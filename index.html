@@ -889,6 +889,7 @@ const INIT = {
   emerGoal: "",
   emerSaved: "",
   extraIncome: [],
+  saldoActual: "",
   onboardingComplete: false
 };
 
@@ -1057,6 +1058,22 @@ function calcDP(data) {
   const cashSpentToday = (data.cashTransactions || []).filter(t => t.date === todayStr).reduce((s, t) => s + (+t.amount || 0), 0);
   const committed = fixedQ + varH + debtQ + cardPayQ + cardReserved + cashSpentToday;
   const remaining = income - committed;
+  const saldo = +data.saldoActual || 0;
+  let realBalance = null;
+  if (saldo > 0) {
+    const curMonthR = today.toISOString().slice(0, 7);
+    const pendingFixed = data.exps.filter(e => e.day && +e.day > day && (isQ1 ? +e.day <= 15 : +e.day >= 16)).reduce((s, e) => s + (+e.amount || 0), 0);
+    const pendingDebts = data.debts.filter(d => {
+      if (!d.dueDay) return false;
+      const dd = +d.dueDay;
+      if (isQ1 ? !(dd <= 15 && dd > day) : !(dd >= 16 && dd > day)) return false;
+      return !(d.monthlyPayments || []).some(p => p.month === curMonthR);
+    }).reduce((s, d) => {
+      const pay = d.type === 'plan' ? +(d.paymentAmount || 0) : d.type === 'informal' && d.informalMode === 'fixed' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
+      return s + pay;
+    }, 0);
+    realBalance = saldo - pendingFixed - pendingDebts;
+  }
   return {
     income,
     isQ1,
@@ -1069,7 +1086,9 @@ function calcDP(data) {
     cashSpentToday,
     committed,
     remaining,
-    daily: remaining / daysLeft
+    daily: remaining / daysLeft,
+    saldoActual: saldo,
+    realBalance
   };
 }
 
@@ -2800,6 +2819,10 @@ function OnboardingFlow(_ref5) {
     _useState0 = _slicedToArray(_useState9, 2),
     q2 = _useState0[0],
     setQ2 = _useState0[1];
+  const _useStateS1 = useState(data.saldoActual || ''),
+    _useStateS2 = _slicedToArray(_useStateS1, 2),
+    obSaldo = _useStateS2[0],
+    setObSaldo = _useStateS2[1];
   const _useState1 = useState([{
       name: '',
       amount: ''
@@ -2881,7 +2904,8 @@ function OnboardingFlow(_ref5) {
       if (step === 1) {
         onUpdate({
           q1,
-          q2
+          q2,
+          saldoActual: obSaldo
         });
       }
       if (step === 2) {
@@ -2942,7 +2966,7 @@ function OnboardingFlow(_ref5) {
       setLeaving(false);
       setStep(nextStep);
     }, 260);
-  }, [step, q1, q2, expRows, varRows, debtType, debtName, debtAmount, debtPayment, debtDay, skipDebt, emerGoal, data, onUpdate]);
+  }, [step, q1, q2, obSaldo, expRows, varRows, debtType, debtName, debtAmount, debtPayment, debtDay, skipDebt, emerGoal, data, onUpdate]);
   const finish = () => {
     onUpdate({
       onboardingComplete: true
@@ -3137,7 +3161,32 @@ function OnboardingFlow(_ref5) {
     onChange: e => setQ2(e.target.value)
   }))), (+q1 || +q2) > 0 && /*#__PURE__*/React.createElement("div", {
     className: "al al-g"
-  }, "\u2705 Ingreso mensual: ", fmt((+q1 || 0) + (+q2 || 0)))), step === 2 && /*#__PURE__*/React.createElement(React.Fragment, null, expRows.map((r, ri) => /*#__PURE__*/React.createElement("div", {
+  }, "\u2705 Ingreso mensual: ", fmt((+q1 || 0) + (+q2 || 0)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 16,
+      borderTop: '1px solid rgba(255,255,255,.07)',
+      paddingTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "q-lbl"
+  }, "\ud83c\udfe6 \xBFCu\xE1nto tienes ahorita en tu cuenta de d\xE9bito?"), /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "number",
+    inputMode: "decimal",
+    placeholder: "Ej. 5000 (opcional)",
+    value: obSaldo,
+    onChange: e => setObSaldo(e.target.value),
+    style: {
+      marginTop: 6
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--dim)',
+      marginTop: 6,
+      lineHeight: 1.5
+    }
+  }, "Esto nos ayuda a mostrarte cu\xE1nto te queda real despu\xE9s de pagos pendientes. Puedes actualizarlo cuando quieras.")), step === 2 && /*#__PURE__*/React.createElement(React.Fragment, null, expRows.map((r, ri) => /*#__PURE__*/React.createElement("div", {
     key: ri,
     style: {
       marginBottom: 10,
@@ -5572,6 +5621,33 @@ function TabInfo(_ref21) {
   const totalDebt = data.debts.reduce((s, d) => s + (d.type === 'plan' ? getPlanInfo(d).remainingAmount : +(d.balance || 0)), 0);
   const spentPct = pct(totalFixed + totalVar, income);
   const emerPct = pct(parseFloat(data.emerSaved) || 0, parseFloat(data.emerGoal) || 1);
+  const _useState53 = useState(''),
+    _useState54 = _slicedToArray(_useState53, 2),
+    exportText = _useState54[0],
+    setExportText = _useState54[1];
+  const _useState55 = useState(''),
+    _useState56 = _slicedToArray(_useState55, 2),
+    importText = _useState56[0],
+    setImportText = _useState56[1];
+  const doExport = () => {
+    const keys = ['mipres-pin', 'mipres-name', 'mipres-data-v6', 'mipres-game-v5'];
+    const obj = {};
+    keys.forEach(k => {
+      const v = localStorage.getItem(k);
+      if (v) obj[k] = v;
+    });
+    setExportText(JSON.stringify(obj));
+  };
+  const doImport = () => {
+    try {
+      const obj = JSON.parse(importText);
+      Object.keys(obj).forEach(k => localStorage.setItem(k, obj[k]));
+      alert('¡Data importada! Recargando...');
+      window.location.reload();
+    } catch (e) {
+      alert('Error: el texto no es válido. Copia todo el texto exportado.');
+    }
+  };
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
@@ -5638,6 +5714,37 @@ function TabInfo(_ref21) {
       color: 'var(--accent)'
     }
   }, fmt(income)))), /*#__PURE__*/React.createElement("div", {
+    className: "card"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ct"
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13
+    }
+  }, "🏦"), " Saldo en cuenta de d\xE9bito"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--muted)',
+      marginBottom: 10,
+      lineHeight: 1.5
+    }
+  }, "Actualiza cuando revises tu cuenta. Lo usamos para calcular lo que te queda real despu\xE9s de pagos pendientes."), /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "number",
+    inputMode: "decimal",
+    placeholder: "Ej. 5000",
+    value: data.saldoActual || '',
+    onChange: e => onChange({
+      saldoActual: e.target.value
+    })
+  }), data.saldoActual > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: 'var(--blue)',
+      marginTop: 8,
+      fontWeight: 600
+    }
+  }, "💙 Saldo registrado: ", fmt(+data.saldoActual))), /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       marginTop: 8,
@@ -5933,7 +6040,80 @@ function TabInfo(_ref21) {
     style: {
       color: 'var(--purple)'
     }
-  }, fmt((parseFloat(data.emerGoal) || 0) - (parseFloat(data.emerSaved) || 0))), income > 0 && ` · ~${Math.ceil(((parseFloat(data.emerGoal) || 0) - (parseFloat(data.emerSaved) || 0)) / (income * 0.1))} meses ahorrando el 10%`))));
+  }, fmt((parseFloat(data.emerGoal) || 0) - (parseFloat(data.emerSaved) || 0))), income > 0 && ` · ~${Math.ceil(((parseFloat(data.emerGoal) || 0) - (parseFloat(data.emerSaved) || 0)) / (income * 0.1))} meses ahorrando el 10%`))), /*#__PURE__*/React.createElement("div", {
+    className: "card"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ct"
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13
+    }
+  }, "📦"), " Exportar / Importar data"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: 'var(--muted)',
+      marginBottom: 10,
+      lineHeight: 1.5
+    }
+  }, "Migra tu informaci\xF3n entre dispositivos o dominios."), /*#__PURE__*/React.createElement("button", {
+    className: "btn-g",
+    onClick: doExport,
+    style: {
+      marginBottom: 8
+    }
+  }, "📤 Exportar mi data"), exportText && /*#__PURE__*/React.createElement("textarea", {
+    readOnly: true,
+    value: exportText,
+    onClick: e => e.target.select(),
+    style: {
+      width: '100%',
+      minHeight: 80,
+      fontSize: 10,
+      background: 'var(--bg)',
+      color: 'var(--muted)',
+      border: '1px solid var(--border)',
+      borderRadius: 8,
+      padding: 8,
+      fontFamily: 'monospace',
+      boxSizing: 'border-box',
+      marginBottom: 8,
+      resize: 'none',
+      display: 'block'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--muted)',
+      marginBottom: 4,
+      marginTop: 4
+    }
+  }, "Pegar data para importar:"), /*#__PURE__*/React.createElement("textarea", {
+    value: importText,
+    onChange: e => setImportText(e.target.value),
+    placeholder: "Pega aqu\xED tu data exportada...",
+    style: {
+      width: '100%',
+      minHeight: 60,
+      fontSize: 10,
+      background: 'var(--bg)',
+      color: 'var(--text)',
+      border: '1px solid var(--border)',
+      borderRadius: 8,
+      padding: 8,
+      fontFamily: 'monospace',
+      boxSizing: 'border-box',
+      marginBottom: 8,
+      resize: 'none',
+      display: 'block'
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    className: "btn-g",
+    onClick: doImport,
+    disabled: !importText,
+    style: {
+      opacity: importText ? 1 : 0.4
+    }
+  }, "📥 Importar y recargar")));
 }
 
 /* ════════ MAIN APP ════════ */
@@ -6549,7 +6729,42 @@ function MainApp(_ref22) {
       fontWeight: 800,
       fontSize: 13
     }
-  }, fmt(dp.remaining))))) : /*#__PURE__*/React.createElement("div", {
+  }, fmt(dp.remaining))), dp.saldoActual > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "db-div"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "db-row"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "db-label"
+  }, "🏦 Saldo en cuenta"), /*#__PURE__*/React.createElement("span", {
+    className: "db-val",
+    style: {
+      color: 'var(--blue)'
+    }
+  }, fmt(dp.saldoActual))), /*#__PURE__*/React.createElement("div", {
+    className: "db-row"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "db-label"
+  }, "− Pendientes quincena"), /*#__PURE__*/React.createElement("span", {
+    className: "db-val",
+    style: {
+      color: 'var(--muted)'
+    }
+  }, "−", fmt(dp.saldoActual - dp.realBalance))), /*#__PURE__*/React.createElement("div", {
+    className: "db-row"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "db-label",
+    style: {
+      fontWeight: 700,
+      color: 'var(--text)'
+    }
+  }, "= En cuenta despu\xE9s"), /*#__PURE__*/React.createElement("span", {
+    className: "db-val",
+    style: {
+      color: dp.realBalance >= 0 ? 'var(--blue)' : 'var(--danger)',
+      fontWeight: 800,
+      fontSize: 13
+    }
+  }, fmt(dp.realBalance)))))) : /*#__PURE__*/React.createElement("div", {
     className: "al al-b"
   }, "\uD83D\uDCA1 Ve a \"Mi Info\" y registra tus quincenas para ver cu\xE1nto puedes gastar cada d\xEDa."), (() => {
     const pred = getPrediction(dp);
