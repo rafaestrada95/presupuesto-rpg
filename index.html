@@ -889,7 +889,14 @@ const INIT = {
   emerGoal: "",
   emerSaved: "",
   extraIncome: [],
-  saldoActual: "",
+  saldoDebito: "",
+  saldoEfectivo: "",
+  paydays: [],
+  paidExps: {},
+  paidVars: {},
+  loans: [],
+  incomeTransactions: [],
+  cardPayments: [],
   onboardingComplete: false
 };
 
@@ -1041,7 +1048,7 @@ function calcDP(data) {
   const income = baseIncome + extraQ;
   const lastDay = isQ1 ? 15 : new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
   const daysLeft = Math.max(1, lastDay - day + 1);
-  const fixedQ = data.exps.filter(e => e.day && (isQ1 ? +e.day <= 15 : +e.day >= 16)).reduce((s, e) => s + (+e.amount || 0), 0);
+  const fixedQ = data.exps.filter(e => e.day && (isQ1 ? +e.day <= 15 : +e.day >= 16)).filter(e => !(data.paidExps || {})[`${e.id}_${curMonth}`]).reduce((s, e) => s + (+e.amount || 0), 0);
   const varH = data.varExps.reduce((s, e) => s + (+e.amount || 0), 0) / 2;
   const debtQ = data.debts.filter(d => d.type !== "tarjeta").reduce((s, d) => {
     const pay = d.type === "plan" ? +(d.paymentAmount || 0) : d.type === "informal" && d.informalMode === 'fixed' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
@@ -1058,21 +1065,29 @@ function calcDP(data) {
   const cashSpentToday = (data.cashTransactions || []).filter(t => t.date === todayStr).reduce((s, t) => s + (+t.amount || 0), 0);
   const committed = fixedQ + varH + debtQ + cardPayQ + cardReserved + cashSpentToday;
   const remaining = income - committed;
-  const saldo = +data.saldoActual || 0;
+  const saldoD = +data.saldoDebito || 0;
+  const saldoE = +data.saldoEfectivo || 0;
+  const hasSaldo = saldoD > 0 || saldoE > 0;
   let realBalance = null;
-  if (saldo > 0) {
-    const curMonthR = today.toISOString().slice(0, 7);
-    const pendingFixed = data.exps.filter(e => e.day && +e.day > day && (isQ1 ? +e.day <= 15 : +e.day >= 16)).reduce((s, e) => s + (+e.amount || 0), 0);
+  let currentDebit = saldoD;
+  let currentEfectivo = saldoE;
+  if (hasSaldo) {
+    const totalPaydays = (data.paydays || []).reduce((s, p) => s + (+p.amount || 0), 0);
+    const spentDebit = (data.cashTransactions || []).filter(t => t.method === 'debit').reduce((s, t) => s + (+t.amount || 0), 0);
+    const spentCash = (data.cashTransactions || []).filter(t => !t.method || t.method === 'cash').reduce((s, t) => s + (+t.amount || 0), 0);
+    currentDebit = saldoD + totalPaydays - spentDebit;
+    currentEfectivo = saldoE - spentCash;
+    const pendingFixed = data.exps.filter(e => e.day && +e.day > day && (isQ1 ? +e.day <= 15 : +e.day >= 16)).filter(e => !(data.paidExps || {})[`${e.id}_${curMonth}`]).reduce((s, e) => s + (+e.amount || 0), 0);
     const pendingDebts = data.debts.filter(d => {
       if (!d.dueDay) return false;
       const dd = +d.dueDay;
       if (isQ1 ? !(dd <= 15 && dd > day) : !(dd >= 16 && dd > day)) return false;
-      return !(d.monthlyPayments || []).some(p => p.month === curMonthR);
+      return !(d.monthlyPayments || []).some(p => p.month === curMonth);
     }).reduce((s, d) => {
       const pay = d.type === 'plan' ? +(d.paymentAmount || 0) : d.type === 'informal' && d.informalMode === 'fixed' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
       return s + pay;
     }, 0);
-    realBalance = saldo - pendingFixed - pendingDebts;
+    realBalance = currentDebit + currentEfectivo - pendingFixed - pendingDebts;
   }
   return {
     income,
@@ -1087,7 +1102,9 @@ function calcDP(data) {
     committed,
     remaining,
     daily: remaining / daysLeft,
-    saldoActual: saldo,
+    hasSaldo,
+    currentDebit,
+    currentEfectivo,
     realBalance
   };
 }
@@ -1332,6 +1349,7 @@ function getCountdowns(data) {
   const today = new Date();
   const day = today.getDate();
   const isQ1 = day <= 15;
+  const curMonth = today.toISOString().slice(0, 7);
   const items = [];
   const nextQ = isQ1 ? new Date(today.getFullYear(), today.getMonth(), 16) : new Date(today.getFullYear(), today.getMonth() + 1, 1);
   items.push({
@@ -1340,6 +1358,25 @@ function getCountdowns(data) {
     days: Math.max(0, Math.ceil((nextQ - today) / 86400000)),
     urgent: false,
     warn: Math.ceil((nextQ - today) / 86400000) <= 3
+  });
+  (data.exps || []).filter(e => {
+    if (!e.day || !e.id) return false;
+    const d = +e.day;
+    const upcoming = isQ1 ? d <= 15 && d > day : d >= 16 && d > day;
+    return upcoming && !(data.paidExps || {})[`${e.id}_${curMonth}`];
+  }).forEach(e => {
+    const daysLeft = +e.day - day;
+    items.push({
+      icon: '📌',
+      label: e.name.length > 11 ? e.name.slice(0, 11) + '…' : e.name,
+      days: daysLeft,
+      urgent: daysLeft <= 2,
+      warn: daysLeft <= 5,
+      sub: fmt(+e.amount || 0),
+      type: 'exp',
+      expId: e.id,
+      curMonth
+    });
   });
   data.debts.filter(d => d.type === "tarjeta" && d.cutDay).forEach(card => {
     const info = getCardInfo(card, data.cardTransactions, today);
@@ -2819,10 +2856,14 @@ function OnboardingFlow(_ref5) {
     _useState0 = _slicedToArray(_useState9, 2),
     q2 = _useState0[0],
     setQ2 = _useState0[1];
-  const _useStateS1 = useState(data.saldoActual || ''),
+  const _useStateS1 = useState(data.saldoDebito || ''),
     _useStateS2 = _slicedToArray(_useStateS1, 2),
-    obSaldo = _useStateS2[0],
-    setObSaldo = _useStateS2[1];
+    obSaldoD = _useStateS2[0],
+    setObSaldoD = _useStateS2[1];
+  const _useStateS3 = useState(data.saldoEfectivo || ''),
+    _useStateS4 = _slicedToArray(_useStateS3, 2),
+    obSaldoE = _useStateS4[0],
+    setObSaldoE = _useStateS4[1];
   const _useState1 = useState([{
       name: '',
       amount: ''
@@ -2905,7 +2946,8 @@ function OnboardingFlow(_ref5) {
         onUpdate({
           q1,
           q2,
-          saldoActual: obSaldo
+          saldoDebito: obSaldoD,
+          saldoEfectivo: obSaldoE
         });
       }
       if (step === 2) {
@@ -2966,7 +3008,7 @@ function OnboardingFlow(_ref5) {
       setLeaving(false);
       setStep(nextStep);
     }, 260);
-  }, [step, q1, q2, obSaldo, expRows, varRows, debtType, debtName, debtAmount, debtPayment, debtDay, skipDebt, emerGoal, data, onUpdate]);
+  }, [step, q1, q2, obSaldoD, obSaldoE, expRows, varRows, debtType, debtName, debtAmount, debtPayment, debtDay, skipDebt, emerGoal, data, onUpdate]);
   const finish = () => {
     onUpdate({
       onboardingComplete: true
@@ -3168,25 +3210,44 @@ function OnboardingFlow(_ref5) {
       paddingTop: 14
     }
   }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 700,
+      color: 'var(--text)',
+      marginBottom: 10
+    }
+  }, "\ud83d\udcb0 \xBFCu\xE1nto tienes ahorita?"), /*#__PURE__*/React.createElement("div", {
+    className: "q-grid"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "q-box"
+  }, /*#__PURE__*/React.createElement("div", {
     className: "q-lbl"
-  }, "\ud83c\udfe6 \xBFCu\xE1nto tienes ahorita en tu cuenta de d\xE9bito?"), /*#__PURE__*/React.createElement("input", {
-    className: "inp",
+  }, "\ud83c\udfe6 Cuenta d\xE9bito"), /*#__PURE__*/React.createElement("input", {
+    className: "q-inp",
     type: "number",
     inputMode: "decimal",
-    placeholder: "Ej. 5000 (opcional)",
-    value: obSaldo,
-    onChange: e => setObSaldo(e.target.value),
-    style: {
-      marginTop: 6
-    }
-  }), /*#__PURE__*/React.createElement("div", {
+    placeholder: "Ej. 5000",
+    value: obSaldoD,
+    onChange: e => setObSaldoD(e.target.value)
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "q-box"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "q-lbl"
+  }, "\ud83d\udcb5 Efectivo"), /*#__PURE__*/React.createElement("input", {
+    className: "q-inp",
+    type: "number",
+    inputMode: "decimal",
+    placeholder: "Ej. 500",
+    value: obSaldoE,
+    onChange: e => setObSaldoE(e.target.value)
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
       color: 'var(--dim)',
-      marginTop: 6,
+      marginTop: 8,
       lineHeight: 1.5
     }
-  }, "Esto nos ayuda a mostrarte cu\xE1nto te queda real despu\xE9s de pagos pendientes. Puedes actualizarlo cuando quieras.")), step === 2 && /*#__PURE__*/React.createElement(React.Fragment, null, expRows.map((r, ri) => /*#__PURE__*/React.createElement("div", {
+  }, "Opcional. Lo usamos para saber cu\xE1nto te queda realmente despu\xE9s de pagos pendientes. Tu quincena se suma autom\xE1ticamente el d\xEDa que cae.")), step === 2 && /*#__PURE__*/React.createElement(React.Fragment, null, expRows.map((r, ri) => /*#__PURE__*/React.createElement("div", {
     key: ri,
     style: {
       marginBottom: 10,
@@ -3935,7 +3996,8 @@ function DailyMissions(_ref8) {
 
 /* ════════ OTHER COMPONENTS ════════ */
 function CountdownRail(_ref9) {
-  let data = _ref9.data;
+  let data = _ref9.data,
+    onMarkPaidExp = _ref9.onMarkPaidExp;
   const items = getCountdowns(data);
   if (!items.length) return null;
   return /*#__PURE__*/React.createElement("div", {
@@ -3974,7 +4036,28 @@ function CountdownRail(_ref9) {
       marginTop: 2,
       color: item.urgent ? 'var(--danger)' : item.warn ? 'var(--warn)' : 'var(--muted)'
     }
-  }, item.sub))));
+  }, item.sub), item.type === 'exp' && onMarkPaidExp && /*#__PURE__*/React.createElement("button", {
+    onClick: e => {
+      e.stopPropagation();
+      onMarkPaidExp(item.expId, item.curMonth);
+    },
+    style: {
+      marginTop: 6,
+      background: 'rgba(34,211,165,.18)',
+      border: '1px solid rgba(34,211,165,.4)',
+      borderRadius: 8,
+      color: 'var(--accent)',
+      fontSize: 9,
+      fontWeight: 700,
+      padding: '3px 8px',
+      fontFamily: 'inherit',
+      lineHeight: '1.4',
+      textAlign: 'center',
+      cursor: 'pointer',
+      display: 'block',
+      width: '100%'
+    }
+  }, "✓ Pagado"))));
 }
 function SurpriseChest(_ref0) {
   let onOpen = _ref0.onOpen;
@@ -4217,18 +4300,67 @@ function DebtCard(_ref12) {
     onDel = _ref12.onDel,
     onMarkPaid = _ref12.onMarkPaid,
     onUndoPaid = _ref12.onUndoPaid,
+    onEditDebt = _ref12.onEditDebt,
     cardTransactions = _ref12.cardTransactions;
+  const _useState91 = useState(false),
+    _useState92 = _slicedToArray2(_useState91, 2),
+    showPayInput = _useState92[0],
+    setShowPayInput = _useState92[1];
+  const _useState93 = useState(false),
+    _useState94 = _slicedToArray2(_useState93, 2),
+    editMode = _useState94[0],
+    setEditMode = _useState94[1];
+  const _useState95 = useState({
+      name: d.name || '',
+      balance: String(d.balance || ''),
+      paymentAmount: String(d.paymentAmount || d.minPayment || d.monthlyPayment || ''),
+      dueDay: String(d.dueDay || ''),
+      paidPayments: String(d.paidPayments || ''),
+      totalPayments: String(d.totalPayments || '')
+    }),
+    _useState96 = _slicedToArray2(_useState95, 2),
+    ef = _useState96[0],
+    setEf = _useState96[1];
   const currentMonth = new Date().toISOString().slice(0, 7);
   const paidThisMonth = (d.monthlyPayments || []).some(p => p.month === currentMonth);
   const u = d.urg;
   const uc = URG[u.key];
   const pay = d.type === 'plan' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
+  const _useState97 = useState(String(pay || '')),
+    _useState98 = _slicedToArray2(_useState97, 2),
+    payInput = _useState98[0],
+    setPayInput = _useState98[1];
+  const saveEdit = () => {
+    if (!onEditDebt) return;
+    const patch = {
+      name: ef.name,
+      dueDay: ef.dueDay ? +ef.dueDay : d.dueDay
+    };
+    if (d.type === 'plan') {
+      patch.paymentAmount = +ef.paymentAmount || d.paymentAmount;
+      patch.paidPayments = ef.paidPayments !== '' ? +ef.paidPayments : d.paidPayments;
+      patch.totalPayments = +ef.totalPayments || d.totalPayments;
+    } else if (d.type === 'tarjeta') {
+      patch.balance = +ef.balance;
+      patch.minPayment = +ef.paymentAmount || d.minPayment;
+    } else if (d.type === 'prestamo') {
+      patch.balance = +ef.balance;
+      patch.monthlyPayment = +ef.paymentAmount || d.monthlyPayment;
+    } else {
+      patch.balance = +ef.balance;
+      patch.paymentAmount = +ef.paymentAmount || d.paymentAmount;
+    }
+    onEditDebt(d.id, patch);
+    setEditMode(false);
+  };
   let meta = '';
   if (d.type === 'tarjeta') meta = `💳 Día ${d.dueDay || '?'} del mes`;else if (d.type === 'prestamo') meta = `🏦 Día ${d.dueDay || '?'} del mes`;else if (d.type === 'plan') {
     const info = getPlanInfo(d);
     meta = `📋 ${info.remaining} pagos restantes de ${fmt(info.amount)} · Día ${d.dueDay || '?'}`;
   } else if (d.type === 'informal') meta = d.informalMode === 'fixed' ? `🤝 ${d.person || '?'} · Día ${d.dueDay || '?'} · ${fmt(+(d.paymentAmount || 0))}/quinc` : `🎯 ${d.person || '?'} · Liquida antes de ${fmtDate(d.deadlineDate)}`;else meta = `⚠️ ${d.entity || '?'} · ${fmtDate(d.deadlineDate)}`;
   const displayBal = d.type === 'plan' ? getPlanInfo(d).remainingAmount : d.type === 'tarjeta' && cardTransactions ? +(d.balance || 0) + getCardInfo(d, cardTransactions, new Date()).cycleSpend : +(d.balance || 0);
+  const last6Months = d.type !== 'plan' ? [5, 4, 3, 2, 1, 0].map(i => new Date(new Date().getFullYear(), new Date().getMonth() - i, 1).toISOString().slice(0, 7)) : [];
+  const monthPaySet = new Set((d.monthlyPayments || []).map(p => p.month));
   return /*#__PURE__*/React.createElement("div", {
     className: "pri-card",
     style: {
@@ -4286,13 +4418,63 @@ function DebtCard(_ref12) {
       padding: '5px 10px',
       fontSize: 11,
       fontWeight: 700,
-      cursor: 'pointer',
-      display: 'flex',
-      alignItems: 'center',
-      gap: 4
+      cursor: 'pointer'
     }
-  }, "✓ Pagado  ↩") : /*#__PURE__*/React.createElement("button", {
-    onClick: () => onMarkPaid(d.id),
+  }, "✓ Pagado ↩") : showPayInput ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginLeft: 'auto',
+      display: 'flex',
+      gap: 6,
+      alignItems: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "number",
+    inputMode: "decimal",
+    value: payInput,
+    onChange: e => setPayInput(e.target.value),
+    style: {
+      width: 90,
+      textAlign: 'right',
+      fontSize: 12,
+      padding: '4px 8px'
+    },
+    placeholder: "$0"
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      onMarkPaid(d.id, +payInput || pay);
+      setShowPayInput(false);
+    },
+    style: {
+      background: 'var(--accent)',
+      color: '#000',
+      border: 'none',
+      borderRadius: 8,
+      padding: '5px 10px',
+      fontSize: 11,
+      fontWeight: 700,
+      cursor: 'pointer',
+      lineHeight: '1.4',
+      textAlign: 'center'
+    }
+  }, "✓"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowPayInput(false),
+    style: {
+      background: 'transparent',
+      color: 'var(--muted)',
+      border: '1px solid var(--border)',
+      borderRadius: 8,
+      padding: '5px 8px',
+      fontSize: 11,
+      cursor: 'pointer',
+      lineHeight: '1.4',
+      textAlign: 'center'
+    }
+  }, "✕")) : /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setPayInput(String(pay || ''));
+      setShowPayInput(true);
+    },
     style: {
       marginLeft: 'auto',
       background: 'rgba(34,211,165,.1)',
@@ -4302,15 +4484,218 @@ function DebtCard(_ref12) {
       padding: '5px 10px',
       fontSize: 11,
       fontWeight: 700,
-      cursor: 'pointer'
+      cursor: 'pointer',
+      lineHeight: '1.4',
+      textAlign: 'center'
     }
-  }, "✓ Ya pagué")), onDel && /*#__PURE__*/React.createElement("button", {
+  }, "✓ Ya pagu\xE9")), onEditDebt && !editMode && /*#__PURE__*/React.createElement("button", {
+    style: {
+      background: 'none',
+      border: 'none',
+      padding: '5px 6px',
+      color: 'var(--muted)',
+      fontSize: 14,
+      cursor: 'pointer',
+      lineHeight: '1',
+      textAlign: 'center'
+    },
+    onClick: () => setEditMode(true)
+  }, "✏️"), onDel && /*#__PURE__*/React.createElement("button", {
     className: "btn-x",
     style: {
-      marginLeft: d.type !== 'plan' ? 0 : 'auto'
+      marginLeft: d.type !== 'plan' && !onEditDebt ? 'auto' : 0
     },
     onClick: () => onDel(d.id)
-  }, "Eliminar")));
+  }, "Eliminar")), d.type !== 'plan' && monthPaySet.size > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 8,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 4,
+      paddingTop: 8,
+      borderTop: '1px solid rgba(255,255,255,.06)'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 9,
+      color: 'var(--muted)',
+      marginRight: 2,
+      whiteSpace: 'nowrap'
+    }
+  }, "Historial:"), last6Months.map(mk => /*#__PURE__*/React.createElement("div", {
+    key: mk,
+    title: mk,
+    style: {
+      width: 10,
+      height: 10,
+      borderRadius: '50%',
+      flexShrink: 0,
+      background: monthPaySet.has(mk) ? 'var(--accent)' : 'rgba(255,255,255,.1)',
+      border: monthPaySet.has(mk) ? 'none' : '1px solid rgba(255,255,255,.2)'
+    }
+  }))), editMode && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      background: 'rgba(0,0,0,.25)',
+      borderRadius: 10,
+      padding: '12px 10px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      color: 'var(--muted)',
+      marginBottom: 8,
+      letterSpacing: 1
+    }
+  }, "EDITAR DEUDA"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: 8,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      gridColumn: '1/-1'
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 10,
+      color: 'var(--muted)',
+      display: 'block',
+      marginBottom: 3
+    }
+  }, "Nombre"), /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    value: ef.name,
+    onChange: e => setEf(p => ({
+      ...p,
+      name: e.target.value
+    })),
+    placeholder: "Nombre"
+  })), d.type !== 'plan' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 10,
+      color: 'var(--muted)',
+      display: 'block',
+      marginBottom: 3
+    }
+  }, "Saldo"), /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "number",
+    inputMode: "decimal",
+    value: ef.balance,
+    onChange: e => setEf(p => ({
+      ...p,
+      balance: e.target.value
+    })),
+    placeholder: "$0"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 10,
+      color: 'var(--muted)',
+      display: 'block',
+      marginBottom: 3
+    }
+  }, d.type === 'plan' ? 'Pago/mes' : 'Pago mín'), /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "number",
+    inputMode: "decimal",
+    value: ef.paymentAmount,
+    onChange: e => setEf(p => ({
+      ...p,
+      paymentAmount: e.target.value
+    })),
+    placeholder: "$0"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 10,
+      color: 'var(--muted)',
+      display: 'block',
+      marginBottom: 3
+    }
+  }, "D\xEDa de pago"), /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "number",
+    inputMode: "numeric",
+    value: ef.dueDay,
+    onChange: e => setEf(p => ({
+      ...p,
+      dueDay: e.target.value
+    })),
+    placeholder: "1-31"
+  })), d.type === 'plan' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 10,
+      color: 'var(--muted)',
+      display: 'block',
+      marginBottom: 3
+    }
+  }, "Pagos hechos"), /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "number",
+    inputMode: "numeric",
+    value: ef.paidPayments,
+    onChange: e => setEf(p => ({
+      ...p,
+      paidPayments: e.target.value
+    })),
+    placeholder: "0"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 10,
+      color: 'var(--muted)',
+      display: 'block',
+      marginBottom: 3
+    }
+  }, "Total pagos"), /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "number",
+    inputMode: "numeric",
+    value: ef.totalPayments,
+    onChange: e => setEf(p => ({
+      ...p,
+      totalPayments: e.target.value
+    })),
+    placeholder: "0"
+  })))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: saveEdit,
+    style: {
+      flex: 1,
+      background: 'var(--accent)',
+      color: '#000',
+      border: 'none',
+      borderRadius: 8,
+      padding: '9px 0',
+      fontFamily: 'inherit',
+      fontWeight: 700,
+      fontSize: 13,
+      lineHeight: '1.4',
+      textAlign: 'center',
+      cursor: 'pointer'
+    }
+  }, "Guardar cambios"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setEditMode(false),
+    style: {
+      flex: '0 0 80px',
+      background: 'transparent',
+      color: 'var(--muted)',
+      border: '1px solid var(--border)',
+      borderRadius: 8,
+      padding: '9px 0',
+      fontFamily: 'inherit',
+      fontSize: 13,
+      lineHeight: '1.4',
+      textAlign: 'center',
+      cursor: 'pointer'
+    }
+  }, "Cancelar"))));
 }
 function AchievementsPanel(_ref13) {
   let game = _ref13.game;
@@ -4500,7 +4885,7 @@ function ExpenseLogger(_ref15) {
     debts = _ref15.debts,
     onAddCash = _ref15.onAddCash,
     onAddCard = _ref15.onAddCard;
-  const _useState29 = useState('cash'),
+  const _useState29 = useState('debit'),
     _useState30 = _slicedToArray(_useState29, 2),
     method = _useState30[0],
     setMethod = _useState30[1];
@@ -4528,13 +4913,56 @@ function ExpenseLogger(_ref15) {
     _useState40 = _slicedToArray(_useState39, 2),
     batchRows = _useState40[0],
     setBatchRows = _useState40[1];
+  const _useState99 = useState(''),
+    _useState100 = _slicedToArray2(_useState99, 2),
+    photo = _useState100[0],
+    setPhoto = _useState100[1];
+  const _useState101 = useState(false),
+    _useState102 = _slicedToArray2(_useState101, 2),
+    photoLoading = _useState102[0],
+    setPhotoLoading = _useState102[1];
+  const photoRef = useRef(null);
+  const handlePhotoSelect = function (ev) {
+    const file = ev.target.files[0];
+    if (!file) return;
+    setPhotoLoading(true);
+    const reader = new FileReader();
+    reader.onload = function (re) {
+      const img = new Image();
+      img.onload = function () {
+        const canvas = document.createElement('canvas');
+        const MAX = 400;
+        let w = img.width,
+          h = img.height;
+        if (w > h) {
+          if (w > MAX) {
+            h = Math.round(h * MAX / w);
+            w = MAX;
+          }
+        } else {
+          if (h > MAX) {
+            w = Math.round(w * MAX / h);
+            h = MAX;
+          }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        setPhoto(canvas.toDataURL('image/jpeg', 0.5));
+        setPhotoLoading(false);
+      };
+      img.src = re.target.result;
+    };
+    reader.readAsDataURL(file);
+    ev.target.value = '';
+  };
   const cards = debts.filter(d => d.type === 'tarjeta');
   const todayStr = new Date().toISOString().slice(0, 10);
   const todayCash = (data.cashTransactions || []).filter(t => t.date === todayStr);
   const todayCard = (data.cardTransactions || []).filter(t => t.date === todayStr);
   const allToday = [...todayCash.map(t => ({
     ...t,
-    m: 'cash'
+    m: t.method === 'debit' ? 'debit' : 'cash'
   })), ...todayCard.map(t => ({
     ...t,
     m: 'card'
@@ -4545,20 +4973,24 @@ function ExpenseLogger(_ref15) {
       hour: '2-digit',
       minute: '2-digit'
     });
-    if (method === 'cash') onAddCash({
-      amount: +amt,
-      desc: desc || 'Gasto',
-      date: todayStr,
-      time
-    });else onAddCard({
+    if (method === 'card') onAddCard({
       amount: +amt,
       desc: desc || 'Gasto',
       date: todayStr,
       time,
-      cardId: cardId || cards[0]?.id || ''
+      cardId: cardId || cards[0]?.id || '',
+      photo
+    });else onAddCash({
+      amount: +amt,
+      desc: desc || 'Gasto',
+      date: todayStr,
+      time,
+      method: method,
+      photo
     });
     setAmt('');
     setDesc('');
+    setPhoto('');
   };
   const addBatch = () => {
     batchRows.forEach(r => {
@@ -4567,17 +4999,18 @@ function ExpenseLogger(_ref15) {
         hour: '2-digit',
         minute: '2-digit'
       });
-      if (method === 'cash') onAddCash({
-        amount: +r.amt,
-        desc: r.desc || 'Gasto',
-        date: todayStr,
-        time
-      });else onAddCard({
+      if (method === 'card') onAddCard({
         amount: +r.amt,
         desc: r.desc || 'Gasto',
         date: todayStr,
         time,
         cardId: r.cardId || cards[0]?.id || ''
+      });else onAddCash({
+        amount: +r.amt,
+        desc: r.desc || 'Gasto',
+        date: todayStr,
+        time,
+        method: method
       });
     });
     setBatchRows([{
@@ -4607,6 +5040,9 @@ function ExpenseLogger(_ref15) {
   }, "+10 XP si vas bien")), /*#__PURE__*/React.createElement("div", {
     className: "method-toggle"
   }, /*#__PURE__*/React.createElement("button", {
+    className: `method-btn ${method === 'debit' ? 'on-cash' : ''}`,
+    onClick: () => setMethod('debit')
+  }, "\uD83C\uDFE6 D\xE9bito"), /*#__PURE__*/React.createElement("button", {
     className: `method-btn ${method === 'cash' ? 'on-cash' : ''}`,
     onClick: () => setMethod('cash')
   }, "\uD83D\uDCB5 Efectivo"), /*#__PURE__*/React.createElement("button", {
@@ -4634,7 +5070,60 @@ function ExpenseLogger(_ref15) {
   }), /*#__PURE__*/React.createElement("button", {
     className: "btn-sm",
     onClick: add
-  }, "+")), method === 'card' && cards.length > 0 && /*#__PURE__*/React.createElement("select", {
+  }, "+")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    accept: "image/*",
+    capture: "environment",
+    ref: photoRef,
+    style: {
+      display: 'none'
+    },
+    onChange: handlePhotoSelect
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => photoRef.current && photoRef.current.click(),
+    style: {
+      background: 'none',
+      border: '1px dashed rgba(255,255,255,.2)',
+      borderRadius: 8,
+      color: 'var(--muted)',
+      fontSize: 11,
+      padding: '6px 10px',
+      cursor: 'pointer',
+      lineHeight: '1.4',
+      textAlign: 'center',
+      flexShrink: 0
+    }
+  }, photoLoading ? '⏳ Cargando...' : photo ? '📷 Cambiar foto' : '📷 Foto de ticket'), photo && /*#__PURE__*/React.createElement("img", {
+    src: photo,
+    alt: "ticket",
+    style: {
+      width: 36,
+      height: 36,
+      borderRadius: 6,
+      objectFit: 'cover',
+      border: '1px solid var(--border)',
+      flexShrink: 0
+    }
+  }), photo && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setPhoto(''),
+    style: {
+      background: 'none',
+      border: 'none',
+      color: 'var(--muted)',
+      fontSize: 14,
+      cursor: 'pointer',
+      lineHeight: '1',
+      textAlign: 'center',
+      padding: '2px 4px'
+    }
+  }, "✕")), method === 'card' && cards.length > 0 && /*#__PURE__*/React.createElement("select", {
     className: "sel",
     style: {
       marginBottom: 8
@@ -4739,6 +5228,7 @@ function ExpenseLogger(_ref15) {
     className: "log-list"
   }, [...allToday].reverse().map(t => {
     const isCard = t.m === 'card';
+    const isDebit = t.m === 'debit';
     const cName = isCard ? debts.find(d => d.id === t.cardId)?.name?.split(' ')[0] || 'Tarjeta' : '';
     return /*#__PURE__*/React.createElement("div", {
       key: t.id,
@@ -4752,10 +5242,10 @@ function ExpenseLogger(_ref15) {
     }, t.time), /*#__PURE__*/React.createElement("span", {
       className: "log-badge",
       style: {
-        background: isCard ? 'rgba(251,146,60,.15)' : 'var(--as)',
-        color: isCard ? 'var(--orange)' : 'var(--accent)'
+        background: isCard ? 'rgba(251,146,60,.15)' : isDebit ? 'rgba(59,130,246,.15)' : 'var(--as)',
+        color: isCard ? 'var(--orange)' : isDebit ? '#3b82f6' : 'var(--accent)'
       }
-    }, isCard ? `💳 ${cName}` : '💵'), /*#__PURE__*/React.createElement("span", {
+    }, isCard ? `💳 ${cName}` : isDebit ? '🏦' : '💵'), /*#__PURE__*/React.createElement("span", {
       style: {
         flex: 1
       }
@@ -4900,6 +5390,323 @@ function MonthVsMonth(_ref16) {
 }
 
 /* ════════ TABS ════════ */
+/* ════════ TAB HISTORIAL ════════ */
+function TabHistorial(_ref26) {
+  let data = _ref26.data,
+    onDelCash = _ref26.onDelCash,
+    onDelCard = _ref26.onDelCard,
+    onEditCash = _ref26.onEditCash;
+  const _useState103 = useState(''),
+    _useState104 = _slicedToArray2(_useState103, 2),
+    viewPhoto = _useState104[0],
+    setViewPhoto = _useState104[1];
+  const _useState105 = useState('todos'),
+    _useState106 = _slicedToArray2(_useState105, 2),
+    filter = _useState106[0],
+    setFilter = _useState106[1];
+  const _useState107 = useState(null),
+    _useState108 = _slicedToArray2(_useState107, 2),
+    editId = _useState108[0],
+    setEditId = _useState108[1];
+  const _useState109 = useState(''),
+    _useState110 = _slicedToArray2(_useState109, 2),
+    editAmt = _useState110[0],
+    setEditAmt = _useState110[1];
+  const _useState111 = useState(''),
+    _useState112 = _slicedToArray2(_useState111, 2),
+    editDesc = _useState112[0],
+    setEditDesc = _useState112[1];
+  const debts = data.debts || [];
+  const cashItems = (data.cashTransactions || []).map(t => ({
+    ...t,
+    kind: 'cash',
+    sortKey: (t.date || '') + ' ' + (t.time || '00:00')
+  }));
+  const cardItems = (data.cardTransactions || []).map(t => ({
+    ...t,
+    kind: 'card',
+    sortKey: (t.date || '') + ' ' + (t.time || '00:00')
+  }));
+  const paydayItems = (data.paydays || []).map(p => ({
+    id: p.quincena,
+    amount: p.amount,
+    desc: (p.quincena.includes('Q1') ? 'Quincena 1' : 'Quincena 2') + ' 💰',
+    date: p.addedAt,
+    time: '00:00',
+    kind: 'income',
+    sortKey: (p.addedAt || '') + ' 00:00'
+  }));
+  const extraItems = (data.extraIncome || []).filter(e => e.date).map(e => ({
+    id: e.id,
+    amount: +(e.amount || 0),
+    desc: e.label || 'Ingreso extra',
+    date: e.date,
+    time: '00:00',
+    kind: 'income',
+    sortKey: (e.date || '') + ' 00:00'
+  }));
+  let items = [];
+  if (filter === 'gastos') items = [...cashItems, ...cardItems];else if (filter === 'ingresos') items = [...paydayItems, ...extraItems];else items = [...cashItems, ...cardItems, ...paydayItems, ...extraItems];
+  items = [...items].sort((a, b) => b.sortKey.localeCompare(a.sortKey));
+  const startEdit = t => {
+    setEditId(t.id);
+    setEditAmt(String(t.amount));
+    setEditDesc(t.desc || '');
+  };
+  const saveEdit = () => {
+    if (editId && editAmt) onEditCash(editId, {
+      amount: +editAmt,
+      desc: editDesc
+    });
+    setEditId(null);
+  };
+  const FILTERS = [['todos', 'Todos'], ['gastos', 'Gastos'], ['ingresos', 'Ingresos']];
+  const btnBase = {
+    flex: 1,
+    padding: '8px 0',
+    borderRadius: 10,
+    fontFamily: 'inherit',
+    fontSize: 13,
+    fontWeight: 600,
+    lineHeight: '1.4',
+    textAlign: 'center',
+    cursor: 'pointer'
+  };
+  return React.createElement(React.Fragment, null, viewPhoto && React.createElement('div', {
+    onClick: () => setViewPhoto(''),
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,.92)',
+      zIndex: 9999,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20
+    }
+  }, React.createElement('img', {
+    src: viewPhoto,
+    alt: 'ticket',
+    style: {
+      maxWidth: '100%',
+      maxHeight: '80vh',
+      borderRadius: 12
+    }
+  }), React.createElement('button', {
+    onClick: () => setViewPhoto(''),
+    style: {
+      position: 'absolute',
+      top: 20,
+      right: 20,
+      background: 'rgba(255,255,255,.15)',
+      border: 'none',
+      color: '#fff',
+      borderRadius: '50%',
+      width: 40,
+      height: 40,
+      fontSize: 22,
+      cursor: 'pointer',
+      lineHeight: '40px',
+      textAlign: 'center'
+    }
+  }, '✕')), React.createElement('div', {
+    style: {
+      display: 'flex',
+      gap: 8,
+      marginBottom: 12
+    }
+  }, FILTERS.map(_ref27 => {
+    let _ref28 = _slicedToArray2(_ref27, 2),
+      k = _ref28[0],
+      l = _ref28[1];
+    return React.createElement('button', {
+      key: k,
+      style: {
+        ...btnBase,
+        background: filter === k ? 'var(--accent)' : 'var(--card)',
+        color: filter === k ? '#000' : 'var(--fg)',
+        border: filter === k ? 'none' : '1px solid var(--border)'
+      },
+      onClick: () => setFilter(k)
+    }, l);
+  })), items.length > 0 && React.createElement('div', {
+    style: {
+      fontSize: 11,
+      color: 'var(--muted)',
+      marginBottom: 8,
+      textAlign: 'right'
+    }
+  }, items.length + ' movimiento' + (items.length !== 1 ? 's' : '')), items.length === 0 && React.createElement('div', {
+    style: {
+      textAlign: 'center',
+      color: 'var(--muted)',
+      padding: '48px 0',
+      fontSize: 14
+    }
+  }, 'Sin movimientos a\xFAn 📋'), items.map(t => {
+    const isEditing = editId === t.id && t.kind === 'cash';
+    const isIncome = t.kind === 'income';
+    const isCard = t.kind === 'card';
+    const isDebit = !isIncome && !isCard && t.method === 'debit';
+    const cardName = isCard ? debts.find(d => d.id === t.cardId)?.name?.split(' ')[0] || 'Tarjeta' : '';
+    const icon = isIncome ? '💰' : isCard ? '💳' : isDebit ? '🏦' : '💵';
+    const iconBg = isIncome ? 'rgba(34,211,165,.15)' : isCard ? 'rgba(251,146,60,.15)' : isDebit ? 'rgba(59,130,246,.15)' : 'var(--as)';
+    const iconColor = isIncome ? 'var(--accent)' : isCard ? 'var(--orange)' : isDebit ? '#3b82f6' : 'var(--accent)';
+    const amtColor = isIncome ? 'var(--accent)' : 'var(--danger)';
+    const sign = isIncome ? '+' : '-';
+    return React.createElement('div', {
+      key: t.id + t.kind,
+      style: {
+        background: 'var(--card)',
+        borderRadius: 12,
+        padding: '12px 14px',
+        marginBottom: 8,
+        border: '1px solid var(--border)'
+      }
+    }, isEditing ? React.createElement(React.Fragment, null, React.createElement('div', {
+      style: {
+        display: 'flex',
+        gap: 8,
+        marginBottom: 8
+      }
+    }, React.createElement('input', {
+      className: 'inp',
+      type: 'number',
+      inputMode: 'decimal',
+      value: editAmt,
+      onChange: e => setEditAmt(e.target.value),
+      style: {
+        flex: '0 0 90px'
+      },
+      placeholder: '$0'
+    }), React.createElement('input', {
+      className: 'inp',
+      value: editDesc,
+      onChange: e => setEditDesc(e.target.value),
+      style: {
+        flex: 1
+      },
+      placeholder: 'Descripci\xF3n'
+    })), React.createElement('div', {
+      style: {
+        display: 'flex',
+        gap: 8
+      }
+    }, React.createElement('button', {
+      onClick: saveEdit,
+      style: {
+        flex: 1,
+        background: 'var(--accent)',
+        color: '#000',
+        border: 'none',
+        borderRadius: 8,
+        padding: '8px 0',
+        fontFamily: 'inherit',
+        fontWeight: 700,
+        fontSize: 13,
+        lineHeight: '1.4',
+        textAlign: 'center',
+        cursor: 'pointer'
+      }
+    }, 'Guardar'), React.createElement('button', {
+      onClick: () => setEditId(null),
+      style: {
+        flex: 1,
+        background: 'transparent',
+        color: 'var(--muted)',
+        border: '1px solid var(--border)',
+        borderRadius: 8,
+        padding: '8px 0',
+        fontFamily: 'inherit',
+        fontSize: 13,
+        lineHeight: '1.4',
+        textAlign: 'center',
+        cursor: 'pointer'
+      }
+    }, 'Cancelar'))) : React.createElement('div', {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10
+      }
+    }, React.createElement('span', {
+      style: {
+        background: iconBg,
+        color: iconColor,
+        borderRadius: 8,
+        padding: '4px 7px',
+        fontSize: 15,
+        flexShrink: 0
+      }
+    }, icon), React.createElement('div', {
+      style: {
+        flex: 1,
+        minWidth: 0
+      }
+    }, React.createElement('div', {
+      style: {
+        fontSize: 13,
+        fontWeight: 600,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, t.desc || 'Sin descripci\xF3n'), React.createElement('div', {
+      style: {
+        fontSize: 10,
+        color: 'var(--muted)',
+        marginTop: 2
+      }
+    }, t.date + (t.time && t.time !== '00:00' ? ' \xB7 ' + t.time : '') + (isCard && cardName ? ' \xB7 ' + cardName : ''))), React.createElement('span', {
+      style: {
+        fontFamily: "'Bricolage Grotesque',sans-serif",
+        fontWeight: 700,
+        color: amtColor,
+        flexShrink: 0,
+        marginLeft: 4
+      }
+    }, sign + fmt(t.amount)), t.photo && React.createElement('button', {
+      onClick: () => setViewPhoto(t.photo),
+      style: {
+        background: 'none',
+        border: 'none',
+        padding: '3px 5px',
+        color: 'var(--accent)',
+        fontSize: 16,
+        lineHeight: '1',
+        textAlign: 'center',
+        cursor: 'pointer',
+        flexShrink: 0
+      }
+    }, '🖼️'), !isIncome && React.createElement(React.Fragment, null, t.kind === 'cash' && React.createElement('button', {
+      onClick: () => startEdit(t),
+      style: {
+        background: 'none',
+        border: 'none',
+        padding: '4px 6px',
+        color: 'var(--muted)',
+        fontSize: 15,
+        lineHeight: '1',
+        textAlign: 'center',
+        cursor: 'pointer'
+      }
+    }, '✏️'), React.createElement('button', {
+      onClick: () => {
+        if (t.kind === 'cash') onDelCash(t.id);else onDelCard(t.id);
+      },
+      style: {
+        background: 'none',
+        border: 'none',
+        padding: '4px 6px',
+        color: 'var(--danger)',
+        fontSize: 15,
+        lineHeight: '1',
+        textAlign: 'center',
+        cursor: 'pointer'
+      }
+    }, '🗑️'))));
+  }));
+}
 function TabGastos(_ref18) {
   let data = _ref18.data,
     onAddExp = _ref18.onAddExp,
@@ -4907,7 +5714,9 @@ function TabGastos(_ref18) {
     onAddVar = _ref18.onAddVar,
     onDelVar = _ref18.onDelVar,
     onAddCash = _ref18.onAddCash,
-    onAddCard = _ref18.onAddCard;
+    onAddCard = _ref18.onAddCard,
+    onToggleVarPaid = _ref18.onToggleVarPaid;
+  const curMonthV = new Date().toISOString().slice(0, 7);
   const _useState41 = useState({
       name: '',
       amount: '',
@@ -5133,7 +5942,10 @@ function TabGastos(_ref18) {
     }
   }, data.varExps.map(e => /*#__PURE__*/React.createElement("div", {
     key: e.id,
-    className: "exp-row"
+    className: "exp-row",
+    style: (data.paidVars || {})[`${e.catId}_${curMonthV}`] ? {
+      opacity: 0.55
+    } : {}
   }, /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 17
@@ -5145,7 +5957,8 @@ function TabGastos(_ref18) {
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 13,
-      fontWeight: 500
+      fontWeight: 500,
+      textDecoration: (data.paidVars || {})[`${e.catId}_${curMonthV}`] ? 'line-through' : 'none'
     }
   }, e.n), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -5157,10 +5970,25 @@ function TabGastos(_ref18) {
       fontFamily: "'Bricolage Grotesque',sans-serif",
       fontSize: 13,
       fontWeight: 700,
-      color: 'var(--warn)',
+      color: (data.paidVars || {})[`${e.catId}_${curMonthV}`] ? 'var(--accent)' : 'var(--warn)',
       marginRight: 6
     }
-  }, fmt(e.amount), "/mes"), /*#__PURE__*/React.createElement("button", {
+  }, fmt(e.amount), "/mes"), onToggleVarPaid && /*#__PURE__*/React.createElement("button", {
+    style: {
+      background: (data.paidVars || {})[`${e.catId}_${curMonthV}`] ? 'rgba(34,211,165,.2)' : 'rgba(255,255,255,.06)',
+      border: (data.paidVars || {})[`${e.catId}_${curMonthV}`] ? '1px solid rgba(34,211,165,.4)' : '1px solid var(--border)',
+      borderRadius: 7,
+      color: (data.paidVars || {})[`${e.catId}_${curMonthV}`] ? 'var(--accent)' : 'var(--muted)',
+      fontSize: 11,
+      fontWeight: 700,
+      padding: '3px 7px',
+      marginRight: 4,
+      cursor: 'pointer',
+      lineHeight: '1.4',
+      textAlign: 'center'
+    },
+    onClick: () => onToggleVarPaid(`${e.catId}_${curMonthV}`, !(data.paidVars || {})[`${e.catId}_${curMonthV}`])
+  }, (data.paidVars || {})[`${e.catId}_${curMonthV}`] ? "\u2713" : "\u25cb"), /*#__PURE__*/React.createElement("button", {
     className: "btn-x",
     onClick: () => onDelVar(e.id)
   }, "\u2715"))), /*#__PURE__*/React.createElement("div", {
@@ -5180,12 +6008,23 @@ function TabDeudas(_ref20) {
   let data = _ref20.data,
     onAddDebt = _ref20.onAddDebt,
     onDelDebt = _ref20.onDelDebt,
+    onEditDebt = _ref20.onEditDebt,
     sorted = _ref20.sorted,
     onVisit = _ref20.onVisit,
     onMarkPayment = _ref20.onMarkPayment,
     onMarkPaid = _ref20.onMarkPaid,
     onUndoPaid = _ref20.onUndoPaid,
+    onAddLoan = _ref20.onAddLoan,
+    onDelLoan = _ref20.onDelLoan,
     cardTransactions = _ref20.cardTransactions;
+  const _useState113 = useState({
+      person: '',
+      amount: '',
+      notes: ''
+    }),
+    _useState114 = _slicedToArray2(_useState113, 2),
+    lf = _useState114[0],
+    setLf = _useState114[1];
   useEffect(() => onVisit(), []);
   const _useState45 = useState({
       type: 'tarjeta',
@@ -5211,7 +6050,42 @@ function TabDeudas(_ref20) {
     setDf = _useState46[1];
   const totalDebt = data.debts.reduce((s, d) => s + (d.type === 'plan' ? getPlanInfo(d).remainingAmount : +(d.balance || 0)), 0);
   const planDebts = data.debts.filter(d => d.type === 'plan');
-  return /*#__PURE__*/React.createElement(React.Fragment, null, planDebts.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  const topUrgent = (sorted || []).filter(d => d.urg && (d.urg.key === 'critical' || d.urg.key === 'danger')).slice(0, 1);
+  return /*#__PURE__*/React.createElement(React.Fragment, null, topUrgent.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'rgba(239,68,68,.08)',
+      border: '1px solid rgba(239,68,68,.3)',
+      borderRadius: 14,
+      padding: '12px 14px',
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      color: 'var(--danger)',
+      marginBottom: 6,
+      letterSpacing: .5
+    }
+  }, "🎯 ATACA PRIMERO"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      fontSize: 14,
+      color: 'var(--text)',
+      marginBottom: 2
+    }
+  }, topUrgent[0].name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: 'var(--muted)'
+    }
+  }, (URG[topUrgent[0].urg.key] || {}).icon, " ", (URG[topUrgent[0].urg.key] || {}).label, topUrgent[0].urg.daysLeft != null ? ` · ${topUrgent[0].urg.daysLeft === 0 ? '\xA1Hoy!' : topUrgent[0].urg.daysLeft === 1 ? 'Ma\xF1ana' : topUrgent[0].urg.daysLeft + ' d\xEDas'}` : ''), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'rgba(239,68,68,.8)',
+      marginTop: 4
+    }
+  }, "Prioriza este pago esta quincena antes que cualquier otro.")), planDebts.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "sec"
   }, /*#__PURE__*/React.createElement("span", null, "\uD83D\uDCCB Planes de pago activos")), /*#__PURE__*/React.createElement(PlanProgressCards, {
     data: data,
@@ -5589,6 +6463,7 @@ function TabDeudas(_ref20) {
     d: d,
     rank: i + 1,
     onDel: onDelDebt,
+    onEditDebt: onEditDebt,
     onMarkPaid: onMarkPaid,
     onUndoPaid: onUndoPaid,
     cardTransactions: cardTransactions
@@ -5596,7 +6471,118 @@ function TabDeudas(_ref20) {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "empty"
-  }, "Sin deudas registradas.")));
+  }, "Sin deudas registradas.")), /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      marginTop: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ct"
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13
+    }
+  }, "🤝"), " Te deben", (data.loans || []).length > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 'auto',
+      fontWeight: 400,
+      color: 'var(--accent)',
+      textTransform: 'none',
+      letterSpacing: 0
+    }
+  }, fmt((data.loans || []).reduce((s, l) => s + (+l.amount || 0), 0)))), /*#__PURE__*/React.createElement("div", {
+    className: "fg"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ff"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "fl"
+  }, "Qui\xE9n"), /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    value: lf.person,
+    onChange: e => setLf(p => ({
+      ...p,
+      person: e.target.value
+    })),
+    placeholder: "Nombre"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "ff"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "fl"
+  }, "Cu\xE1nto"), /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "number",
+    inputMode: "decimal",
+    value: lf.amount,
+    onChange: e => setLf(p => ({
+      ...p,
+      amount: e.target.value
+    })),
+    placeholder: "$0"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "ff fg-full"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "fl"
+  }, "Nota (opcional)"), /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    value: lf.notes,
+    onChange: e => setLf(p => ({
+      ...p,
+      notes: e.target.value
+    })),
+    placeholder: "Ej. Cena del viernes"
+  }))), /*#__PURE__*/React.createElement("button", {
+    className: "btn-g",
+    onClick: () => {
+      if (lf.person && lf.amount && onAddLoan) {
+        onAddLoan(lf);
+        setLf({
+          person: '',
+          amount: '',
+          notes: ''
+        });
+      }
+    }
+  }, "Registrar pr\xE9stamo"), (data.loans || []).length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10
+    }
+  }, (data.loans || []).map(l => /*#__PURE__*/React.createElement("div", {
+    key: l.id,
+    className: "exp-row"
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 15
+    }
+  }, "🤝"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, l.person), l.notes && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: 'var(--muted)'
+    }
+  }, l.notes), l.date && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: 'var(--muted)'
+    }
+  }, l.date)), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Bricolage Grotesque',sans-serif",
+      fontWeight: 700,
+      color: 'var(--accent)',
+      marginRight: 6
+    }
+  }, fmt(+l.amount)), onDelLoan && /*#__PURE__*/React.createElement("button", {
+    className: "btn-x",
+    onClick: () => onDelLoan(l.id)
+  }, "✕"))))));
 }
 function TabInfo(_ref21) {
   let data = _ref21.data,
@@ -5721,30 +6707,42 @@ function TabInfo(_ref21) {
     style: {
       fontSize: 13
     }
-  }, "🏦"), " Saldo en cuenta de d\xE9bito"), /*#__PURE__*/React.createElement("div", {
+  }, "💰"), " Mi saldo actual"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
       color: 'var(--muted)',
       marginBottom: 10,
       lineHeight: 1.5
     }
-  }, "Actualiza cuando revises tu cuenta. Lo usamos para calcular lo que te queda real despu\xE9s de pagos pendientes."), /*#__PURE__*/React.createElement("input", {
-    className: "inp",
+  }, "Actualiza cada vez que revises tu cuenta. Tu quincena se suma autom\xE1ticamente el d\xEDa que cae."), /*#__PURE__*/React.createElement("div", {
+    className: "q-grid"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "q-box"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "q-lbl"
+  }, "🏦 D\xE9bito"), /*#__PURE__*/React.createElement("input", {
+    className: "q-inp",
     type: "number",
     inputMode: "decimal",
-    placeholder: "Ej. 5000",
-    value: data.saldoActual || '',
+    placeholder: "0",
+    value: data.saldoDebito || '',
     onChange: e => onChange({
-      saldoActual: e.target.value
+      saldoDebito: e.target.value
     })
-  }), data.saldoActual > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: 'var(--blue)',
-      marginTop: 8,
-      fontWeight: 600
-    }
-  }, "💙 Saldo registrado: ", fmt(+data.saldoActual))), /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "q-box"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "q-lbl"
+  }, "💵 Efectivo"), /*#__PURE__*/React.createElement("input", {
+    className: "q-inp",
+    type: "number",
+    inputMode: "decimal",
+    placeholder: "0",
+    value: data.saldoEfectivo || '',
+    onChange: e => onChange({
+      saldoEfectivo: e.target.value
+    })
+  })))), /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       marginTop: 8,
@@ -6117,6 +7115,159 @@ function TabInfo(_ref21) {
 }
 
 /* ════════ MAIN APP ════════ */
+const TUTORIAL_SLIDES = [{
+  icon: '🎮',
+  title: 'Tu presupuesto, gamificado',
+  body: 'Gana XP, sube de nivel y desbloquea logros mientras controlas tu dinero. Cada quincena es una misión nueva.'
+}, {
+  icon: '💸',
+  title: 'Anota tus gastos',
+  body: 'Toca el campo de gasto en la pantalla Hoy. Elige 🏦 D\xE9bito (descuenta de tu cuenta), 💵 Efectivo o 💳 Tarjeta. Tu historial se guarda autom\xE1tico.'
+}, {
+  icon: '📋',
+  title: 'Tu historial',
+  body: 'En la pesta\xF1a Historial ves todos tus movimientos. Filtra por tipo, edita montos y elimina gastos registrados por error.'
+}, {
+  icon: '🗡️',
+  title: 'Misiones diarias',
+  body: 'Cada d\xEDa tienes 3 misiones: anotar gastos, revisar saldo, pagar deudas. Compl\xE9talas para ganar XP y mantener tu racha.'
+}, {
+  icon: '🏦',
+  title: 'Controla tus deudas',
+  body: 'En Deudas ves la urgencia de cada pago: 🔴 cr\xEDtico, 🟠 peligro, 🟡 atenci\xF3n. Paga siempre las m\xE1s urgentes primero.'
+}, {
+  icon: '💚',
+  title: 'Tu HealthScore',
+  body: 'Tu score de salud financiera va de 0 a 100. Lo determinan tu racha, saldo disponible, deudas urgentes, misiones del d\xEDa y fondo de emergencia.'
+}];
+function TutorialOverlay(_ref_tut) {
+  let onClose = _ref_tut.onClose;
+  const _stT = useState(0),
+    _stT2 = _slicedToArray(_stT, 2),
+    slide = _stT2[0],
+    setSlide = _stT2[1];
+  const total = TUTORIAL_SLIDES.length;
+  const s = TUTORIAL_SLIDES[slide];
+  const isLast = slide === total - 1;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(4,21,15,.92)',
+      zIndex: 9999,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '24px 20px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '100%',
+      maxWidth: 360,
+      background: 'var(--card)',
+      borderRadius: 20,
+      padding: '28px 22px',
+      border: '1px solid var(--border)',
+      position: 'relative'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    style: {
+      position: 'absolute',
+      top: 12,
+      right: 14,
+      background: 'none',
+      border: 'none',
+      fontSize: 18,
+      color: 'var(--muted)',
+      cursor: 'pointer',
+      lineHeight: '1',
+      textAlign: 'center',
+      padding: '6px 10px'
+    }
+  }, "✕"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 5,
+      marginBottom: 20
+    }
+  }, TUTORIAL_SLIDES.map((_, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      height: 3,
+      borderRadius: 2,
+      flex: 1,
+      background: i <= slide ? 'var(--accent)' : 'rgba(255,255,255,.12)'
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      fontSize: 44,
+      marginBottom: 10,
+      lineHeight: '1'
+    }
+  }, s.icon), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      fontSize: 17,
+      color: 'var(--text)',
+      textAlign: 'center',
+      marginBottom: 10
+    }
+  }, s.title), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: 'var(--muted)',
+      textAlign: 'center',
+      lineHeight: '1.65',
+      marginBottom: 22
+    }
+  }, s.body), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 10
+    }
+  }, slide > 0 && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setSlide(slide - 1),
+    style: {
+      flex: 1,
+      padding: '12px 0',
+      borderRadius: 12,
+      border: '1px solid var(--border)',
+      background: 'transparent',
+      color: 'var(--muted)',
+      fontFamily: 'inherit',
+      fontSize: 14,
+      cursor: 'pointer',
+      lineHeight: '1.4',
+      textAlign: 'center'
+    }
+  }, "← Atr\xE1s"), /*#__PURE__*/React.createElement("button", {
+    onClick: isLast ? onClose : () => setSlide(slide + 1),
+    style: {
+      flex: 1,
+      padding: '12px 0',
+      borderRadius: 12,
+      border: 'none',
+      background: 'var(--accent)',
+      color: '#000',
+      fontFamily: 'inherit',
+      fontSize: 14,
+      fontWeight: 700,
+      cursor: 'pointer',
+      lineHeight: '1.4',
+      textAlign: 'center'
+    }
+  }, isLast ? '\xA1Listo! 🎉' : 'Siguiente →')), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      fontSize: 10,
+      color: 'var(--muted)',
+      marginTop: 10
+    }
+  }, slide + 1, " de ", total)));
+}
 function MainApp(_ref22) {
   let onLock = _ref22.onLock;
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -6150,6 +7301,15 @@ function MainApp(_ref22) {
     _useState62 = _slicedToArray(_useState61, 2),
     showOnboarding = _useState62[0],
     setShowOnboarding = _useState62[1];
+  const _useState_tut = useState(false),
+    _useState_tut2 = _slicedToArray(_useState_tut, 2),
+    showTutorial = _useState_tut2[0],
+    setShowTutorial = _useState_tut2[1];
+  const _useStateP1 = useState(null),
+    _useStateP2 = _slicedToArray(_useStateP1, 2),
+    paydayBanner = _useStateP2[0],
+    setPaydayBanner = _useStateP2[1];
+  const paydayChecked = useRef(false);
   const _useState63 = useState(() => {
       const saved = loadLS(DATA_KEY);
       return saved ? {
@@ -6284,6 +7444,35 @@ function MainApp(_ref22) {
     }
   }, []);
 
+  // Auto-payday detection (runs once per session)
+  useEffect(() => {
+    if (paydayChecked.current) return;
+    paydayChecked.current = true;
+    const today = new Date();
+    const day = today.getDate();
+    const isQ1 = day <= 15;
+    const isPayday = isQ1 ? day === 1 : day === 16;
+    if (!isPayday) return;
+    const quincena = `${today.toISOString().slice(0, 7)}-${isQ1 ? 'Q1' : 'Q2'}`;
+    const alreadyAdded = (data.paydays || []).some(p => p.quincena === quincena);
+    if (alreadyAdded) return;
+    const incomeAmount = isQ1 ? +data.q1 || 0 : +data.q2 || 0;
+    if (!incomeAmount) return;
+    const newPayday = {
+      quincena,
+      amount: incomeAmount,
+      addedAt: todayStr
+    };
+    update({
+      paydays: [...(data.paydays || []), newPayday]
+    });
+    setPaydayBanner({
+      isQ1,
+      amount: incomeAmount
+    });
+    awardXP(20, {});
+  }, []);
+
   // Chest trigger
   useEffect(() => {
     const total = (data.cashTransactions || []).length + (data.cardTransactions || []).length;
@@ -6355,22 +7544,40 @@ function MainApp(_ref22) {
     });
     vibrate([100, 50, 200]);
   }, [data.debts, update, awardXP]);
-  const markDebtPaid = useCallback(debtId => {
+  const markDebtPaid = useCallback((debtId, amount) => {
     const month = new Date().toISOString().slice(0, 7);
+    const paidAt = new Date().toISOString().slice(0, 10);
+    const debtObj = data.debts.find(d => d.id === debtId) || {};
     update({
-      debts: data.debts.map(d => d.id === debtId ? {
-        ...d,
-        monthlyPayments: [...(d.monthlyPayments || []).filter(p => p.month !== month), {
+      debts: data.debts.map(d => {
+        if (d.id !== debtId) return d;
+        const payRecord = {
           month,
-          paidAt: new Date().toISOString().slice(0, 10)
-        }]
-      } : d)
+          paidAt,
+          amount: amount || 0
+        };
+        const newMonthlyPayments = [...(d.monthlyPayments || []).filter(p => p.month !== month), payRecord];
+        const newBalance = amount && d.balance ? Math.max(0, +(d.balance || 0) - amount) : d.balance;
+        return {
+          ...d,
+          monthlyPayments: newMonthlyPayments,
+          balance: newBalance
+        };
+      }),
+      cardPayments: [...(data.cardPayments || []), {
+        id: uid(),
+        debtId,
+        debtName: debtObj.name || '',
+        month,
+        paidAt,
+        amount: amount || 0
+      }]
     });
     awardXP(15, {
       debtPaid: true
     });
     vibrate([100, 50, 200]);
-  }, [data.debts, update, awardXP]);
+  }, [data.debts, data.cardPayments, update, awardXP]);
   const unmarkDebtPaid = useCallback(debtId => {
     const month = new Date().toISOString().slice(0, 7);
     update({
@@ -6483,7 +7690,42 @@ function MainApp(_ref22) {
         saveLS(GAME_KEY, p);
         return p;
       });
-    }
+    },
+    delCash: id => update({
+      cashTransactions: (data.cashTransactions || []).filter(t => t.id !== id)
+    }),
+    delCard: id => update({
+      cardTransactions: (data.cardTransactions || []).filter(t => t.id !== id)
+    }),
+    editCash: (id, patch) => update({
+      cashTransactions: (data.cashTransactions || []).map(t => t.id === id ? {
+        ...t,
+        ...patch
+      } : t)
+    }),
+    editDebt: (id, patch) => update({
+      debts: data.debts.map(d => d.id === id ? {
+        ...d,
+        ...patch
+      } : d)
+    }),
+    toggleVarPaid: (key, val) => update({
+      paidVars: {
+        ...(data.paidVars || {}),
+        [key]: val
+      }
+    }),
+    addLoan: lf => update({
+      loans: [...(data.loans || []), {
+        ...lf,
+        id: uid(),
+        date: new Date().toISOString().slice(0, 10),
+        amount: +lf.amount
+      }]
+    }),
+    delLoan: id => update({
+      loans: (data.loans || []).filter(l => l.id !== id)
+    })
   };
   const sorted = useMemo(() => sortDebts(data.debts), [data.debts]);
   const dp = useMemo(() => calcDP(data), [data]);
@@ -6511,6 +7753,8 @@ function MainApp(_ref22) {
   }), levelUpData && /*#__PURE__*/React.createElement(LevelUpOverlay, {
     lvlData: levelUpData,
     onDismiss: () => setLevelUpData(null)
+  }), showTutorial && /*#__PURE__*/React.createElement(TutorialOverlay, {
+    onClose: () => setShowTutorial(false)
   }), /*#__PURE__*/React.createElement("div", {
     className: "app"
   }, /*#__PURE__*/React.createElement("div", {
@@ -6540,10 +7784,16 @@ function MainApp(_ref22) {
     }
   }, pill.txt)), /*#__PURE__*/React.createElement("button", {
     className: "lock-btn",
+    style: {
+      marginRight: 6
+    },
+    onClick: () => setShowTutorial(true)
+  }, "?"), /*#__PURE__*/React.createElement("button", {
+    className: "lock-btn",
     onClick: onLock
   }, "\uD83D\uDD12 Bloquear"))), /*#__PURE__*/React.createElement("div", {
     className: "tabs"
-  }, [['hoy', '🏠', 'Hoy'], ['gastos', '💸', 'Gastos'], ['deudas', '🏦', 'Deudas'], ['info', '⚙️', 'Mi Info']].map(_ref23 => {
+  }, [['hoy', '🏠', 'Hoy'], ['gastos', '💸', 'Gastos'], ['deudas', '🏦', 'Deudas'], ['historial', '📋', 'Historial'], ['info', '⚙️', 'Info']].map(_ref23 => {
     let _ref24 = _slicedToArray(_ref23, 3),
       k = _ref24[0],
       i = _ref24[1],
@@ -6556,12 +7806,51 @@ function MainApp(_ref22) {
   })), tab === 'hoy' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(GameHeroCard, {
     game: game,
     userName: userName
-  }), /*#__PURE__*/React.createElement(HealthScore, {
+  }), paydayBanner && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'linear-gradient(135deg,rgba(34,211,165,.18),rgba(96,165,250,.12))',
+      border: '1px solid rgba(34,211,165,.4)',
+      borderRadius: 14,
+      padding: '14px 16px',
+      marginBottom: 10,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      fontSize: 14,
+      color: 'var(--accent)'
+    }
+  }, "🎉 ¡Cayó tu ", paydayBanner.isQ1 ? 'Q1' : 'Q2', "!"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: 'var(--muted)',
+      marginTop: 2
+    }
+  }, fmt(paydayBanner.amount), " sumados a tu saldo")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setPaydayBanner(null),
+    style: {
+      background: 'none',
+      border: 'none',
+      color: 'var(--muted)',
+      fontSize: 18,
+      cursor: 'pointer',
+      padding: '0 4px'
+    }
+  }, "×")), /*#__PURE__*/React.createElement(HealthScore, {
     data: data,
     game: game,
     dp: dp
   }), /*#__PURE__*/React.createElement(CountdownRail, {
-    data: data
+    data: data,
+    onMarkPaidExp: (expId, month) => update({
+      paidExps: {
+        ...(data.paidExps || {}),
+        [`${expId}_${month}`]: true
+      }
+    })
   }), showChest && /*#__PURE__*/React.createElement(SurpriseChest, {
     onOpen: openChest
   }), /*#__PURE__*/React.createElement(DailyMissions, {
@@ -6729,27 +8018,27 @@ function MainApp(_ref22) {
       fontWeight: 800,
       fontSize: 13
     }
-  }, fmt(dp.remaining))), dp.saldoActual > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, fmt(dp.remaining))), dp.hasSaldo && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "db-div"
-  }), /*#__PURE__*/React.createElement("div", {
+  }), dp.currentDebit > 0 && /*#__PURE__*/React.createElement("div", {
     className: "db-row"
   }, /*#__PURE__*/React.createElement("span", {
     className: "db-label"
-  }, "🏦 Saldo en cuenta"), /*#__PURE__*/React.createElement("span", {
+  }, "🏦 Cuenta débito"), /*#__PURE__*/React.createElement("span", {
     className: "db-val",
     style: {
       color: 'var(--blue)'
     }
-  }, fmt(dp.saldoActual))), /*#__PURE__*/React.createElement("div", {
+  }, fmt(dp.currentDebit))), dp.currentEfectivo > 0 && /*#__PURE__*/React.createElement("div", {
     className: "db-row"
   }, /*#__PURE__*/React.createElement("span", {
     className: "db-label"
-  }, "− Pendientes quincena"), /*#__PURE__*/React.createElement("span", {
+  }, "💵 Efectivo"), /*#__PURE__*/React.createElement("span", {
     className: "db-val",
     style: {
-      color: 'var(--muted)'
+      color: 'var(--blue)'
     }
-  }, "−", fmt(dp.saldoActual - dp.realBalance))), /*#__PURE__*/React.createElement("div", {
+  }, fmt(dp.currentEfectivo))), /*#__PURE__*/React.createElement("div", {
     className: "db-row"
   }, /*#__PURE__*/React.createElement("span", {
     className: "db-label",
@@ -6757,7 +8046,7 @@ function MainApp(_ref22) {
       fontWeight: 700,
       color: 'var(--text)'
     }
-  }, "= En cuenta despu\xE9s"), /*#__PURE__*/React.createElement("span", {
+  }, "= Despu\xE9s de pendientes"), /*#__PURE__*/React.createElement("span", {
     className: "db-val",
     style: {
       color: dp.realBalance >= 0 ? 'var(--blue)' : 'var(--danger)',
@@ -6868,17 +8157,26 @@ function MainApp(_ref22) {
     onAddVar: actions.addVar,
     onDelVar: actions.delVar,
     onAddCash: actions.addCash,
-    onAddCard: actions.addCard
+    onAddCard: actions.addCard,
+    onToggleVarPaid: actions.toggleVarPaid
   }), tab === 'deudas' && /*#__PURE__*/React.createElement(TabDeudas, {
     data: data,
     sorted: sorted,
     onAddDebt: actions.addDebt,
     onDelDebt: actions.delDebt,
+    onEditDebt: actions.editDebt,
+    onAddLoan: actions.addLoan,
+    onDelLoan: actions.delLoan,
     onVisit: actions.visitDebt,
     onMarkPayment: markPlanPayment,
     onMarkPaid: markDebtPaid,
     onUndoPaid: unmarkDebtPaid,
     cardTransactions: data.cardTransactions || []
+  }), tab === 'historial' && React.createElement(TabHistorial, {
+    data: data,
+    onDelCash: actions.delCash,
+    onDelCard: actions.delCard,
+    onEditCash: actions.editCash
   }), tab === 'info' && /*#__PURE__*/React.createElement(TabInfo, {
     data: data,
     onChange: patch => {
