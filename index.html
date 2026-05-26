@@ -78,7 +78,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'Instrument Sans',s
 .save-dot{width:6px;height:6px;border-radius:50%}
 .lock-btn{font-size:11px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px 10px;cursor:pointer;-webkit-appearance:none}
 .tabs{display:flex;gap:2px;background:var(--surface);border-radius:12px;padding:3px;margin-bottom:12px;border:1px solid var(--border)}
-.tab{flex:1;padding:8px 2px;border-radius:9px;border:none;background:transparent;color:var(--muted);font-family:'Instrument Sans',sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:all .2s;text-align:center;-webkit-appearance:none}
+.tab{flex:1;padding:8px 1px;border-radius:9px;border:none;background:transparent;color:var(--muted);font-family:'Instrument Sans',sans-serif;font-size:10px;font-weight:600;cursor:pointer;transition:all .2s;text-align:center;-webkit-appearance:none}
 .tab.on{background:var(--card);color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,.6)}
 .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px}
 .ct{font-family:'Bricolage Grotesque',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:11px;display:flex;align-items:center;gap:5px}
@@ -424,90 +424,90 @@ const LEVELS = [{
   n: 2,
   min: 100,
   max: 299,
-  title: "Aldeano con Harapos",
-  emoji: "🧥",
+  title: "Chilango Pelado",
+  emoji: "📱",
   color: "#60a5fa",
-  story: "Ya tienes algo con qué cubrirte. Vas agarrando el ritmo."
+  story: "La quincena llega a cero el día 14. Te lo sabes de memoria."
 }, {
   n: 3,
   min: 300,
   max: 599,
-  title: "Aprendiz Armado",
-  emoji: "🗡️",
+  title: "Ya con Ritmo",
+  emoji: "🎧",
   color: "#a78bfa",
-  story: "Conseguiste una espada de madera. No es mucho, pero ya da respeto."
+  story: "Anotas tus gastos, controlas algo. El cambio empieza aquí."
 }, {
   n: 4,
   min: 600,
   max: 1099,
-  title: "Escudero",
-  emoji: "🛡️",
+  title: "Empleado Organizado",
+  emoji: "💼",
   color: "#f472b6",
-  story: "Escudo en mano. Ahora te puedes defender de las deudas que vienen."
+  story: "Sin deudas chicas. Ya sabes exactamente en qué se va tu dinero."
 }, {
   n: 5,
   min: 1100,
   max: 1999,
-  title: "Guerrero de Cuero",
-  emoji: "⚔️",
+  title: "Inquilino sin Dramas",
+  emoji: "🏠",
   color: "#fbbf24",
-  story: "Armadura de cuero recién estrenada. Estás tomando esto en serio."
+  story: "Renta cubierta, algo de ahorro. Las prioridades claras."
 }, {
   n: 6,
   min: 2000,
   max: 3499,
-  title: "Caballero de Hierro",
-  emoji: "🤺",
+  title: "Mid-level Financiero",
+  emoji: "🚗",
   color: "#fb923c",
-  story: "Espada y escudo de metal. Eres una amenaza real para las deudas."
+  story: "Ahorro consistente, deudas bajo control. Esto ya se nota."
 }, {
   n: 7,
   min: 3500,
   max: 5999,
-  title: "Caballero Completo",
-  emoji: "🦺",
+  title: "Senior sin Deudas",
+  emoji: "💻",
   color: "#f87171",
-  story: "Armadura de metal completa. Los aldeanos te miran diferente."
+  story: "Liquidaste algo importante. Tu historial ya presume."
 }, {
   n: 8,
   min: 6000,
   max: 9999,
-  title: "Caballero de Bronce",
-  emoji: "🔱",
+  title: "Gerente de su Vida",
+  emoji: "🧳",
   color: "#CD7F32",
-  story: "Bronce puro. La gente se mueve cuando entras al pueblo."
+  story: "Fondo de emergencia activo. Los imprevistos ya no te quiebran."
 }, {
   n: 9,
   min: 10000,
   max: 15999,
-  title: "Caballero Dorado",
-  emoji: "👑",
+  title: "Ejecutivo Financiero",
+  emoji: "👔",
   color: "#FFD700",
-  story: "Armadura de oro. El rey mismo te pide consejo financiero."
+  story: "Varias fuentes de ingreso. El dinero empieza a trabajar para ti."
 }, {
   n: 10,
   min: 16000,
   max: 24999,
-  title: "Caballero Oscuro",
-  emoji: "🖤",
+  title: "Director General",
+  emoji: "🏙️",
   color: "#c084fc",
-  story: "Armadura negra con poderes oscuros. Nadie se atreve a cobrarte."
+  story: "Tus finanzas corren solas. Tú supervisas, nomás."
 }, {
   n: 11,
   min: 25000,
   max: 39999,
-  title: "Jinete Legendario",
-  emoji: "🏇",
+  title: "Inversionista Libre",
+  emoji: "🚀",
   color: "#fb923c",
-  story: "Montando un caballo negro. Tu ejército se está formando detrás de ti."
+  story: "Portfolio activo, deudas cero, ingresos pasivos. La neta."
 }, {
   n: 12,
   min: 40000,
   max: 999999,
-  title: "Dios del Dragón",
-  emoji: "🐉",
+  title: "Libre Financiero",
+  emoji: "💎",
   color: "#f87171",
-  story: "Montando un dragón de fuego. Completamente libre de deudas. Leyenda."
+  story: "Libertad total. El dinero trabaja mientras tú decides qué hacer hoy."
 }];
 const getLvl = xp => LEVELS.find(l => xp >= l.min && xp <= l.max) || LEVELS[LEVELS.length - 1];
 const getXPProg = xp => {
@@ -676,26 +676,26 @@ const ACHIEVEMENTS = [{
   check: g => g.streak >= 30
 }, {
   id: "level3",
-  icon: "🗡️",
-  title: "Ya llevas arma",
+  icon: "🎧",
+  title: "Ya con ritmo",
   desc: "Nivel 3 alcanzado",
   check: g => g.xp >= 300
 }, {
   id: "level6",
-  icon: "🤺",
-  title: "Caballero de hierro",
+  icon: "🚗",
+  title: "Mid-level financiero",
   desc: "Nivel 6 alcanzado",
   check: g => g.xp >= 2000
 }, {
   id: "level9",
-  icon: "👑",
-  title: "El rey de tus finanzas",
+  icon: "👔",
+  title: "Ejecutivo financiero",
   desc: "Nivel 9 alcanzado",
   check: g => g.xp >= 10000
 }, {
   id: "level12",
-  icon: "🐉",
-  title: "Dios del Dragón",
+  icon: "💎",
+  title: "Libre Financiero",
   desc: "Nivel máximo. Leyenda.",
   check: g => g.xp >= 40000
 }, {
@@ -756,7 +756,10 @@ const GAME_INIT = {
   sessionCount: 0,
   todayXP: 0,
   todayDate: '',
-  planPaymentsMade: 0
+  planPaymentsMade: 0,
+  bits: 0,
+  inventory: [],
+  equipped: {}
 };
 
 /* ── CONSTANTS ── */
@@ -1419,13 +1422,13 @@ function PixelHero(_ref) {
   const n = Math.min(12, Math.max(1, level));
   const SK = '#FDBCB4',
     HAIR = '#784212';
-  const hasHelmet = n >= 7;
-  const AP = ['', '', '', '', '#8B5E3C', '#8B5E3C', '#7F8C8D', '#B5651D', '#C9A227', '#1C2833', '#1C2833', '#1C2833'][n - 1] || SK;
-  const HP = ['', '', '', '', '', '', '#5D6D7E', '#935116', '#9A7D0A', '#0d0d2e', '#0d0d2e', '#0d0d2e'][n - 1] || '#5D6D7E';
-  const SP = n >= 10 ? '#1C2833' : n >= 9 ? '#D4AC0D' : n >= 8 ? '#CA6F1E' : n >= 6 ? '#95A5A6' : '#C4A265';
-  const WP = n >= 10 ? '#0d0d2e' : n >= 9 ? '#F4D03F' : n >= 8 ? '#E59866' : n >= 6 ? '#ECF0F1' : '#D4A96A';
-  const WE = n >= 10 ? '#9B59B6' : n >= 9 ? '#F7DC6F' : n >= 8 ? '#F0B27A' : n >= 6 ? '#BDC3C7' : '#A07440';
-  const CL = n >= 10 ? '#0a0a1a' : n >= 9 ? '#B7950B' : n >= 8 ? '#935116' : n >= 7 ? '#6E6E6E' : n >= 5 ? '#6E2C12' : n >= 2 ? '#4A4A4A' : '#784212';
+  // Modern clothing palette — shirt/jacket per level
+  const SHIRTS = ['#dde1e7', '#444444', '#3a5fa0', '#2980B9', '#1d6a9e', '#17406b', '#212f3d', '#5a2d82', '#9A7D0A', '#0d0d2e', '#f0f3f4', '#fdf6d0'];
+  const SHIRT = SHIRTS[n - 1];
+  const PANTS = n >= 10 ? '#0a0a1a' : n >= 7 ? '#1C2833' : n >= 4 ? '#2C3E50' : '#3d2b1f';
+  const SHOES = n >= 9 ? '#0a0a0a' : n >= 5 ? '#2c2c2c' : '#5D4037';
+  const hasCap = n >= 4 && n <= 7;
+  const hasSunglasses = n >= 8;
   const vH = n >= 11 ? 130 : 92;
   return /*#__PURE__*/React.createElement("svg", {
     viewBox: `0 0 60 ${vH}`,
@@ -1433,198 +1436,123 @@ function PixelHero(_ref) {
     height: "100%"
   }, n === 11 && /*#__PURE__*/React.createElement("g", {
     transform: "translate(0,73)"
-  }, /*#__PURE__*/React.createElement("ellipse", {
-    cx: "29",
-    cy: "22",
-    rx: "25",
-    ry: "14",
-    fill: "#4a2e10"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "42",
-    y: "8",
-    width: "12",
-    height: "20",
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "5",
+    y: "13",
+    width: "52",
+    height: "24",
     rx: "5",
-    fill: "#4a2e10"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "54",
-    cy: "8",
-    rx: "12",
-    ry: "9",
-    fill: "#4a2e10"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "58",
-    cy: "6",
-    r: "2",
-    fill: "#1a0800"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M44,4 Q38,10 36,20 Q41,14 46,10Z",
-    fill: "#2a1500"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M4,18 Q-5,24 -1,33 Q4,28 1,20Z",
-    fill: "#2a1500"
+    fill: "#1a6bcc"
   }), /*#__PURE__*/React.createElement("rect", {
-    x: "8",
-    y: "30",
-    width: "9",
-    height: "20",
-    rx: "3",
-    fill: "#3a1e08"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "20",
-    y: "32",
-    width: "9",
+    x: "11",
+    y: "3",
+    width: "38",
     height: "18",
-    rx: "3",
-    fill: "#3a1e08"
+    rx: "6",
+    fill: "#2480e8"
   }), /*#__PURE__*/React.createElement("rect", {
-    x: "33",
-    y: "32",
-    width: "9",
-    height: "18",
-    rx: "3",
-    fill: "#3a1e08"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "45",
-    y: "30",
-    width: "9",
-    height: "20",
-    rx: "3",
-    fill: "#3a1e08"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "6",
-    y: "48",
+    x: "14",
+    y: "5",
     width: "13",
-    height: "5",
+    height: "12",
     rx: "2",
-    fill: "#0a0500"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "18",
-    y: "48",
-    width: "13",
-    height: "5",
-    rx: "2",
-    fill: "#0a0500"
+    fill: "#AED6F1",
+    opacity: "0.85"
   }), /*#__PURE__*/React.createElement("rect", {
     x: "31",
-    y: "48",
+    y: "5",
     width: "13",
-    height: "5",
+    height: "12",
     rx: "2",
-    fill: "#0a0500"
+    fill: "#AED6F1",
+    opacity: "0.85"
   }), /*#__PURE__*/React.createElement("rect", {
-    x: "43",
-    y: "48",
-    width: "13",
+    x: "3",
+    y: "26",
+    width: "55",
     height: "5",
-    rx: "2",
-    fill: "#0a0500"
+    rx: "1",
+    fill: "#0f4a99"
   }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "27",
-    cy: "10",
-    rx: "13",
-    ry: "5",
-    fill: "#1a0800",
-    opacity: "0.65"
-  })), n === 12 && /*#__PURE__*/React.createElement("g", {
-    transform: "translate(-2,62)"
-  }, /*#__PURE__*/React.createElement("path", {
-    d: "M5,22 L32,4 L26,36Z",
-    fill: "#0f3d1e"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M57,22 L30,4 L36,36Z",
-    fill: "#0f3d1e"
+    cx: "16",
+    cy: "38",
+    rx: "8",
+    ry: "8",
+    fill: "#1a1a1a"
   }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "31",
-    cy: "31",
-    rx: "26",
-    ry: "17",
-    fill: "#1a5c2e"
-  }), [6, 14, 22, 30, 38, 46, 54].map((x, i) => /*#__PURE__*/React.createElement("ellipse", {
-    key: i,
-    cx: x,
-    cy: 27 + i % 2 * 3,
-    rx: "6",
-    ry: "5",
-    fill: "#0f3d1e"
-  })), /*#__PURE__*/React.createElement("rect", {
-    x: "40",
-    y: "12",
-    width: "14",
-    height: "24",
-    rx: "6",
-    fill: "#1a5c2e"
+    cx: "16",
+    cy: "38",
+    rx: "4",
+    ry: "4",
+    fill: "#555"
   }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "53",
-    cy: "12",
-    rx: "14",
-    ry: "11",
-    fill: "#1a5c2e"
+    cx: "46",
+    cy: "38",
+    rx: "8",
+    ry: "8",
+    fill: "#1a1a1a"
   }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "57",
-    cy: "9",
-    r: "3",
-    fill: "#FF6600"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "57",
-    cy: "9",
-    r: "1.5",
-    fill: "#FF2200"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M49,2 L44,-5 L51,0Z",
-    fill: "#0a2e14"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M57,2 L62,-5 L55,0Z",
-    fill: "#0a2e14"
+    cx: "46",
+    cy: "38",
+    rx: "4",
+    ry: "4",
+    fill: "#555"
   }), /*#__PURE__*/React.createElement("rect", {
-    x: "62",
+    x: "55",
     y: "18",
     width: "4",
-    height: "7",
-    rx: "1",
-    fill: "#eee"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M64,15 Q74,11 82,7 Q74,18 70,27 Q66,23 64,15Z",
-    fill: "#FF6600",
-    opacity: "0.95"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M66,14 Q78,9 88,5 Q78,19 72,29 Q68,25 66,14Z",
-    fill: "#FFAA00",
-    opacity: "0.65"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M4,30 Q-6,38 -2,50 Q5,44 2,34Z",
-    fill: "#1a5c2e"
+    height: "8",
+    rx: "2",
+    fill: "#F9E79F",
+    opacity: "0.9"
   }), /*#__PURE__*/React.createElement("rect", {
-    x: "12",
-    y: "43",
-    width: "10",
-    height: "16",
-    rx: "4",
-    fill: "#1a5c2e"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "42",
-    y: "43",
-    width: "10",
-    height: "16",
-    rx: "4",
-    fill: "#1a5c2e"
-  }), [-2, 2, 6].map((dx, i) => /*#__PURE__*/React.createElement("rect", {
-    key: i,
-    x: 12 + dx,
-    y: "57",
-    width: "3",
-    height: "6",
+    x: "4",
+    y: "22",
+    width: "48",
+    height: "2",
     rx: "1",
-    fill: "#0a2e14"
-  })), [-2, 2, 6].map((dx, i) => /*#__PURE__*/React.createElement("rect", {
+    fill: "rgba(255,255,255,0.15)"
+  })), n === 12 && /*#__PURE__*/React.createElement("g", {
+    transform: "translate(-2,62)"
+  }, /*#__PURE__*/React.createElement("ellipse", {
+    cx: "31",
+    cy: "26",
+    rx: "29",
+    ry: "10",
+    fill: "#ECF0F1"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M2,26 Q30,16 62,26 Q30,36 2,26Z",
+    fill: "#D5D8DC"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M60,23 Q76,26 62,29 Z",
+    fill: "#BDC3C7"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M4,26 L0,15 L12,24 Z",
+    fill: "#BDC3C7"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M20,33 L10,48 L38,35 Z",
+    fill: "#BDC3C7"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M35,34 L26,48 L52,36 Z",
+    fill: "#BDC3C7"
+  }), [26, 34, 42].map((x, i) => /*#__PURE__*/React.createElement("rect", {
     key: i,
-    x: 42 + dx,
-    y: "57",
-    width: "3",
-    height: "6",
+    x: String(x),
+    y: "20",
+    width: "6",
+    height: "5",
+    rx: "2",
+    fill: "#AED6F1",
+    opacity: "0.85"
+  })), /*#__PURE__*/React.createElement("rect", {
+    x: "8",
+    y: "28",
+    width: "46",
+    height: "2",
     rx: "1",
-    fill: "#0a2e14"
-  }))), /*#__PURE__*/React.createElement("g", {
+    fill: "#F9E79F",
+    opacity: "0.8"
+  })), /*#__PURE__*/React.createElement("g", {
     transform: n >= 11 ? 'translate(4,-14)' : 'translate(4,0)'
   }, /*#__PURE__*/React.createElement("rect", {
     x: "0",
@@ -1632,220 +1560,112 @@ function PixelHero(_ref) {
     width: "10",
     height: "18",
     rx: "4",
-    fill: n >= 5 ? AP : n >= 2 ? '#555' : SK
+    fill: SHIRT
   }), /*#__PURE__*/React.createElement("rect", {
     x: "10",
     y: "22",
     width: "30",
     height: "27",
-    fill: n >= 5 ? AP : n >= 2 ? '#4A4A4A' : SK
-  }), n >= 2 && n <= 4 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
+    fill: SHIRT
+  }), n >= 2 && n <= 4 && /*#__PURE__*/React.createElement("rect", {
     x: "10",
     y: "22",
     width: "30",
     height: "3",
-    fill: "#333"
+    fill: "#222",
+    opacity: "0.3"
+  }), n >= 5 && n <= 8 && /*#__PURE__*/React.createElement("rect", {
+    x: "22",
+    y: "22",
+    width: "6",
+    height: "14",
+    rx: "2",
+    fill: "rgba(255,255,255,0.1)"
+  }), n >= 9 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("path", {
+    d: "M16,22 L23,32 L23,49 L10,49 Z",
+    fill: "rgba(0,0,0,0.15)"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M34,22 L27,32 L27,49 L40,49 Z",
+    fill: "rgba(0,0,0,0.15)"
   }), /*#__PURE__*/React.createElement("rect", {
-    x: "14",
-    y: "25",
+    x: "21",
+    y: "22",
     width: "8",
-    height: "22",
-    fill: "#333",
-    opacity: "0.7"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "27",
-    y: "30",
-    width: "10",
-    height: "16",
-    fill: "#333",
-    opacity: "0.7"
-  })), n >= 5 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
-    x: "11",
-    y: "24",
-    width: "28",
-    height: "2",
-    fill: "rgba(255,255,255,0.2)"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "11",
-    y: "30",
-    width: "28",
-    height: "2",
-    fill: "rgba(255,255,255,0.12)"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "11",
-    y: "36",
-    width: "28",
-    height: "2",
-    fill: "rgba(255,255,255,0.08)"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "24",
-    y: "22",
-    width: "2",
-    height: "27",
-    fill: "rgba(0,0,0,0.2)"
-  })), n >= 10 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
-    x: "10",
-    y: "22",
-    width: "30",
-    height: "27",
-    fill: "#9B59B6",
-    opacity: "0.12"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "10",
-    y: "22",
-    width: "4",
-    height: "27",
-    fill: "#9B59B6",
-    opacity: "0.35"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "36",
-    y: "22",
-    width: "4",
-    height: "27",
-    fill: "#9B59B6",
-    opacity: "0.35"
+    height: "20",
+    rx: "2",
+    fill: n >= 10 ? '#9B59B6' : '#C0392B',
+    opacity: "0.8"
   })), /*#__PURE__*/React.createElement("rect", {
     x: "40",
     y: "26",
     width: "10",
     height: "18",
     rx: "4",
-    fill: n >= 5 ? AP : n >= 2 ? '#555' : SK
+    fill: SHIRT
   }), /*#__PURE__*/React.createElement("rect", {
     x: "10",
     y: "49",
     width: "12",
     height: "24",
     rx: "4",
-    fill: CL
+    fill: PANTS
   }), /*#__PURE__*/React.createElement("rect", {
     x: "28",
     y: "49",
     width: "12",
     height: "24",
     rx: "4",
-    fill: CL
-  }), n >= 7 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
-    x: "10",
-    y: "57",
-    width: "12",
-    height: "12",
+    fill: PANTS
+  }), n >= 3 && /*#__PURE__*/React.createElement("g", {
+    transform: "translate(48,28)"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "0",
+    y: "0",
+    width: "7",
+    height: "11",
     rx: "2",
-    fill: AP
+    fill: n >= 9 ? '#0a0a0a' : '#2C3E50'
   }), /*#__PURE__*/React.createElement("rect", {
-    x: "28",
-    y: "57",
+    x: "1",
+    y: "1",
+    width: "5",
+    height: "7",
+    rx: "1",
+    fill: "#AED6F1",
+    opacity: "0.75"
+  })), n >= 5 && /*#__PURE__*/React.createElement("g", {
+    transform: "translate(-14,30)"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "0",
+    y: "2",
     width: "12",
-    height: "12",
+    height: "9",
     rx: "2",
-    fill: AP
+    fill: n >= 9 ? '#7D6608' : n >= 7 ? '#1C2833' : '#6B4423'
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "4",
+    y: "0",
+    width: "4",
+    height: "3",
+    rx: "1",
+    fill: "none",
+    stroke: n >= 9 ? '#9A7D0A' : '#8a5a33',
+    strokeWidth: "1.5"
   })), /*#__PURE__*/React.createElement("rect", {
     x: "8",
     y: "71",
     width: "16",
     height: "8",
     rx: "4",
-    fill: n >= 5 ? '#3d2008' : '#5D4037'
+    fill: SHOES
   }), /*#__PURE__*/React.createElement("rect", {
     x: "26",
     y: "71",
     width: "16",
     height: "8",
     rx: "4",
-    fill: n >= 5 ? '#3d2008' : '#5D4037'
-  }), hasHelmet ? /*#__PURE__*/React.createElement("g", null, /*#__PURE__*/React.createElement("rect", {
-    x: "10",
-    y: "2",
-    width: "30",
-    height: "28",
-    rx: "8",
-    fill: HP
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "12",
-    y: "0",
-    width: "26",
-    height: "10",
-    rx: "4",
-    fill: HP
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "14",
-    y: "14",
-    width: "22",
-    height: "10",
-    rx: "2",
-    fill: n >= 10 ? '#050510' : '#3a4a5a',
-    opacity: "0.92"
-  }), n >= 10 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
-    x: "15",
-    y: "17",
-    width: "8",
-    height: "4",
-    rx: "2",
-    fill: "#9B59B6"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "27",
-    y: "17",
-    width: "8",
-    height: "4",
-    rx: "2",
-    fill: "#9B59B6"
-  })), n === 8 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
-    x: "22",
-    y: "-6",
-    width: "6",
-    height: "11",
-    rx: "3",
-    fill: "#E74C3C"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "17",
-    y: "-3",
-    width: "4",
-    height: "8",
-    rx: "2",
-    fill: "#C0392B"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "29",
-    y: "-3",
-    width: "4",
-    height: "8",
-    rx: "2",
-    fill: "#C0392B"
-  })), n === 9 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
-    x: "13",
-    y: "-2",
-    width: "24",
-    height: "6",
-    rx: "1",
-    fill: "#F1C40F"
-  }), [15, 21, 27, 33].map((x, i) => /*#__PURE__*/React.createElement("rect", {
-    key: i,
-    x: x,
-    y: "-7",
-    width: "5",
-    height: "7",
-    rx: "1",
-    fill: "#F39C12"
-  })), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "25",
-    cy: "-5",
-    rx: "4",
-    ry: "3",
-    fill: "#E74C3C"
-  })), n >= 10 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
-    x: "10",
-    y: "-1",
-    width: "30",
-    height: "4",
-    fill: "#0a0a1a"
-  }), [12, 17, 22, 27, 32, 37].map((x, i) => /*#__PURE__*/React.createElement("rect", {
-    key: i,
-    x: x,
-    y: "-5",
-    width: "4",
-    height: "6",
-    rx: "1",
-    fill: "#1C2833"
-  })))) : /*#__PURE__*/React.createElement("g", null, /*#__PURE__*/React.createElement("rect", {
+    fill: SHOES
+  }), /*#__PURE__*/React.createElement("g", null, /*#__PURE__*/React.createElement("rect", {
     x: "12",
     y: "2",
     width: "26",
@@ -1943,91 +1763,57 @@ function PixelHero(_ref) {
     height: "2",
     rx: "1",
     fill: "#1C2833"
-  }), n >= 4 && n <= 6 && /*#__PURE__*/React.createElement("rect", {
-    x: "14",
+  }), n >= 9 && /*#__PURE__*/React.createElement("rect", {
+    x: "15",
     y: "20",
-    width: "22",
+    width: "20",
     height: "8",
     rx: "4",
-    fill: HAIR
-  })), n >= 4 && /*#__PURE__*/React.createElement("g", {
-    transform: "translate(-12,24)"
-  }, /*#__PURE__*/React.createElement("ellipse", {
-    cx: "8",
-    cy: "14",
-    rx: "9",
-    ry: "11",
-    fill: SP
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "8",
-    cy: "14",
-    rx: "9",
-    ry: "11",
-    fill: "none",
-    stroke: n >= 10 ? '#9B59B6' : n >= 9 ? '#F39C12' : n >= 8 ? '#E67E22' : n >= 6 ? '#6E6E6E' : '#6B4F2A',
-    strokeWidth: "2.5"
-  }), n >= 7 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
-    x: "5",
-    y: "4",
-    width: "6",
-    height: "20",
-    rx: "1",
-    fill: "rgba(255,255,255,0.15)"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "2",
-    y: "10",
-    width: "12",
-    height: "6",
-    rx: "1",
-    fill: "rgba(255,255,255,0.15)"
-  })), n >= 9 && /*#__PURE__*/React.createElement("ellipse", {
-    cx: "8",
-    cy: "14",
-    rx: "3",
-    ry: "3",
-    fill: n >= 10 ? '#9B59B6' : '#F39C12'
-  })), n >= 3 && (n >= 11 ? /*#__PURE__*/React.createElement("g", {
-    transform: "translate(44,10)"
-  }, /*#__PURE__*/React.createElement("rect", {
-    x: "2",
-    y: "-50",
-    width: "6",
-    height: "80",
-    rx: "2",
-    fill: "#5D3A1A"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M0,-50 L5,-68 L10,-50Z",
-    fill: "#BDC3C7"
-  })) : /*#__PURE__*/React.createElement("g", {
-    transform: "translate(48,16) rotate(15)"
-  }, /*#__PURE__*/React.createElement("rect", {
-    x: "2",
-    y: "18",
-    width: "6",
-    height: "10",
-    rx: "2",
-    fill: n >= 6 ? '#5D6D7E' : '#8B6914'
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "-2",
-    y: "14",
-    width: "14",
-    height: "5",
-    rx: "2",
-    fill: n >= 10 ? '#9B59B6' : n >= 9 ? '#F39C12' : n >= 8 ? '#E67E22' : n >= 6 ? '#808B96' : '#A07440'
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M3,0 L7,0 L8,14 L5,18 L2,14Z",
-    fill: WP
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M5,0 L7,0 L8,14 L5,18Z",
-    fill: WE,
-    opacity: "0.6"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "5",
-    cy: "27",
+    fill: HAIR,
+    opacity: "0.45"
+  }), hasCap && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
+    x: "10",
+    y: "2",
+    width: "30",
+    height: "7",
     rx: "4",
-    ry: "3",
-    fill: n >= 10 ? '#9B59B6' : n >= 9 ? '#F39C12' : n >= 8 ? '#CA6F1E' : n >= 6 ? '#6E6E6E' : '#6B4F2A'
-  })))));
+    fill: n >= 6 ? '#1C2833' : '#2C3E50'
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "8",
+    y: "7",
+    width: "34",
+    height: "3",
+    rx: "1",
+    fill: n >= 6 ? '#151f29' : '#1e2d3d'
+  })), hasSunglasses && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
+    x: "14",
+    y: "11",
+    width: "10",
+    height: "6",
+    rx: "2",
+    fill: "rgba(0,0,0,0.8)"
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "26",
+    y: "11",
+    width: "10",
+    height: "6",
+    rx: "2",
+    fill: "rgba(0,0,0,0.8)"
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "24",
+    y: "13",
+    width: "2",
+    height: "2",
+    fill: "#555"
+  })), n >= 10 && /*#__PURE__*/React.createElement("rect", {
+    x: "19",
+    y: "26",
+    width: "12",
+    height: "3",
+    rx: "1",
+    fill: "#F9E79F",
+    opacity: "0.75"
+  }))));
 }
 
 /* ════════ WORLD SCENE ════════ */
@@ -2702,7 +2488,15 @@ function GameHeroCard(_ref3) {
       borderColor: c + '44',
       background: c + '15'
     }
-  }, "Niv. ", lvl.n, " \xB7 ", game.xp, " XP")), /*#__PURE__*/React.createElement("div", {
+  }, "Niv. ", lvl.n, " \xB7 ", game.xp, " XP"), (game.bits || 0) > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "hero-badge",
+    style: {
+      marginTop: 4,
+      color: '#60a5fa',
+      borderColor: '#60a5fa44',
+      background: '#60a5fa15'
+    }
+  }, "💎 ", (game.bits || 0).toLocaleString('es-MX'), " Bits")), /*#__PURE__*/React.createElement("div", {
     className: "streak-badge"
   }, "\uD83D\uDD25 ", game.streak, " ", game.streak === 1 ? 'día' : 'días')), /*#__PURE__*/React.createElement("div", {
     className: "xp-bar-bg"
@@ -3081,7 +2875,7 @@ function OnboardingFlow(_ref5) {
     style: {
       color: ac
     }
-  }, "Dios del Drag\xF3n \uD83D\uDC09")))), step === 1 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "Libre Financiero \uD83D\uDCB8")))), step === 1 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "ob-icon"
   }, "\uD83D\uDCB5"), /*#__PURE__*/React.createElement("div", {
     className: "ob-step-num",
@@ -3169,7 +2963,7 @@ function OnboardingFlow(_ref5) {
       textAlign: 'center',
       marginTop: 10
     }
-  }, "De aqu\xED a convertirte en el Dios del Drag\xF3n \uD83D\uDC09"))), /*#__PURE__*/React.createElement("div", {
+  }, "De aqu\xED a convertirte en el Libre Financiero \uD83D\uDCB8"))), /*#__PURE__*/React.createElement("div", {
     className: "ob-body",
     style: {
       padding: '0 0 16px'
@@ -5707,6 +5501,369 @@ function TabHistorial(_ref26) {
     }, '🗑️'))));
   }));
 }
+
+/* ════════ SHOP ════════ */
+const SHOP_ITEMS = [{
+  id: 'cuarto',
+  name: 'Cuarto de alquiler',
+  cat: 'home',
+  price: 0,
+  icon: '🛏️',
+  desc: 'Tu punto de partida.',
+  free: true
+}, {
+  id: 'depto',
+  name: 'Departamento',
+  cat: 'home',
+  price: 80,
+  icon: '🏢',
+  desc: 'Primer paso real.'
+}, {
+  id: 'casa',
+  name: 'Casa propia',
+  cat: 'home',
+  price: 350,
+  icon: '🏠',
+  desc: 'El sue\xF1o cumplido.'
+}, {
+  id: 'mansion',
+  name: 'Mansi\xF3n residencial',
+  cat: 'home',
+  price: 1500,
+  icon: '🏡',
+  desc: 'Llegaste lejos.'
+}, {
+  id: 'penthouse',
+  name: 'Penthouse',
+  cat: 'home',
+  price: 6000,
+  icon: '🌆',
+  desc: 'Vista desde arriba.'
+}, {
+  id: 'bici',
+  name: 'Bicicleta',
+  cat: 'vehicle',
+  price: 30,
+  icon: '🚲',
+  desc: 'Eco y chido.'
+}, {
+  id: 'moto',
+  name: 'Moto',
+  cat: 'vehicle',
+  price: 150,
+  icon: '🏍️',
+  desc: 'Velocidad pura.'
+}, {
+  id: 'auto',
+  name: 'Auto sed\xE1n',
+  cat: 'vehicle',
+  price: 500,
+  icon: '🚗',
+  desc: 'La independencia.'
+}, {
+  id: 'suv',
+  name: 'SUV familiar',
+  cat: 'vehicle',
+  price: 1200,
+  icon: '🚙',
+  desc: 'Espacio de sobra.'
+}, {
+  id: 'ferrari',
+  name: 'Ferrari',
+  cat: 'vehicle',
+  price: 4000,
+  icon: '🏎️',
+  desc: 'El sue\xF1o.'
+}, {
+  id: 'heli',
+  name: 'Helic\xF3ptero',
+  cat: 'vehicle',
+  price: 10000,
+  icon: '🚁',
+  desc: 'Por encima de todo.'
+}, {
+  id: 'casual',
+  name: 'Ropa casual',
+  cat: 'outfit',
+  price: 0,
+  icon: '👕',
+  desc: 'El d\xEDa a d\xEDa.',
+  free: true
+}, {
+  id: 'negocio',
+  name: 'Traje de negocios',
+  cat: 'outfit',
+  price: 100,
+  icon: '👔',
+  desc: 'Pro mode ON.'
+}, {
+  id: 'streetwear',
+  name: 'Streetwear',
+  cat: 'outfit',
+  price: 400,
+  icon: '🧢',
+  desc: 'Hoodie, sneakers, vibras.'
+}, {
+  id: 'premium_fit',
+  name: 'Look Premium',
+  cat: 'outfit',
+  price: 1800,
+  icon: '🕶️',
+  desc: 'Ropa de marca, actitud.'
+}, {
+  id: 'luxury_fit',
+  name: 'Outfit de Lujo',
+  cat: 'outfit',
+  price: 7000,
+  icon: '🤵',
+  desc: 'Dise\xF1ador de pies a cabeza.'
+}, {
+  id: 'tv',
+  name: 'Smart TV 65"',
+  cat: 'extra',
+  price: 50,
+  icon: '📺',
+  desc: 'Entretenimiento VIP.'
+}, {
+  id: 'gym',
+  name: 'Home Gym',
+  cat: 'extra',
+  price: 200,
+  icon: '💪',
+  desc: 'Mens sana...'
+}, {
+  id: 'piscina',
+  name: 'Piscina',
+  cat: 'extra',
+  price: 800,
+  icon: '🏊',
+  desc: 'Status m\xE1ximo.'
+}, {
+  id: 'jet',
+  name: 'Jet privado',
+  cat: 'extra',
+  price: 5000,
+  icon: '✈️',
+  desc: 'Para el mundo.'
+}, {
+  id: 'isla',
+  name: 'Isla privada',
+  cat: 'extra',
+  price: 20000,
+  icon: '🏝️',
+  desc: 'Endgame definitivo.'
+}];
+const SHOP_CATS = [{
+  key: 'home',
+  label: 'Viviendas',
+  icon: '🏠'
+}, {
+  key: 'vehicle',
+  label: 'Veh\xEDculos',
+  icon: '🚗'
+}, {
+  key: 'outfit',
+  label: 'Ropa',
+  icon: '👕'
+}, {
+  key: 'extra',
+  label: 'Lujos',
+  icon: '✨'
+}];
+function ShopItem(_ref_si) {
+  let item = _ref_si.item,
+    bits = _ref_si.bits,
+    inventory = _ref_si.inventory,
+    equipped = _ref_si.equipped,
+    onBuyItem = _ref_si.onBuyItem,
+    onEquipItem = _ref_si.onEquipItem;
+  const owned = item.free || inventory.includes(item.id);
+  const isEquipped = equipped[item.cat] === item.id || item.cat === 'extra' && owned;
+  const canAfford = bits >= item.price;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: isEquipped ? 'rgba(96,165,250,.12)' : 'var(--card)',
+      border: isEquipped ? '1px solid rgba(96,165,250,.5)' : '1px solid var(--border)',
+      borderRadius: 14,
+      padding: '14px 10px',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 36,
+      lineHeight: '1'
+    }
+  }, item.icon), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      fontWeight: 700,
+      color: 'var(--text)',
+      textAlign: 'center',
+      lineHeight: '1.3'
+    }
+  }, item.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: 'var(--muted)',
+      textAlign: 'center',
+      lineHeight: '1.4'
+    }
+  }, item.desc), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 700,
+      color: item.free ? 'var(--accent)' : canAfford ? '#60a5fa' : 'var(--danger)',
+      marginTop: 2
+    }
+  }, item.free ? 'Gratis' : `💎 ${item.price.toLocaleString('es-MX')}`), isEquipped ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '100%',
+      padding: '7px 0',
+      borderRadius: 10,
+      background: 'rgba(96,165,250,.2)',
+      color: '#60a5fa',
+      fontSize: 11,
+      fontWeight: 700,
+      textAlign: 'center'
+    }
+  }, "✓ Equipado") : owned ? /*#__PURE__*/React.createElement("button", {
+    onClick: () => onEquipItem(item.id),
+    style: {
+      width: '100%',
+      padding: '7px 0',
+      borderRadius: 10,
+      border: 'none',
+      background: 'var(--accent)',
+      color: '#000',
+      fontSize: 11,
+      fontWeight: 700,
+      cursor: 'pointer',
+      lineHeight: '1.4',
+      textAlign: 'center',
+      fontFamily: 'inherit'
+    }
+  }, "Equipar") : /*#__PURE__*/React.createElement("button", {
+    onClick: () => canAfford && onBuyItem(item.id),
+    style: {
+      width: '100%',
+      padding: '7px 0',
+      borderRadius: 10,
+      border: 'none',
+      background: canAfford ? '#60a5fa' : 'rgba(255,255,255,.08)',
+      color: canAfford ? '#000' : 'var(--muted)',
+      fontSize: 11,
+      fontWeight: 700,
+      cursor: canAfford ? 'pointer' : 'default',
+      lineHeight: '1.4',
+      textAlign: 'center',
+      fontFamily: 'inherit'
+    }
+  }, canAfford ? 'Comprar' : 'Sin Bits'));
+}
+function TabTienda(_ref_tt) {
+  let game = _ref_tt.game,
+    onBuyItem = _ref_tt.onBuyItem,
+    onEquipItem = _ref_tt.onEquipItem;
+  const _useState113 = useState('home'),
+    _useState114 = _slicedToArray2(_useState113, 2),
+    cat = _useState114[0],
+    setCat = _useState114[1];
+  const bits = game.bits || 0;
+  const inventory = game.inventory || [];
+  const equipped = game.equipped || {};
+  const items = SHOP_ITEMS.filter(i => i.cat === cat);
+  const equippedIcons = ['home', 'vehicle', 'outfit'].map(slot => SHOP_ITEMS.find(i => i.id === (equipped[slot] || ''))).filter(Boolean).map(i => i.icon).join('');
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'linear-gradient(135deg,rgba(96,165,250,.18),rgba(34,211,165,.12))',
+      border: '1px solid rgba(96,165,250,.3)',
+      borderRadius: 16,
+      padding: '16px 18px',
+      marginBottom: 12,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: 'var(--muted)',
+      letterSpacing: .5,
+      fontWeight: 700
+    }
+  }, "TU SALDO"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 34,
+      fontWeight: 700,
+      color: '#60a5fa',
+      fontFamily: "'Bricolage Grotesque',sans-serif",
+      lineHeight: '1.1'
+    }
+  }, "💎 ", bits.toLocaleString('es-MX'))), equippedIcons && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'right'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: 'var(--muted)',
+      marginBottom: 4
+    }
+  }, "Equipado"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 24,
+      letterSpacing: 4
+    }
+  }, equippedIcons))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--muted)',
+      textAlign: 'center',
+      marginBottom: 14,
+      lineHeight: 1.5
+    }
+  }, "💎 Gana Bits anotando gastos, pagando deudas y abriendo cofres"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 6,
+      marginBottom: 14
+    }
+  }, SHOP_CATS.map(c => /*#__PURE__*/React.createElement("button", {
+    key: c.key,
+    onClick: () => setCat(c.key),
+    style: {
+      flex: 1,
+      padding: '7px 2px',
+      borderRadius: 10,
+      border: cat === c.key ? '1px solid rgba(96,165,250,.6)' : '1px solid var(--border)',
+      background: cat === c.key ? 'rgba(96,165,250,.15)' : 'transparent',
+      color: cat === c.key ? '#60a5fa' : 'var(--muted)',
+      fontSize: 10,
+      fontWeight: 700,
+      cursor: 'pointer',
+      lineHeight: '1.4',
+      textAlign: 'center',
+      fontFamily: 'inherit'
+    }
+  }, c.icon, " ", c.label))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: 10
+    }
+  }, items.map(item => /*#__PURE__*/React.createElement(ShopItem, {
+    key: item.id,
+    item: item,
+    bits: bits,
+    inventory: inventory,
+    equipped: equipped,
+    onBuyItem: onBuyItem,
+    onEquipItem: onEquipItem
+  }))));
+}
 function TabGastos(_ref18) {
   let data = _ref18.data,
     onAddExp = _ref18.onAddExp,
@@ -6017,14 +6174,14 @@ function TabDeudas(_ref20) {
     onAddLoan = _ref20.onAddLoan,
     onDelLoan = _ref20.onDelLoan,
     cardTransactions = _ref20.cardTransactions;
-  const _useState113 = useState({
+  const _useState115 = useState({
       person: '',
       amount: '',
       notes: ''
     }),
-    _useState114 = _slicedToArray2(_useState113, 2),
-    lf = _useState114[0],
-    setLf = _useState114[1];
+    _useState116 = _slicedToArray2(_useState115, 2),
+    lf = _useState116[0],
+    setLf = _useState116[1];
   useEffect(() => onVisit(), []);
   const _useState45 = useState({
       type: 'tarjeta',
@@ -7389,11 +7546,56 @@ function MainApp(_ref22) {
       });
       patch.unlockedIds = [...unlocked];
       saveLS(GAME_KEY, patch);
-      if (newLvl.n > prevLvl.n) setTimeout(() => setLevelUpData(newLvl), 300);
+      if (newLvl.n > prevLvl.n) {
+        patch.bits = (prev.bits || 0) + 25;
+        setTimeout(() => setLevelUpData(newLvl), 300);
+      }
       return patch;
     });
     showXPFloat(amount, getLvl(game.xp).color);
   }, [game.xp, todayStr]);
+  const awardBits = useCallback(n => {
+    setGame(prev => {
+      const patch = {
+        ...prev,
+        bits: (prev.bits || 0) + n
+      };
+      saveLS(GAME_KEY, patch);
+      return patch;
+    });
+  }, []);
+  const buyItem = useCallback(itemId => {
+    const item = SHOP_ITEMS.find(i => i.id === itemId);
+    if (!item) return;
+    setGame(prev => {
+      if ((prev.bits || 0) < item.price) return prev;
+      if ((prev.inventory || []).includes(itemId)) return prev;
+      const patch = {
+        ...prev,
+        bits: (prev.bits || 0) - item.price,
+        inventory: [...(prev.inventory || []), itemId]
+      };
+      saveLS(GAME_KEY, patch);
+      return patch;
+    });
+    vibrate([50, 30, 100]);
+  }, []);
+  const equipItem = useCallback(itemId => {
+    const item = SHOP_ITEMS.find(i => i.id === itemId);
+    if (!item) return;
+    setGame(prev => {
+      const patch = {
+        ...prev,
+        equipped: {
+          ...(prev.equipped || {}),
+          [item.cat]: itemId
+        }
+      };
+      saveLS(GAME_KEY, patch);
+      return patch;
+    });
+    vibrate([30, 20, 60]);
+  }, []);
 
   // Daily check-in
   useEffect(() => {
@@ -7523,6 +7725,7 @@ function MainApp(_ref22) {
     awardXP(reward, {
       chestOpened: true
     });
+    awardBits(Math.floor(reward / 3));
     setGame(prev => {
       const patch = {
         ...prev,
@@ -7542,8 +7745,9 @@ function MainApp(_ref22) {
     awardXP(20, {
       planPayment: true
     });
+    awardBits(5);
     vibrate([100, 50, 200]);
-  }, [data.debts, update, awardXP]);
+  }, [data.debts, update, awardXP, awardBits]);
   const markDebtPaid = useCallback((debtId, amount) => {
     const month = new Date().toISOString().slice(0, 7);
     const paidAt = new Date().toISOString().slice(0, 10);
@@ -7576,8 +7780,9 @@ function MainApp(_ref22) {
     awardXP(15, {
       debtPaid: true
     });
+    awardBits(10);
     vibrate([100, 50, 200]);
-  }, [data.debts, data.cardPayments, update, awardXP]);
+  }, [data.debts, data.cardPayments, update, awardXP, awardBits]);
   const unmarkDebtPaid = useCallback(debtId => {
     const month = new Date().toISOString().slice(0, 7);
     update({
@@ -7658,6 +7863,7 @@ function MainApp(_ref22) {
         logEntry: true,
         budgetDay: dp.remaining >= 0
       });
+      awardBits(dp.remaining >= 0 ? 2 : 1);
     },
     addCard: tx => {
       update({
@@ -7670,6 +7876,7 @@ function MainApp(_ref22) {
         cardLog: true,
         logEntry: true
       });
+      awardBits(1);
     },
     visitDebt: () => {
       setGame(prev => {
@@ -7793,7 +8000,7 @@ function MainApp(_ref22) {
     onClick: onLock
   }, "\uD83D\uDD12 Bloquear"))), /*#__PURE__*/React.createElement("div", {
     className: "tabs"
-  }, [['hoy', '🏠', 'Hoy'], ['gastos', '💸', 'Gastos'], ['deudas', '🏦', 'Deudas'], ['historial', '📋', 'Historial'], ['info', '⚙️', 'Info']].map(_ref23 => {
+  }, [['hoy', '🏠', 'Hoy'], ['gastos', '💸', 'Gastos'], ['deudas', '🏦', 'Deudas'], ['historial', '📋', 'Hist.'], ['info', '⚙️', 'Info'], ['tienda', '🛒', 'Tienda']].map(_ref23 => {
     let _ref24 = _slicedToArray(_ref23, 3),
       k = _ref24[0],
       i = _ref24[1],
@@ -8192,6 +8399,10 @@ function MainApp(_ref22) {
     onDelExtra: id => update({
       extraIncome: (data.extraIncome || []).filter(ei => ei.id !== id)
     })
+  }), tab === 'tienda' && /*#__PURE__*/React.createElement(TabTienda, {
+    game: game,
+    onBuyItem: buyItem,
+    onEquipItem: equipItem
   })));
 }
 
