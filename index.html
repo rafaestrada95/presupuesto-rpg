@@ -759,7 +759,10 @@ const GAME_INIT = {
   planPaymentsMade: 0,
   bits: 0,
   inventory: [],
-  equipped: {},
+  equipped: {
+    home: 'cuarto',
+    outfit: 'casual'
+  },
   debtSnapshot: null,
   lastMonthDebtSnapshot: null,
   lastDebtReduced: 0,
@@ -1588,6 +1591,7 @@ function PixelHero(_ref) {
     heli: '🚁'
   };
   const HOME_ICONS = {
+    cuarto: '🛏️',
     depto: '🏢',
     casa: '🏠',
     mansion: '🏡',
@@ -3805,6 +3809,169 @@ function PlanProgressCards(_ref6) {
 }
 
 /* ════════ FINANCIAL PLANNER ════════ */
+/* ════════ SPENDING BREAKDOWN ════════ */
+function getMonthlySpending(data, mk) {
+  const txs = data.cashTransactions || [];
+  const cards = data.cardTransactions || [];
+  const debit = txs.filter(t => t.date && t.date.startsWith(mk) && t.method === 'debit').reduce((s, t) => s + Math.abs(+t.amount), 0);
+  const cash = txs.filter(t => t.date && t.date.startsWith(mk) && t.method !== 'debit').reduce((s, t) => s + Math.abs(+t.amount), 0);
+  const card = cards.filter(t => t.date && t.date.startsWith(mk)).reduce((s, t) => s + Math.abs(+t.amount), 0);
+  return {
+    debit,
+    cash,
+    card,
+    total: debit + cash + card
+  };
+}
+function SpendingBreakdown(_ref_sb) {
+  let data = _ref_sb.data;
+  const now = new Date();
+  const curMk = now.toISOString().slice(0, 7);
+  const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevMk = prevDate.toISOString().slice(0, 7);
+  const cur = getMonthlySpending(data, curMk);
+  const prev = getMonthlySpending(data, prevMk);
+  if (cur.total === 0 && prev.total === 0) return null;
+  const max = Math.max(cur.total, prev.total, 1);
+  const diff = cur.total - prev.total;
+  const rows = [['🏦', 'Débito', cur.debit], ['💵', 'Efectivo', cur.cash], ['💳', 'Tarjeta', cur.card]];
+  return /*#__PURE__*/React.createElement("div", {
+    className: "card"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ct"
+  }, "📊 Gasto registrado este mes"), cur.total > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      marginBottom: 12
+    }
+  }, rows.map(r => /*#__PURE__*/React.createElement("div", {
+    key: r[1],
+    style: {
+      flex: 1,
+      textAlign: 'center',
+      background: 'var(--surface)',
+      borderRadius: 8,
+      padding: '8px 4px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16
+    }
+  }, r[0]), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      fontWeight: 700,
+      color: 'var(--text)'
+    }
+  }, fmt(r[2])), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 9,
+      color: 'var(--muted)'
+    }
+  }, r[1])))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      fontSize: 11,
+      color: 'var(--muted)',
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "Este mes: ", /*#__PURE__*/React.createElement("b", null, fmt(cur.total))), prev.total > 0 && /*#__PURE__*/React.createElement("span", null, "Mes pasado: ", /*#__PURE__*/React.createElement("b", null, fmt(prev.total)))), prev.total > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 8,
+      background: 'var(--surface)',
+      borderRadius: 4,
+      overflow: 'hidden',
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: `${Math.min(100, cur.total / max * 100)}%`,
+      height: '100%',
+      background: diff > 0 ? 'var(--danger)' : 'var(--accent)',
+      borderRadius: 4
+    }
+  })), prev.total > 0 && diff !== 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      color: diff > 0 ? 'var(--danger)' : 'var(--accent)',
+      marginTop: 2
+    }
+  }, diff > 0 ? `▲ ${fmt(diff)} m\xE1s que el mes pasado` : `▼ ${fmt(Math.abs(diff))} menos que el mes pasado`));
+}
+
+/* ════════ URGENT PAYMENTS BANNER ════════ */
+function UrgentPaymentsBanner(_ref_upb) {
+  let data = _ref_upb.data,
+    sorted = _ref_upb.sorted;
+  const today = new Date();
+  const urgent = [];
+  (sorted || []).forEach(d => {
+    const u = d.urg || calcUrgency(d);
+    if (u.daysLeft != null && u.daysLeft <= 3) urgent.push({
+      name: d.name,
+      daysLeft: u.daysLeft,
+      amount: d.type === 'plan' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0)
+    });
+  });
+  (data.exps || []).forEach(e => {
+    const day = +(e.day || 0);
+    if (!day) return;
+    const due = new Date(today.getFullYear(), today.getMonth(), day);
+    if (due < today) due.setMonth(due.getMonth() + 1);
+    const daysLeft = Math.ceil((due - today) / 86400000);
+    if (daysLeft >= 0 && daysLeft <= 3) urgent.push({
+      name: e.name,
+      daysLeft,
+      amount: +(e.amount || 0)
+    });
+  });
+  if (urgent.length === 0) return null;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'rgba(251,191,36,.1)',
+      border: '1px solid rgba(251,191,36,.35)',
+      borderRadius: 14,
+      padding: '12px 14px',
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      fontWeight: 700,
+      color: '#fbbf24',
+      marginBottom: 8,
+      letterSpacing: .5
+    }
+  }, "🔔 PAGOS EN LOS PR\xD3XIMOS 3 D\xCDAS"), urgent.map(u => /*#__PURE__*/React.createElement("div", {
+    key: u.name + u.daysLeft,
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: '5px 0',
+      borderBottom: '1px solid rgba(255,255,255,.05)',
+      fontSize: 12
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: 'var(--text)',
+      fontWeight: 600
+    }
+  }, u.name), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: u.daysLeft === 0 ? 'var(--danger)' : u.daysLeft <= 1 ? '#f87171' : '#fbbf24',
+      fontWeight: 700
+    }
+  }, u.daysLeft === 0 ? '\xA1Hoy! ' : u.daysLeft === 1 ? 'Ma\xF1ana ' : `${u.daysLeft} d\xEDas `, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: 'var(--muted)',
+      fontWeight: 400
+    }
+  }, fmt(u.amount))))));
+}
 function FinancialPlanner(_ref_fp) {
   let data = _ref_fp.data;
   const _useState_fp1 = useState(''),
@@ -3819,11 +3986,34 @@ function FinancialPlanner(_ref_fp) {
     _useState_fp6 = _slicedToArray(_useState_fp5, 2),
     result = _useState_fp6[0],
     setResult = _useState_fp6[1];
+  const _useState_fp7 = useState(''),
+    _useState_fp8 = _slicedToArray(_useState_fp7, 2),
+    emerExtra = _useState_fp8[0],
+    setEmerExtra = _useState_fp8[1];
+  const _useState_fp9 = useState(null),
+    _useState_fp10 = _slicedToArray(_useState_fp9, 2),
+    emerResult = _useState_fp10[0],
+    setEmerResult = _useState_fp10[1];
   const monthly = getMonthlySurplus(data);
   const yearly = getYearlyProjection(data);
   const check = () => {
     if (!amount) return;
     setResult(canAfford(data, +amount, +months || 1));
+  };
+  const checkEmer = () => {
+    const goal = +(data.emerGoal || 0);
+    const saved = +(data.emerSaved || 0);
+    const remaining = Math.max(0, goal - saved);
+    if (remaining <= 0) {
+      setEmerResult(-1);
+      return;
+    }
+    const total = monthly + (+emerExtra || 0);
+    if (total <= 0) {
+      setEmerResult(null);
+      return;
+    }
+    setEmerResult(Math.ceil(remaining / total));
   };
   return /*#__PURE__*/React.createElement("div", {
     className: "card"
@@ -3915,7 +4105,85 @@ function FinancialPlanner(_ref_fp) {
     style: {
       marginTop: 8
     }
-  }, result.ok ? `✅ Sí te alcanza. Llegando a ese mes te quedarían ${fmt(result.diff)} de colchón.` : `⚠️ No te alcanza todavía. Te faltarían ${fmt(Math.abs(result.diff))} para esa fecha.`));
+  }, result.ok ? `✅ Sí te alcanza. Llegando a ese mes te quedarían ${fmt(result.diff)} de colchón.` : `⚠️ No te alcanza todavía. Te faltarían ${fmt(Math.abs(result.diff))} para esa fecha.`), +(data.emerGoal || 0) > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      borderTop: '1px solid var(--border)',
+      marginTop: 14,
+      paddingTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      color: 'var(--muted)',
+      letterSpacing: 1,
+      marginBottom: 8
+    }
+  }, "🏦 FONDO DE EMERGENCIA"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      fontSize: 11,
+      color: 'var(--muted)',
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "Tienes: ", /*#__PURE__*/React.createElement("b", null, fmt(+(data.emerSaved || 0)))), /*#__PURE__*/React.createElement("span", null, "Meta: ", /*#__PURE__*/React.createElement("b", null, fmt(+(data.emerGoal || 0))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 8,
+      background: 'var(--surface)',
+      borderRadius: 4,
+      overflow: 'hidden',
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: `${Math.min(100, +(data.emerSaved || 0) / Math.max(1, +(data.emerGoal || 1)) * 100)}%`,
+      height: '100%',
+      background: 'var(--accent)',
+      borderRadius: 4
+    }
+  })), monthly > 0 && +(data.emerSaved || 0) < +(data.emerGoal || 0) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--muted)',
+      marginBottom: 8,
+      lineHeight: 1.6
+    }
+  }, `A tu ritmo actual llegas en ${Math.ceil((+(data.emerGoal || 0) - +(data.emerSaved || 0)) / monthly)} meses.`), monthly <= 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--danger)',
+      marginBottom: 8,
+      lineHeight: 1.6
+    }
+  }, "Con d\xE9ficit mensual no puedes ahorrar — primero cierra el hueco."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--muted)',
+      marginBottom: 6
+    }
+  }, "\xBFY si aparto $X extra/mes para el fondo?"), /*#__PURE__*/React.createElement("div", {
+    className: "log-row"
+  }, /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "number",
+    inputMode: "decimal",
+    placeholder: "$ extra/mes",
+    style: {
+      flex: 1
+    },
+    value: emerExtra,
+    onChange: e => setEmerExtra(e.target.value),
+    onKeyDown: e => e.key === 'Enter' && checkEmer()
+  }), /*#__PURE__*/React.createElement("button", {
+    className: "btn-sm",
+    onClick: checkEmer
+  }, "\xBFCu\xE1ndo llego?")), emerResult != null && /*#__PURE__*/React.createElement("div", {
+    className: `al ${emerResult > 0 ? 'al-g' : 'al-g'}`,
+    style: {
+      marginTop: 6
+    }
+  }, emerResult > 0 ? `📅 Con ese extra llegas en ${emerResult} ${emerResult === 1 ? 'mes' : 'meses'}.` : `✅ ¡Ya tienes tu fondo completo!`)));
 }
 
 /* ════════ DEFICIT WARNING OVERLAY ════════ */
@@ -4528,6 +4796,14 @@ function DebtCard(_ref12) {
     _useState98 = _slicedToArray2(_useState97, 2),
     payInput = _useState98[0],
     setPayInput = _useState98[1];
+  const _useState99 = useState(false),
+    _useState100 = _slicedToArray2(_useState99, 2),
+    showExtra = _useState100[0],
+    setShowExtra = _useState100[1];
+  const _useState101 = useState(''),
+    _useState102 = _slicedToArray2(_useState101, 2),
+    extraPay = _useState102[0],
+    setExtraPay = _useState102[1];
   const saveEdit = () => {
     if (!onEditDebt) return;
     const patch = {
@@ -4555,6 +4831,7 @@ function DebtCard(_ref12) {
   };
   const interestCost = getDebtInterestCost(d);
   const payoff = (d.type === 'tarjeta' || d.type === 'prestamo') && d.interestRate > 0 ? getPayoffProjection(d.balance, pay, d.interestRate) : null;
+  const extraPayoff = payoff && +extraPay > 0 ? getPayoffProjection(+(d.balance || 0), pay + +extraPay, +(d.interestRate || 0)) : null;
   let meta = '';
   if (d.type === 'tarjeta') meta = `💳 Día ${d.dueDay || '?'} del mes`;else if (d.type === 'prestamo') meta = `🏦 Día ${d.dueDay || '?'} del mes`;else if (d.type === 'plan') {
     const info = getPlanInfo(d);
@@ -4727,7 +5004,92 @@ function DebtCard(_ref12) {
       color: payoff.neverPaysOff ? '#f87171' : 'var(--muted)',
       lineHeight: 1.5
     }
-  }, payoff.neverPaysOff ? "⚠️ Pagando solo esto, NUNCA se acaba: el pago ni siquiera cubre el interés del mes." : `⏳ Pagando solo ${fmt(pay)}/mes, te tardas ${payoff.months >= 12 ? `${(payoff.months / 12).toFixed(1)} años` : `${payoff.months} meses`} y pagas ${fmt(payoff.totalInterest)} solo en intereses.`), d.type !== 'plan' && monthPaySet.size > 0 && /*#__PURE__*/React.createElement("div", {
+  }, payoff.neverPaysOff ? "⚠️ Pagando solo esto, NUNCA se acaba: el pago ni siquiera cubre el interés del mes." : `⏳ Pagando solo ${fmt(pay)}/mes, te tardas ${payoff.months >= 12 ? `${(payoff.months / 12).toFixed(1)} años` : `${payoff.months} meses`} y pagas ${fmt(payoff.totalInterest)} solo en intereses.`), payoff && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 6
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowExtra(p => !p),
+    style: {
+      fontSize: 10,
+      color: '#60a5fa',
+      background: 'none',
+      border: 'none',
+      padding: '2px 0',
+      cursor: 'pointer',
+      lineHeight: '1.4',
+      textAlign: 'left'
+    }
+  }, showExtra ? '▲ Cerrar simulador' : '💡 ¿Qué pasa si pago más?'), showExtra && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 6,
+      alignItems: 'center',
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      color: 'var(--muted)',
+      whiteSpace: 'nowrap'
+    }
+  }, "Extra/mes:"), /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "number",
+    inputMode: "decimal",
+    value: extraPay,
+    onChange: e => setExtraPay(e.target.value),
+    placeholder: "$0",
+    style: {
+      flex: 1,
+      fontSize: 12,
+      padding: '4px 8px'
+    }
+  })), extraPayoff && !extraPayoff.neverPaysOff && !payoff.neverPaysOff && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'rgba(34,211,165,.1)',
+      border: '1px solid rgba(34,211,165,.25)',
+      borderRadius: 8,
+      padding: '8px 10px',
+      fontSize: 11,
+      lineHeight: 1.7
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: 'var(--accent)',
+      fontWeight: 700
+    }
+  }, `✅ Terminas ${payoff.months - extraPayoff.months} meses antes`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: 'var(--muted)'
+    }
+  }, `Ahorras ${fmt(Math.max(0, payoff.totalInterest - extraPayoff.totalInterest))} en intereses`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: 'var(--muted)'
+    }
+  }, `Nueva duración: ${extraPayoff.months >= 12 ? `${(extraPayoff.months / 12).toFixed(1)} años` : `${extraPayoff.months} meses`}`)), extraPayoff && payoff.neverPaysOff && !extraPayoff.neverPaysOff && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'rgba(34,211,165,.1)',
+      border: '1px solid rgba(34,211,165,.25)',
+      borderRadius: 8,
+      padding: '8px 10px',
+      fontSize: 11,
+      lineHeight: 1.7
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: 'var(--accent)',
+      fontWeight: 700
+    }
+  }, "✅ ¡Con ese extra sí puedes liquidar esta deuda!"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: 'var(--muted)'
+    }
+  }, `La liquidas en ${extraPayoff.months >= 12 ? `${(extraPayoff.months / 12).toFixed(1)} años` : `${extraPayoff.months} meses`}`)))), d.type !== 'plan' && monthPaySet.size > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 8,
       display: 'flex',
@@ -5156,24 +5518,24 @@ function ExpenseLogger(_ref15) {
     _useState40 = _slicedToArray(_useState39, 2),
     batchRows = _useState40[0],
     setBatchRows = _useState40[1];
-  const _useState99 = useState(''),
-    _useState100 = _slicedToArray2(_useState99, 2),
-    photo = _useState100[0],
-    setPhoto = _useState100[1];
-  const _useState101 = useState(false),
-    _useState102 = _slicedToArray2(_useState101, 2),
-    photoLoading = _useState102[0],
-    setPhotoLoading = _useState102[1];
+  const _useState103 = useState(''),
+    _useState104 = _slicedToArray2(_useState103, 2),
+    photo = _useState104[0],
+    setPhoto = _useState104[1];
+  const _useState105 = useState(false),
+    _useState106 = _slicedToArray2(_useState105, 2),
+    photoLoading = _useState106[0],
+    setPhotoLoading = _useState106[1];
   const photoRef = useRef(null);
   const amtRef = useRef(null);
-  const _useState103 = useState(false),
-    _useState104 = _slicedToArray2(_useState103, 2),
-    listening = _useState104[0],
-    setListening = _useState104[1];
-  const _useState105 = useState(''),
-    _useState106 = _slicedToArray2(_useState105, 2),
-    voiceFeedback = _useState106[0],
-    setVoiceFeedback = _useState106[1];
+  const _useState107 = useState(false),
+    _useState108 = _slicedToArray2(_useState107, 2),
+    listening = _useState108[0],
+    setListening = _useState108[1];
+  const _useState109 = useState(''),
+    _useState110 = _slicedToArray2(_useState109, 2),
+    voiceFeedback = _useState110[0],
+    setVoiceFeedback = _useState110[1];
   useEffect(() => {
     if (quickFocus && amtRef.current) {
       amtRef.current.scrollIntoView({
@@ -5744,26 +6106,26 @@ function TabHistorial(_ref26) {
     onDelCash = _ref26.onDelCash,
     onDelCard = _ref26.onDelCard,
     onEditCash = _ref26.onEditCash;
-  const _useState107 = useState(''),
-    _useState108 = _slicedToArray2(_useState107, 2),
-    viewPhoto = _useState108[0],
-    setViewPhoto = _useState108[1];
-  const _useState109 = useState('todos'),
-    _useState110 = _slicedToArray2(_useState109, 2),
-    filter = _useState110[0],
-    setFilter = _useState110[1];
-  const _useState111 = useState(null),
+  const _useState111 = useState(''),
     _useState112 = _slicedToArray2(_useState111, 2),
-    editId = _useState112[0],
-    setEditId = _useState112[1];
-  const _useState113 = useState(''),
+    viewPhoto = _useState112[0],
+    setViewPhoto = _useState112[1];
+  const _useState113 = useState('todos'),
     _useState114 = _slicedToArray2(_useState113, 2),
-    editAmt = _useState114[0],
-    setEditAmt = _useState114[1];
-  const _useState115 = useState(''),
+    filter = _useState114[0],
+    setFilter = _useState114[1];
+  const _useState115 = useState(null),
     _useState116 = _slicedToArray2(_useState115, 2),
-    editDesc = _useState116[0],
-    setEditDesc = _useState116[1];
+    editId = _useState116[0],
+    setEditId = _useState116[1];
+  const _useState117 = useState(''),
+    _useState118 = _slicedToArray2(_useState117, 2),
+    editAmt = _useState118[0],
+    setEditAmt = _useState118[1];
+  const _useState119 = useState(''),
+    _useState120 = _slicedToArray2(_useState119, 2),
+    editDesc = _useState120[0],
+    setEditDesc = _useState120[1];
   const debts = data.debts || [];
   const cashItems = (data.cashTransactions || []).map(t => ({
     ...t,
@@ -6321,10 +6683,10 @@ function TabTienda(_ref_tt) {
   let game = _ref_tt.game,
     onBuyItem = _ref_tt.onBuyItem,
     onEquipItem = _ref_tt.onEquipItem;
-  const _useState117 = useState('home'),
-    _useState118 = _slicedToArray2(_useState117, 2),
-    cat = _useState118[0],
-    setCat = _useState118[1];
+  const _useState121 = useState('home'),
+    _useState122 = _slicedToArray2(_useState121, 2),
+    cat = _useState122[0],
+    setCat = _useState122[1];
   const bits = game.bits || 0;
   const inventory = game.inventory || [];
   const equipped = game.equipped || {};
@@ -6728,14 +7090,14 @@ function TabDeudas(_ref20) {
     onAddLoan = _ref20.onAddLoan,
     onDelLoan = _ref20.onDelLoan,
     cardTransactions = _ref20.cardTransactions;
-  const _useState119 = useState({
+  const _useState123 = useState({
       person: '',
       amount: '',
       notes: ''
     }),
-    _useState120 = _slicedToArray2(_useState119, 2),
-    lf = _useState120[0],
-    setLf = _useState120[1];
+    _useState124 = _slicedToArray2(_useState123, 2),
+    lf = _useState124[0],
+    setLf = _useState124[1];
   useEffect(() => onVisit(), []);
   const _useState45 = useState({
       type: 'tarjeta',
@@ -8119,7 +8481,12 @@ function MainApp(_ref22) {
       const saved = loadLS(GAME_KEY) || {};
       let g = {
         ...GAME_INIT,
-        ...saved
+        ...saved,
+        equipped: {
+          home: 'cuarto',
+          outfit: 'casual',
+          ...(saved.equipped || {})
+        }
       };
       const currentTotalDebt = getTotalDebt(data);
       if (g.monthKey !== monthKey) {
@@ -8231,10 +8598,15 @@ function MainApp(_ref22) {
     setGame(prev => {
       if ((prev.bits || 0) < item.price) return prev;
       if ((prev.inventory || []).includes(itemId)) return prev;
+      const newEquipped = item.cat !== 'extra' ? {
+        ...(prev.equipped || {}),
+        [item.cat]: itemId
+      } : prev.equipped || {};
       const patch = {
         ...prev,
         bits: (prev.bits || 0) - item.price,
-        inventory: [...(prev.inventory || []), itemId]
+        inventory: [...(prev.inventory || []), itemId],
+        equipped: newEquipped
       };
       saveLS(GAME_KEY, patch);
       return patch;
@@ -8676,7 +9048,10 @@ function MainApp(_ref22) {
       className: `tab ${tab === k ? 'on' : ''}`,
       onClick: () => setTab(k)
     }, i, " ", l);
-  })), tab === 'hoy' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(GameHeroCard, {
+  })), tab === 'hoy' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(UrgentPaymentsBanner, {
+    data: data,
+    sorted: sorted
+  }), /*#__PURE__*/React.createElement(GameHeroCard, {
     game: game,
     userName: userName
   }), paydayBanner && /*#__PURE__*/React.createElement("div", {
@@ -8942,6 +9317,8 @@ function MainApp(_ref22) {
   }), /*#__PURE__*/React.createElement(CashFlowForecast, {
     data: data
   }), /*#__PURE__*/React.createElement(FinancialPlanner, {
+    data: data
+  }), /*#__PURE__*/React.createElement(SpendingBreakdown, {
     data: data
   }), /*#__PURE__*/React.createElement(ExpenseLogger, {
     data: data,
