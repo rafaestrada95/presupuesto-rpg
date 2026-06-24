@@ -759,7 +759,12 @@ const GAME_INIT = {
   planPaymentsMade: 0,
   bits: 0,
   inventory: [],
-  equipped: {}
+  equipped: {},
+  debtSnapshot: null,
+  lastMonthDebtSnapshot: null,
+  lastDebtReduced: 0,
+  deficitStreak: 0,
+  deficitWarningDismissedMonth: ''
 };
 
 /* ── CONSTANTS ── */
@@ -979,6 +984,9 @@ function getCardInfo(card, cardTxs) {
     limit
   };
 }
+function getTotalDebt(data) {
+  return (data.debts || []).reduce((s, d) => s + (d.type === 'plan' ? getPlanInfo(d).remainingAmount : +(d.balance || 0)), 0);
+}
 function getPlanInfo(debt) {
   const total = +(debt.totalPayments || 0);
   const paid = +(debt.paidPayments || 0);
@@ -1013,6 +1021,49 @@ function calcUrgency(debt) {
     daysLeft
   };
 }
+// Cuánto te sangra una deuda al mes en intereses (no en pago de capital).
+// Solo tarjeta/préstamo suelen tener tasa; plan/informal normalmente son 0%.
+function getDebtInterestCost(d) {
+  const rate = (+d.interestRate || 0) / 100;
+  if (rate <= 0) return 0;
+  const balance = d.type === 'plan' ? getPlanInfo(d).remainingAmount : +(d.balance || 0);
+  return balance * (rate / 12);
+}
+// Si solo pagas el monto fijo cada mes, ¿cuántos meses tardas en liquidar y cuánto pagas de interés total?
+// Amortización estándar. Si el pago no cubre ni el interés del mes, la deuda nunca se acaba (neverPaysOff).
+function getPayoffProjection(balance, monthlyPayment, annualRatePct) {
+  const B = +balance || 0;
+  const P = +monthlyPayment || 0;
+  const r = (+annualRatePct || 0) / 100 / 12;
+  if (B <= 0 || P <= 0) return null;
+  if (r <= 0) {
+    const months = Math.ceil(B / P);
+    return {
+      months,
+      totalPaid: B,
+      totalInterest: 0,
+      neverPaysOff: false
+    };
+  }
+  const interestOnly = B * r;
+  if (P <= interestOnly) {
+    return {
+      months: Infinity,
+      totalPaid: Infinity,
+      totalInterest: Infinity,
+      neverPaysOff: true
+    };
+  }
+  const months = Math.ceil(-Math.log(1 - r * B / P) / Math.log(1 + r));
+  const totalPaid = P * months;
+  const totalInterest = Math.max(0, totalPaid - B);
+  return {
+    months,
+    totalPaid,
+    totalInterest,
+    neverPaysOff: false
+  };
+}
 function sortDebts(debts) {
   const uw = {
     critical: 0,
@@ -1031,8 +1082,15 @@ function sortDebts(debts) {
   };
   return [...debts].map(d => ({
     ...d,
-    urg: calcUrgency(d)
+    urg: calcUrgency(d),
+    interestCost: getDebtInterestCost(d)
   })).sort((a, b) => {
+    // Fecha crítica (atrasarte te cuesta recargos/daño) siempre va primero, sin importar interés
+    const aCrit = a.urg.key === 'critical';
+    const bCrit = b.urg.key === 'critical';
+    if (aCrit !== bCrit) return aCrit ? -1 : 1;
+    // Entre las que no son urgentes por fecha, ataca primero la que más te sangra en intereses
+    if (!aCrit && !bCrit && a.interestCost !== b.interestCost) return b.interestCost - a.interestCost;
     const u = uw[a.urg.key] - uw[b.urg.key];
     if (u !== 0) return u;
     if (a.urg.daysLeft != null && b.urg.daysLeft != null) return a.urg.daysLeft - b.urg.daysLeft;
@@ -1113,15 +1171,43 @@ function calcDP(data) {
 }
 
 /* ── CASH FLOW FORECAST ── */
+// Saldo real actual: lo que entró (saldo inicial + quincenas recibidas en la app)
+// menos lo que se gastó (transacciones registradas). Compartido por cash flow y planeación.
+function getActualBalance(data) {
+  const saldoBase = (parseFloat(data.saldoDebito) || 0) + (parseFloat(data.saldoEfectivo) || 0);
+  const paydaysTotal = (data.paydays || []).reduce((s, p) => s + (+p.amount || 0), 0);
+  const cashTotal = (data.cashTransactions || []).reduce((s, t) => s + (+t.amount || 0), 0);
+  return Math.max(0, saldoBase + paydaysTotal - cashTotal);
+}
+// Quincenas de este mes que aún no han llegado (no auto-detectadas en paydays)
+function getPendingPaydays(data) {
+  const today = new Date();
+  const todayDay = today.getDate();
+  const curMonthKey = today.toISOString().slice(0, 7);
+  const q1Full = parseFloat(data.q1) || 0;
+  const q2Full = parseFloat(data.q2) || 0;
+  const q1Received = (data.paydays || []).some(p => p.quincena === curMonthKey + '-Q1');
+  const q2Received = (data.paydays || []).some(p => p.quincena === curMonthKey + '-Q2');
+  const pendingQ2 = !q2Received && todayDay < 16 ? q2Full : 0;
+  const pendingQ1 = !q1Received && todayDay < 1 ? q1Full : 0;
+  return pendingQ1 + pendingQ2;
+}
 function getCashFlow(data) {
   const today = new Date();
+  const q1Full = parseFloat(data.q1) || 0;
+  const q2Full = parseFloat(data.q2) || 0;
+  const actualBalance = getActualBalance(data);
+  const pendingPaydays = getPendingPaydays(data);
   const months = [];
   for (let i = 0; i < 3; i++) {
     const m = new Date(today.getFullYear(), today.getMonth() + i, 1);
     const monthName = m.toLocaleDateString('es-MX', {
       month: 'long'
     });
-    const income = (parseFloat(data.q1) || 0) + (parseFloat(data.q2) || 0);
+
+    // Este mes: ingreso real (saldo + lo que falta de entrar)
+    // Meses futuros: ingreso esperado completo Q1+Q2
+    const income = i === 0 ? actualBalance + pendingPaydays : q1Full + q2Full;
     const fixed = data.exps.reduce((s, e) => s + (+e.amount || 0), 0);
     const vars = data.varExps.reduce((s, e) => s + (+e.amount || 0), 0);
     const debts = data.debts.reduce((s, d) => {
@@ -1150,6 +1236,51 @@ function getCashFlow(data) {
     });
   }
   return months;
+}
+// Cuánto sobra cada mes "normal" (ingreso completo Q1+Q2+extras menos compromisos recurrentes)
+function getMonthlySurplus(data) {
+  const q1 = parseFloat(data.q1) || 0;
+  const q2 = parseFloat(data.q2) || 0;
+  const extraMonthly = (data.extraIncome || []).reduce((s, e) => e.type === 'monthly' ? s + (+e.amount || 0) : s, 0);
+  const income = q1 + q2 + extraMonthly;
+  const fixed = data.exps.reduce((s, e) => s + (+e.amount || 0), 0);
+  const vars = data.varExps.reduce((s, e) => s + (+e.amount || 0), 0);
+  const recurringDebts = data.debts.reduce((s, d) => {
+    if (d.type === 'tarjeta') return s + (+d.minPayment || 0);
+    if (d.type === 'prestamo') return s + (+d.monthlyPayment || 0);
+    if (d.type === 'plan') {
+      const info = getPlanInfo(d);
+      return info.remaining > 0 ? s + info.amount : s;
+    }
+    return s;
+  }, 0);
+  return income - fixed - vars - recurringDebts;
+}
+// Proyección anual: 12 meses de sobrante menos deudas "con persona"/deadline que vencen en el año
+function getYearlyProjection(data) {
+  const monthly = getMonthlySurplus(data);
+  const oneTimeDebts = data.debts.reduce((s, d) => {
+    if (d.type === 'informal' || d.type === 'deadline') {
+      const urg = calcUrgency(d);
+      if (urg.daysLeft != null && urg.daysLeft <= 365) return s + (+d.balance || 0);
+    }
+    return s;
+  }, 0);
+  return monthly * 12 - oneTimeDebts;
+}
+// ¿Me alcanza un gasto de $amount dentro de $months meses sin tronar mis metas/deudas?
+function canAfford(data, amount, months) {
+  const monthly = getMonthlySurplus(data);
+  const actualBalance = getActualBalance(data);
+  const pendingPaydays = getPendingPaydays(data);
+  const projected = actualBalance + pendingPaydays + monthly * Math.max(0, months - 1);
+  const diff = projected - amount;
+  return {
+    ok: diff >= 0,
+    projected,
+    diff,
+    monthly
+  };
 }
 
 /* ── HEALTH SCORE ── */
@@ -1418,23 +1549,72 @@ function getCountdowns(data) {
 
 /* ════════ SVG WARRIOR ════════ */
 function PixelHero(_ref) {
-  let level = _ref.level;
+  let level = _ref.level,
+    equipped = _ref.equipped || {};
   const n = Math.min(12, Math.max(1, level));
   const SK = '#FDBCB4',
     HAIR = '#784212';
   // Modern clothing palette — shirt/jacket per level
   const SHIRTS = ['#dde1e7', '#444444', '#3a5fa0', '#2980B9', '#1d6a9e', '#17406b', '#212f3d', '#5a2d82', '#9A7D0A', '#0d0d2e', '#f0f3f4', '#fdf6d0'];
-  const SHIRT = SHIRTS[n - 1];
-  const PANTS = n >= 10 ? '#0a0a1a' : n >= 7 ? '#1C2833' : n >= 4 ? '#2C3E50' : '#3d2b1f';
-  const SHOES = n >= 9 ? '#0a0a0a' : n >= 5 ? '#2c2c2c' : '#5D4037';
-  const hasCap = n >= 4 && n <= 7;
-  const hasSunglasses = n >= 8;
+  // Outfits comprados en la Tienda — si hay uno equipado, pisa la paleta por nivel
+  const OUTFIT_PALETTES = {
+    negocio: {
+      shirt: '#1C2833',
+      pants: '#0a0a1a',
+      shoes: '#0a0a0a'
+    },
+    streetwear: {
+      shirt: '#E74C3C',
+      pants: '#2C3E50',
+      shoes: '#ECF0F1'
+    },
+    premium_fit: {
+      shirt: '#5a2d82',
+      pants: '#1a1a1a',
+      shoes: '#0a0a0a'
+    },
+    luxury_fit: {
+      shirt: '#9A7D0A',
+      pants: '#0a0a1a',
+      shoes: '#0a0a0a'
+    }
+  };
+  const VEHICLE_ICONS = {
+    bici: '🚲',
+    moto: '🏍️',
+    auto: '🚗',
+    suv: '🚙',
+    ferrari: '🏎️',
+    heli: '🚁'
+  };
+  const HOME_ICONS = {
+    depto: '🏢',
+    casa: '🏠',
+    mansion: '🏡',
+    penthouse: '🌆'
+  };
+  const outfitPal = OUTFIT_PALETTES[equipped.outfit];
+  const SHIRT = outfitPal ? outfitPal.shirt : SHIRTS[n - 1];
+  const PANTS = outfitPal ? outfitPal.pants : n >= 10 ? '#0a0a1a' : n >= 7 ? '#1C2833' : n >= 4 ? '#2C3E50' : '#3d2b1f';
+  const SHOES = outfitPal ? outfitPal.shoes : n >= 9 ? '#0a0a0a' : n >= 5 ? '#2c2c2c' : '#5D4037';
+  const hasCap = n >= 4 && n <= 7 || equipped.outfit === 'streetwear';
+  const hasSunglasses = n >= 8 || equipped.outfit === 'premium_fit' || equipped.outfit === 'luxury_fit';
+  const vehicleIcon = VEHICLE_ICONS[equipped.vehicle];
+  const homeIcon = HOME_ICONS[equipped.home];
   const vH = n >= 11 ? 130 : 92;
   return /*#__PURE__*/React.createElement("svg", {
     viewBox: `0 0 60 ${vH}`,
     width: "100%",
     height: "100%"
-  }, n === 11 && /*#__PURE__*/React.createElement("g", {
+  }, homeIcon && /*#__PURE__*/React.createElement("text", {
+    x: "2",
+    y: "11",
+    fontSize: "11"
+  }, homeIcon), vehicleIcon && /*#__PURE__*/React.createElement("text", {
+    x: "44",
+    y: "11",
+    fontSize: "11"
+  }, vehicleIcon), n === 11 && /*#__PURE__*/React.createElement("g", {
     transform: "translate(0,73)"
   }, /*#__PURE__*/React.createElement("rect", {
     x: "5",
@@ -2457,7 +2637,8 @@ function GameHeroCard(_ref3) {
       zIndex: 2
     }
   }, /*#__PURE__*/React.createElement(PixelHero, {
-    level: lvl.n
+    level: lvl.n,
+    equipped: game.equipped || {}
   }))), /*#__PURE__*/React.createElement("div", {
     className: "hero-bottom",
     style: {
@@ -3623,6 +3804,228 @@ function PlanProgressCards(_ref6) {
   }));
 }
 
+/* ════════ FINANCIAL PLANNER ════════ */
+function FinancialPlanner(_ref_fp) {
+  let data = _ref_fp.data;
+  const _useState_fp1 = useState(''),
+    _useState_fp2 = _slicedToArray(_useState_fp1, 2),
+    amount = _useState_fp2[0],
+    setAmount = _useState_fp2[1];
+  const _useState_fp3 = useState('1'),
+    _useState_fp4 = _slicedToArray(_useState_fp3, 2),
+    months = _useState_fp4[0],
+    setMonths = _useState_fp4[1];
+  const _useState_fp5 = useState(null),
+    _useState_fp6 = _slicedToArray(_useState_fp5, 2),
+    result = _useState_fp6[0],
+    setResult = _useState_fp6[1];
+  const monthly = getMonthlySurplus(data);
+  const yearly = getYearlyProjection(data);
+  const check = () => {
+    if (!amount) return;
+    setResult(canAfford(data, +amount, +months || 1));
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "card"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ct"
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13
+    }
+  }, "🧮"), " Tu poder de gasto real"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      textAlign: 'center',
+      padding: '8px',
+      background: 'var(--surface)',
+      borderRadius: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: 'var(--muted)'
+    }
+  }, "LIBRE AL MES"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      color: monthly >= 0 ? 'var(--accent)' : 'var(--danger)'
+    }
+  }, fmt(monthly))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      textAlign: 'center',
+      padding: '8px',
+      background: 'var(--surface)',
+      borderRadius: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: 'var(--muted)'
+    }
+  }, "LIBRE AL A\xD1O"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      color: yearly >= 0 ? 'var(--accent)' : 'var(--danger)'
+    }
+  }, fmt(yearly)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--muted)',
+      marginBottom: 6
+    }
+  }, "\xBFTe alcanza para algo? Pon el costo y en cu\xE1ntos meses lo necesitas."), /*#__PURE__*/React.createElement("div", {
+    className: "log-row"
+  }, /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "number",
+    inputMode: "decimal",
+    placeholder: "$ costo",
+    style: {
+      flex: '0 0 100px'
+    },
+    value: amount,
+    onChange: e => setAmount(e.target.value),
+    onKeyDown: e => e.key === 'Enter' && check()
+  }), /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "number",
+    inputMode: "numeric",
+    placeholder: "meses",
+    style: {
+      flex: '0 0 70px'
+    },
+    value: months,
+    onChange: e => setMonths(e.target.value),
+    onKeyDown: e => e.key === 'Enter' && check()
+  }), /*#__PURE__*/React.createElement("button", {
+    className: "btn-sm",
+    onClick: check
+  }, "\xBFMe alcanza?")), result && /*#__PURE__*/React.createElement("div", {
+    className: `al ${result.ok ? 'al-g' : 'al-r'}`,
+    style: {
+      marginTop: 8
+    }
+  }, result.ok ? `✅ Sí te alcanza. Llegando a ese mes te quedarían ${fmt(result.diff)} de colchón.` : `⚠️ No te alcanza todavía. Te faltarían ${fmt(Math.abs(result.diff))} para esa fecha.`));
+}
+
+/* ════════ DEFICIT WARNING OVERLAY ════════ */
+function DeficitWarningOverlay(_ref_dw) {
+  let data = _ref_dw.data,
+    deficitStreak = _ref_dw.deficitStreak,
+    onDismiss = _ref_dw.onDismiss;
+  const monthly = getMonthlySurplus(data);
+  const yearly = getYearlyProjection(data);
+  const biggestCost = [...(data.debts || [])].sort((a, b) => {
+    const ca = getDebtInterestCost(a) || (a.type === 'plan' ? +(a.paymentAmount || 0) : +(a.minPayment || a.monthlyPayment || 0));
+    const cb = getDebtInterestCost(b) || (b.type === 'plan' ? +(b.paymentAmount || 0) : +(b.minPayment || b.monthlyPayment || 0));
+    return cb - ca;
+  })[0];
+  const extraNeeded = Math.ceil(Math.abs(monthly) / 100) * 100;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(10,4,4,.94)',
+      zIndex: 9999,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '24px 20px',
+      overflowY: 'auto'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '100%',
+      maxWidth: 360,
+      background: 'var(--card)',
+      border: '1px solid rgba(248,113,113,.4)',
+      borderRadius: 20,
+      padding: '26px 22px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 40,
+      textAlign: 'center',
+      marginBottom: 10,
+      lineHeight: '1'
+    }
+  }, "🚨"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 800,
+      fontSize: 17,
+      textAlign: 'center',
+      color: '#f87171',
+      marginBottom: 8,
+      lineHeight: 1.4
+    }
+  }, `Llevas ${deficitStreak} meses gastando m\xE1s de lo que ganas`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: 'var(--muted)',
+      textAlign: 'center',
+      marginBottom: 18,
+      lineHeight: 1.65
+    }
+  }, `Cada mes te faltan ${fmt(Math.abs(monthly))}. Si nada cambia, en 12 meses vas a deber ${fmt(Math.abs(yearly))} m\xE1s que hoy.`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      color: 'var(--muted)',
+      marginBottom: 10,
+      letterSpacing: 1
+    }
+  }, "3 OPCIONES REALES — NO M\xC1S TIPS DE HORMIGA"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8,
+      marginBottom: 18
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "al al-r",
+    style: {
+      marginBottom: 0
+    }
+  }, "1️⃣ ", /*#__PURE__*/React.createElement("span", null, `Recorta gastos fijos o variables por ${fmt(extraNeeded)}/mes para llegar a cero.`)), biggestCost && /*#__PURE__*/React.createElement("div", {
+    className: "al al-y",
+    style: {
+      marginBottom: 0
+    }
+  }, "2️⃣ ", /*#__PURE__*/React.createElement("span", null, `"${biggestCost.name}" es tu compromiso m\xE1s pesado. Negociarlo, consolidarlo o extender sus pagos es lo que m\xE1s movería la aguja.`)), /*#__PURE__*/React.createElement("div", {
+    className: "al al-b",
+    style: {
+      marginBottom: 0
+    }
+  }, "3️⃣ ", /*#__PURE__*/React.createElement("span", null, `Consigue ${fmt(extraNeeded)}/mes extra de ingreso (freelance, venta, ingreso extra) para cerrar el hueco.`))), /*#__PURE__*/React.createElement("button", {
+    onClick: onDismiss,
+    style: {
+      width: '100%',
+      padding: '13px 0',
+      borderRadius: 12,
+      border: 'none',
+      background: '#f87171',
+      color: '#1a0505',
+      fontFamily: 'inherit',
+      fontSize: 14,
+      fontWeight: 700,
+      cursor: 'pointer',
+      lineHeight: '1.4',
+      textAlign: 'center'
+    }
+  }, "Entendido, vamos a arreglarlo")));
+}
+
 /* ════════ CASH FLOW FORECAST ════════ */
 function CashFlowForecast(_ref7) {
   let data = _ref7.data;
@@ -4110,7 +4513,8 @@ function DebtCard(_ref12) {
       paymentAmount: String(d.paymentAmount || d.minPayment || d.monthlyPayment || ''),
       dueDay: String(d.dueDay || ''),
       paidPayments: String(d.paidPayments || ''),
-      totalPayments: String(d.totalPayments || '')
+      totalPayments: String(d.totalPayments || ''),
+      interestRate: String(d.interestRate || '')
     }),
     _useState96 = _slicedToArray2(_useState95, 2),
     ef = _useState96[0],
@@ -4137,9 +4541,11 @@ function DebtCard(_ref12) {
     } else if (d.type === 'tarjeta') {
       patch.balance = +ef.balance;
       patch.minPayment = +ef.paymentAmount || d.minPayment;
+      patch.interestRate = ef.interestRate !== '' ? +ef.interestRate : d.interestRate;
     } else if (d.type === 'prestamo') {
       patch.balance = +ef.balance;
       patch.monthlyPayment = +ef.paymentAmount || d.monthlyPayment;
+      patch.interestRate = ef.interestRate !== '' ? +ef.interestRate : d.interestRate;
     } else {
       patch.balance = +ef.balance;
       patch.paymentAmount = +ef.paymentAmount || d.paymentAmount;
@@ -4147,6 +4553,8 @@ function DebtCard(_ref12) {
     onEditDebt(d.id, patch);
     setEditMode(false);
   };
+  const interestCost = getDebtInterestCost(d);
+  const payoff = (d.type === 'tarjeta' || d.type === 'prestamo') && d.interestRate > 0 ? getPayoffProjection(d.balance, pay, d.interestRate) : null;
   let meta = '';
   if (d.type === 'tarjeta') meta = `💳 Día ${d.dueDay || '?'} del mes`;else if (d.type === 'prestamo') meta = `🏦 Día ${d.dueDay || '?'} del mes`;else if (d.type === 'plan') {
     const info = getPlanInfo(d);
@@ -4201,7 +4609,17 @@ function DebtCard(_ref12) {
     }
   }, u.daysLeft === 0 ? '¡Hoy!' : u.daysLeft === 1 ? 'Mañana' : `${u.daysLeft} días`), pay > 0 && /*#__PURE__*/React.createElement("span", {
     className: "pay-badge"
-  }, fmt(pay), "/mes"), d.type !== 'plan' && onMarkPaid && (paidThisMonth ? /*#__PURE__*/React.createElement("button", {
+  }, fmt(pay), "/mes"), interestCost > 0 && /*#__PURE__*/React.createElement("span", {
+    title: "Estimado de inter\xE9s que te cobra esta deuda al mes",
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      color: '#f87171',
+      background: 'rgba(248,113,113,.12)',
+      padding: '3px 7px',
+      borderRadius: 7
+    }
+  }, "🔥 ", fmt(interestCost), "/mes en intereses"), d.type !== 'plan' && onMarkPaid && (paidThisMonth ? /*#__PURE__*/React.createElement("button", {
     onClick: () => onUndoPaid && onUndoPaid(d.id),
     style: {
       marginLeft: 'auto',
@@ -4300,7 +4718,16 @@ function DebtCard(_ref12) {
       marginLeft: d.type !== 'plan' && !onEditDebt ? 'auto' : 0
     },
     onClick: () => onDel(d.id)
-  }, "Eliminar")), d.type !== 'plan' && monthPaySet.size > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "Eliminar")), payoff && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 8,
+      paddingTop: 8,
+      borderTop: '1px solid rgba(255,255,255,.06)',
+      fontSize: 11,
+      color: payoff.neverPaysOff ? '#f87171' : 'var(--muted)',
+      lineHeight: 1.5
+    }
+  }, payoff.neverPaysOff ? "⚠️ Pagando solo esto, NUNCA se acaba: el pago ni siquiera cubre el interés del mes." : `⏳ Pagando solo ${fmt(pay)}/mes, te tardas ${payoff.months >= 12 ? `${(payoff.months / 12).toFixed(1)} años` : `${payoff.months} meses`} y pagas ${fmt(payoff.totalInterest)} solo en intereses.`), d.type !== 'plan' && monthPaySet.size > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 8,
       display: 'flex',
@@ -4419,6 +4846,27 @@ function DebtCard(_ref12) {
       dueDay: e.target.value
     })),
     placeholder: "1-31"
+  })), (d.type === 'tarjeta' || d.type === 'prestamo') && /*#__PURE__*/React.createElement("div", {
+    style: {
+      gridColumn: '1/-1'
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 10,
+      color: 'var(--muted)',
+      display: 'block',
+      marginBottom: 3
+    }
+  }, "Tasa de inter\xE9s anual (%)"), /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "number",
+    inputMode: "decimal",
+    value: ef.interestRate,
+    onChange: e => setEf(p => ({
+      ...p,
+      interestRate: e.target.value
+    })),
+    placeholder: "Ej. 45"
   })), d.type === 'plan' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
     style: {
       fontSize: 10,
@@ -4678,7 +5126,8 @@ function ExpenseLogger(_ref15) {
   let data = _ref15.data,
     debts = _ref15.debts,
     onAddCash = _ref15.onAddCash,
-    onAddCard = _ref15.onAddCard;
+    onAddCard = _ref15.onAddCard,
+    quickFocus = _ref15.quickFocus;
   const _useState29 = useState('debit'),
     _useState30 = _slicedToArray(_useState29, 2),
     method = _useState30[0],
@@ -4716,6 +5165,24 @@ function ExpenseLogger(_ref15) {
     photoLoading = _useState102[0],
     setPhotoLoading = _useState102[1];
   const photoRef = useRef(null);
+  const amtRef = useRef(null);
+  const _useState103 = useState(false),
+    _useState104 = _slicedToArray2(_useState103, 2),
+    listening = _useState104[0],
+    setListening = _useState104[1];
+  const _useState105 = useState(''),
+    _useState106 = _slicedToArray2(_useState105, 2),
+    voiceFeedback = _useState106[0],
+    setVoiceFeedback = _useState106[1];
+  useEffect(() => {
+    if (quickFocus && amtRef.current) {
+      amtRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+      setTimeout(() => amtRef.current && amtRef.current.focus(), 300);
+    }
+  }, [quickFocus]);
   const handlePhotoSelect = function (ev) {
     const file = ev.target.files[0];
     if (!file) return;
@@ -4786,6 +5253,49 @@ function ExpenseLogger(_ref15) {
     setDesc('');
     setPhoto('');
   };
+  const parseVoice = txt => {
+    const num = txt.match(/\d[\d,.]*/);
+    if (!num) return {
+      amt: '',
+      desc: txt.trim()
+    };
+    const a = num[0].replace(',', '.');
+    const afterEn = txt.match(/\ben\s+(.+)/i);
+    const d = afterEn ? afterEn[1].trim() : txt.slice(txt.indexOf(num[0]) + num[0].length).replace(/^(pesos?|de|en)\s+/i, '').trim();
+    return {
+      amt: a,
+      desc: d || ''
+    };
+  };
+  const startVoice = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      setVoiceFeedback('Tu navegador no soporta voz 😕');
+      return;
+    }
+    const recog = new SR();
+    recog.lang = 'es-MX';
+    recog.interimResults = false;
+    recog.maxAlternatives = 1;
+    setListening(true);
+    setVoiceFeedback('Escuchando... 🎙️');
+    recog.onresult = ev => {
+      const text = ev.results[0][0].transcript;
+      const parsed = parseVoice(text);
+      if (parsed.amt) setAmt(parsed.amt);
+      if (parsed.desc) setDesc(parsed.desc);
+      setVoiceFeedback('✅ "' + text + '"');
+      setListening(false);
+      setTimeout(() => setVoiceFeedback(''), 3500);
+    };
+    recog.onerror = () => {
+      setVoiceFeedback('❌ No se entendió, intenta de nuevo');
+      setListening(false);
+      setTimeout(() => setVoiceFeedback(''), 2500);
+    };
+    recog.onend = () => setListening(false);
+    recog.start();
+  };
   const addBatch = () => {
     batchRows.forEach(r => {
       if (!r.amt) return;
@@ -4849,6 +5359,7 @@ function ExpenseLogger(_ref15) {
     type: "number",
     inputMode: "decimal",
     placeholder: "$0",
+    ref: amtRef,
     style: {
       flex: '0 0 85px'
     },
@@ -4864,7 +5375,25 @@ function ExpenseLogger(_ref15) {
   }), /*#__PURE__*/React.createElement("button", {
     className: "btn-sm",
     onClick: add
-  }, "+")), /*#__PURE__*/React.createElement("div", {
+  }, "+"), /*#__PURE__*/React.createElement("button", {
+    className: "btn-sm",
+    onClick: startVoice,
+    style: {
+      background: listening ? '#ef4444' : 'rgba(255,255,255,0.08)',
+      lineHeight: '1.4',
+      textAlign: 'center',
+      minWidth: 38,
+      fontSize: 16
+    }
+  }, listening ? '🔴' : '🎤')), voiceFeedback && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: listening ? '#f87171' : 'var(--accent)',
+      padding: '2px 0 6px',
+      textAlign: 'center',
+      fontStyle: 'italic'
+    }
+  }, voiceFeedback), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
@@ -5126,6 +5655,16 @@ function MonthVsMonth(_ref16) {
     b: game.lastMonthBudgetDays,
     f: n => n + 'd'
   }];
+  if (game.debtSnapshot != null && game.lastMonthDebtSnapshot != null) {
+    items.push({
+      icon: '\uD83C\uDFE6',
+      l: 'Deuda total',
+      a: game.debtSnapshot,
+      b: game.lastMonthDebtSnapshot,
+      f: n => fmt(n),
+      inv: true
+    });
+  }
   return /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
@@ -5134,15 +5673,30 @@ function MonthVsMonth(_ref16) {
     style: {
       fontSize: 13
     }
-  }, "\uD83D\uDCCA"), " Este mes vs el pasado"), /*#__PURE__*/React.createElement("div", {
+  }, "\uD83D\uDCCA"), " Este mes vs el pasado"), game.lastDebtReduced > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "al al-g",
+    style: {
+      marginBottom: 10
+    }
+  }, "\uD83C\uDF89 ", /*#__PURE__*/React.createElement("span", null, `Bajaste tu deuda total ${fmt(game.lastDebtReduced)} el mes pasado. Bono extra de XP y Bits por el resultado, no solo por anotar.`)), /*#__PURE__*/React.createElement("div", {
     className: "mvl-grid"
   }, items.map(_ref17 => {
     let icon = _ref17.icon,
       l = _ref17.l,
       a = _ref17.a,
       b = _ref17.b,
-      f = _ref17.f;
-    const ar = arr(a, b);
+      f = _ref17.f,
+      inv = _ref17.inv;
+    const ar = inv ? a < b ? {
+      t: '\u2193',
+      c: 'var(--accent)'
+    } : a > b ? {
+      t: '\u2191',
+      c: 'var(--danger)'
+    } : {
+      t: '=',
+      c: 'var(--muted)'
+    } : arr(a, b);
     return /*#__PURE__*/React.createElement("div", {
       key: l,
       className: "mvl-item"
@@ -5190,26 +5744,26 @@ function TabHistorial(_ref26) {
     onDelCash = _ref26.onDelCash,
     onDelCard = _ref26.onDelCard,
     onEditCash = _ref26.onEditCash;
-  const _useState103 = useState(''),
-    _useState104 = _slicedToArray2(_useState103, 2),
-    viewPhoto = _useState104[0],
-    setViewPhoto = _useState104[1];
-  const _useState105 = useState('todos'),
-    _useState106 = _slicedToArray2(_useState105, 2),
-    filter = _useState106[0],
-    setFilter = _useState106[1];
-  const _useState107 = useState(null),
+  const _useState107 = useState(''),
     _useState108 = _slicedToArray2(_useState107, 2),
-    editId = _useState108[0],
-    setEditId = _useState108[1];
-  const _useState109 = useState(''),
+    viewPhoto = _useState108[0],
+    setViewPhoto = _useState108[1];
+  const _useState109 = useState('todos'),
     _useState110 = _slicedToArray2(_useState109, 2),
-    editAmt = _useState110[0],
-    setEditAmt = _useState110[1];
-  const _useState111 = useState(''),
+    filter = _useState110[0],
+    setFilter = _useState110[1];
+  const _useState111 = useState(null),
     _useState112 = _slicedToArray2(_useState111, 2),
-    editDesc = _useState112[0],
-    setEditDesc = _useState112[1];
+    editId = _useState112[0],
+    setEditId = _useState112[1];
+  const _useState113 = useState(''),
+    _useState114 = _slicedToArray2(_useState113, 2),
+    editAmt = _useState114[0],
+    setEditAmt = _useState114[1];
+  const _useState115 = useState(''),
+    _useState116 = _slicedToArray2(_useState115, 2),
+    editDesc = _useState116[0],
+    setEditDesc = _useState116[1];
   const debts = data.debts || [];
   const cashItems = (data.cashTransactions || []).map(t => ({
     ...t,
@@ -5767,10 +6321,10 @@ function TabTienda(_ref_tt) {
   let game = _ref_tt.game,
     onBuyItem = _ref_tt.onBuyItem,
     onEquipItem = _ref_tt.onEquipItem;
-  const _useState113 = useState('home'),
-    _useState114 = _slicedToArray2(_useState113, 2),
-    cat = _useState114[0],
-    setCat = _useState114[1];
+  const _useState117 = useState('home'),
+    _useState118 = _slicedToArray2(_useState117, 2),
+    cat = _useState118[0],
+    setCat = _useState118[1];
   const bits = game.bits || 0;
   const inventory = game.inventory || [];
   const equipped = game.equipped || {};
@@ -6174,14 +6728,14 @@ function TabDeudas(_ref20) {
     onAddLoan = _ref20.onAddLoan,
     onDelLoan = _ref20.onDelLoan,
     cardTransactions = _ref20.cardTransactions;
-  const _useState115 = useState({
+  const _useState119 = useState({
       person: '',
       amount: '',
       notes: ''
     }),
-    _useState116 = _slicedToArray2(_useState115, 2),
-    lf = _useState116[0],
-    setLf = _useState116[1];
+    _useState120 = _slicedToArray2(_useState119, 2),
+    lf = _useState120[0],
+    setLf = _useState120[1];
   useEffect(() => onVisit(), []);
   const _useState45 = useState({
       type: 'tarjeta',
@@ -6191,6 +6745,7 @@ function TabDeudas(_ref20) {
       cutDay: '',
       minPayment: '',
       monthlyPayment: '',
+      interestRate: '',
       dueDay: '',
       monthsLeft: '',
       person: '',
@@ -6205,9 +6760,16 @@ function TabDeudas(_ref20) {
     _useState46 = _slicedToArray(_useState45, 2),
     df = _useState46[0],
     setDf = _useState46[1];
-  const totalDebt = data.debts.reduce((s, d) => s + (d.type === 'plan' ? getPlanInfo(d).remainingAmount : +(d.balance || 0)), 0);
+  const totalDebt = getTotalDebt(data);
   const planDebts = data.debts.filter(d => d.type === 'plan');
-  const topUrgent = (sorted || []).filter(d => d.urg && (d.urg.key === 'critical' || d.urg.key === 'danger')).slice(0, 1);
+  const topUrgent = (sorted || []).filter(d => d.urg && (d.urg.key === 'critical' || d.urg.key === 'danger' || (d.interestCost || 0) > 0)).slice(0, 1);
+  const topIsDateUrgent = topUrgent[0]?.urg && (topUrgent[0].urg.key === 'critical' || topUrgent[0].urg.key === 'danger');
+  const payoffs = data.debts.filter(d => (d.type === 'tarjeta' || d.type === 'prestamo') && +d.interestRate > 0).map(d => ({
+    d,
+    p: getPayoffProjection(d.balance, d.type === 'plan' ? d.paymentAmount : d.minPayment || d.monthlyPayment, d.interestRate)
+  })).filter(x => x.p);
+  const totalProjectedInterest = payoffs.reduce((s, x) => s + (x.p.neverPaysOff ? 0 : x.p.totalInterest), 0);
+  const neverPayOffDebts = payoffs.filter(x => x.p.neverPaysOff).map(x => x.d.name);
   return /*#__PURE__*/React.createElement(React.Fragment, null, topUrgent.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       background: 'rgba(239,68,68,.08)',
@@ -6236,13 +6798,41 @@ function TabDeudas(_ref20) {
       fontSize: 12,
       color: 'var(--muted)'
     }
-  }, (URG[topUrgent[0].urg.key] || {}).icon, " ", (URG[topUrgent[0].urg.key] || {}).label, topUrgent[0].urg.daysLeft != null ? ` · ${topUrgent[0].urg.daysLeft === 0 ? '\xA1Hoy!' : topUrgent[0].urg.daysLeft === 1 ? 'Ma\xF1ana' : topUrgent[0].urg.daysLeft + ' d\xEDas'}` : ''), /*#__PURE__*/React.createElement("div", {
+  }, topIsDateUrgent ? [(URG[topUrgent[0].urg.key] || {}).icon, " ", (URG[topUrgent[0].urg.key] || {}).label, topUrgent[0].urg.daysLeft != null ? ` · ${topUrgent[0].urg.daysLeft === 0 ? '\xA1Hoy!' : topUrgent[0].urg.daysLeft === 1 ? 'Ma\xF1ana' : topUrgent[0].urg.daysLeft + ' d\xEDas'}` : ''].join('') : `🔥 Te cuesta ${fmt(topUrgent[0].interestCost)}/mes en intereses — la que más te sangra`), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
       color: 'rgba(239,68,68,.8)',
       marginTop: 4
     }
-  }, "Prioriza este pago esta quincena antes que cualquier otro.")), planDebts.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, topIsDateUrgent ? "Prioriza este pago esta quincena antes que cualquier otro." : "Sin presión de fecha, pero es la que más te cuesta dejar viva. Si tienes para abonar extra, ponlo aquí.")), (totalProjectedInterest > 0 || neverPayOffDebts.length > 0) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'rgba(248,113,113,.06)',
+      border: '1px solid rgba(248,113,113,.2)',
+      borderRadius: 14,
+      padding: '12px 14px',
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      color: '#f87171',
+      marginBottom: 6,
+      letterSpacing: .5
+    }
+  }, "💸 EL COSTO REAL DE SOLO PAGAR EL M\xCDNIMO"), totalProjectedInterest > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: 'var(--text)',
+      marginBottom: neverPayOffDebts.length > 0 ? 6 : 0
+    }
+  }, `Si solo pagas los m\xEDnimos en tus deudas con inter\xE9s registrado, vas a terminar pagando ${fmt(totalProjectedInterest)} extra que nunca toca tu deuda real.`), neverPayOffDebts.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: '#f87171',
+      fontWeight: 700
+    }
+  }, `⚠️ ${neverPayOffDebts.join(', ')} nunca se ${neverPayOffDebts.length > 1 ? 'acaban' : 'acaba'} pagando solo el m\xEDnimo — el pago no alcanza ni para el inter\xE9s del mes.`)), planDebts.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "sec"
   }, /*#__PURE__*/React.createElement("span", null, "\uD83D\uDCCB Planes de pago activos")), /*#__PURE__*/React.createElement(PlanProgressCards, {
     data: data,
@@ -6363,6 +6953,20 @@ function TabDeudas(_ref20) {
       ...p,
       dueDay: e.target.value
     }))
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "ff fg-full"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "fl"
+  }, "Tasa de inter\xE9s anual (% CAT, opcional)"), /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "number",
+    inputMode: "decimal",
+    placeholder: "Ej. 45 (revisa tu estado de cuenta)",
+    value: df.interestRate,
+    onChange: e => setDf(p => ({
+      ...p,
+      interestRate: e.target.value
+    }))
   }))), df.type === 'plan' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "ff"
   }, /*#__PURE__*/React.createElement("label", {
@@ -6470,6 +7074,20 @@ function TabDeudas(_ref20) {
     onChange: e => setDf(p => ({
       ...p,
       monthsLeft: e.target.value
+    }))
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "ff fg-full"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "fl"
+  }, "Tasa de inter\xE9s anual (%, opcional)"), /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "number",
+    inputMode: "decimal",
+    placeholder: "Ej. 25 — d\xE9jalo vac\xEDo si no sabes",
+    value: df.interestRate,
+    onChange: e => setDf(p => ({
+      ...p,
+      interestRate: e.target.value
     }))
   }))), df.type === 'informal' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "ff fg-full"
@@ -6761,7 +7379,7 @@ function TabInfo(_ref21) {
   const income = (parseFloat(data.q1) || 0) + (parseFloat(data.q2) || 0);
   const totalFixed = data.exps.reduce((s, e) => s + (+e.amount || 0), 0);
   const totalVar = data.varExps.reduce((s, e) => s + (+e.amount || 0), 0);
-  const totalDebt = data.debts.reduce((s, d) => s + (d.type === 'plan' ? getPlanInfo(d).remainingAmount : +(d.balance || 0)), 0);
+  const totalDebt = getTotalDebt(data);
   const spentPct = pct(totalFixed + totalVar, income);
   const emerPct = pct(parseFloat(data.emerSaved) || 0, parseFloat(data.emerGoal) || 1);
   const _useState53 = useState(''),
@@ -7273,29 +7891,41 @@ function TabInfo(_ref21) {
 
 /* ════════ MAIN APP ════════ */
 const TUTORIAL_SLIDES = [{
-  icon: '🎮',
-  title: 'Tu presupuesto, gamificado',
-  body: 'Gana XP, sube de nivel y desbloquea logros mientras controlas tu dinero. Cada quincena es una misión nueva.'
+  icon: '👋',
+  title: '\xBFQu\xE9 hace esta app?',
+  body: 'Te dice cu\xE1nto dinero puedes gastar HOY sin quedarte sin nada antes de que te vuelvan a pagar. Solo anota lo que gastas y la app hace las cuentas por ti.'
 }, {
-  icon: '💸',
-  title: 'Anota tus gastos',
-  body: 'Toca el campo de gasto en la pantalla Hoy. Elige 🏦 D\xE9bito (descuenta de tu cuenta), 💵 Efectivo o 💳 Tarjeta. Tu historial se guarda autom\xE1tico.'
+  icon: '💰',
+  title: 'El n\xFAmero grande de "Hoy"',
+  body: 'En la primera pantalla ver\xE1s un n\xFAmero grande: es lo que puedes gastar hoy sin problema. Si gastas menos, vas bien. Si gastas m\xE1s, se reduce lo que te queda para los pr\xF3ximos d\xEDas.'
+}, {
+  icon: '✏️',
+  title: 'Anotar un gasto — ejemplo',
+  body: 'Compraste un caf\xE9 de $50: 1) Toca el cuadro "$0" y escribe 50. 2) Toca "\xBFEn qu\xE9?" y escribe "caf\xE9". 3) Elige c\xF3mo pagaste: 🏦 D\xE9bito, 💵 Efectivo o 💳 Tarjeta. 4) Toca el bot\xF3n "+". \xA1Listo!'
+}, {
+  icon: '🎤',
+  title: 'O dilo en voz alta',
+  body: 'Si no quieres escribir, toca el micr\xF3fono 🎤 y di algo como "gast\xE9 50 en caf\xE9". La app lo entiende y llena los campos por ti.'
+}, {
+  icon: '📌',
+  title: 'Tus gastos fijos y deudas',
+  body: 'En la pesta\xF1a "Gastos" anota lo que pagas siempre (renta, luz, Netflix). En "Deudas" anota lo que debes (tarjetas, pr\xE9stamos). Mientras m\xE1s completo, m\xE1s exacta es la cuenta de cu\xE1nto puedes gastar.'
+}, {
+  icon: '🧮',
+  title: '\xBFMe alcanza para algo?',
+  body: 'En "Hoy" hay una calculadora: pon cu\xE1nto cuesta lo que quieres (un viaje, una compra) y en cu\xE1ntos meses lo necesitas. Te dice si te alcanza o cu\xE1nto te falta todav\xEDa.'
+}, {
+  icon: '🎮',
+  title: 'El juego: subes de nivel',
+  body: 'Cada vez que anotas un gasto o pagas algo, ganas puntos y tu personaje sube de nivel y cambia de ropa. Es solo para hacerlo divertido — no es dinero real ni afecta tus cuentas.'
+}, {
+  icon: '🛒',
+  title: 'La Tienda',
+  body: 'Ganas "Bits" 💎 (una moneda del juego) por usar la app seguido. Con esos Bits compras ropa, casas y autos para tu personaje en la pesta\xF1a "Tienda". Es solo decoraci\xF3n, no cuesta dinero real.'
 }, {
   icon: '📋',
-  title: 'Tu historial',
-  body: 'En la pesta\xF1a Historial ves todos tus movimientos. Filtra por tipo, edita montos y elimina gastos registrados por error.'
-}, {
-  icon: '🗡️',
-  title: 'Misiones diarias',
-  body: 'Cada d\xEDa tienes 3 misiones: anotar gastos, revisar saldo, pagar deudas. Compl\xE9talas para ganar XP y mantener tu racha.'
-}, {
-  icon: '🏦',
-  title: 'Controla tus deudas',
-  body: 'En Deudas ves la urgencia de cada pago: 🔴 cr\xEDtico, 🟠 peligro, 🟡 atenci\xF3n. Paga siempre las m\xE1s urgentes primero.'
-}, {
-  icon: '💚',
-  title: 'Tu HealthScore',
-  body: 'Tu score de salud financiera va de 0 a 100. Lo determinan tu racha, saldo disponible, deudas urgentes, misiones del d\xEDa y fondo de emergencia.'
+  title: '\xBFTe equivocaste? Sin problema',
+  body: 'En la pesta\xF1a "Historial" ves todo lo que anotaste. Si te equivocaste en un monto o quieres borrar algo, ah\xED lo editas o lo eliminas cuando quieras.'
 }];
 function TutorialOverlay(_ref_tut) {
   let onClose = _ref_tut.onClose;
@@ -7436,6 +8066,7 @@ function MainApp(_ref22) {
   });
   const userName = loadLS(NAME_KEY) || '';
   const h = new Date().getHours();
+  const isQuickAdd = typeof window !== 'undefined' && window.location.search.indexOf('quick=1') !== -1;
   const _useState53 = useState('hoy'),
     _useState54 = _slicedToArray(_useState53, 2),
     tab = _useState54[0],
@@ -7490,7 +8121,14 @@ function MainApp(_ref22) {
         ...GAME_INIT,
         ...saved
       };
+      const currentTotalDebt = getTotalDebt(data);
       if (g.monthKey !== monthKey) {
+        // Bono por bajar deuda real, no solo por anotar — si tu deuda total bajó vs el mes pasado, premiamos el resultado
+        const prevSnapshot = g.debtSnapshot;
+        const debtReduced = prevSnapshot != null ? Math.max(0, prevSnapshot - currentTotalDebt) : 0;
+        // Racha de déficit: ¿llevas meses seguidos gastando más de lo que ganas?
+        const monthlySurplus = getMonthlySurplus(data);
+        const newDeficitStreak = monthlySurplus < 0 ? (g.deficitStreak || 0) + 1 : 0;
         g = {
           ...g,
           monthKey,
@@ -7499,7 +8137,20 @@ function MainApp(_ref22) {
           lastMonthBudgetDays: g.thisMonthBudgetDays || 0,
           thisMonthXP: 0,
           thisMonthLogs: 0,
-          thisMonthBudgetDays: 0
+          thisMonthBudgetDays: 0,
+          lastMonthDebtSnapshot: prevSnapshot,
+          debtSnapshot: currentTotalDebt,
+          lastDebtReduced: debtReduced,
+          deficitStreak: newDeficitStreak
+        };
+        if (debtReduced > 0) {
+          g.xp = (g.xp || 0) + Math.min(300, Math.round(debtReduced / 100));
+          g.bits = (g.bits || 0) + Math.min(80, Math.round(debtReduced / 250));
+        }
+      } else if (g.debtSnapshot == null) {
+        g = {
+          ...g,
+          debtSnapshot: currentTotalDebt
         };
       }
       return g;
@@ -7564,6 +8215,16 @@ function MainApp(_ref22) {
       return patch;
     });
   }, []);
+  const dismissDeficitWarning = useCallback(() => {
+    setGame(prev => {
+      const patch = {
+        ...prev,
+        deficitWarningDismissedMonth: monthKey
+      };
+      saveLS(GAME_KEY, patch);
+      return patch;
+    });
+  }, [monthKey]);
   const buyItem = useCallback(itemId => {
     const item = SHOP_ITEMS.find(i => i.id === itemId);
     if (!item) return;
@@ -7952,11 +8613,16 @@ function MainApp(_ref22) {
     dot: '#fbbf24',
     txt: 'Guardando…'
   } : {};
+  const showDeficitWarning = !showOnboarding && (game.deficitStreak || 0) >= 2 && game.deficitWarningDismissedMonth !== monthKey;
   return /*#__PURE__*/React.createElement(React.Fragment, null, showOnboarding && /*#__PURE__*/React.createElement(OnboardingFlow, {
     userName: userName,
     data: data,
     onUpdate: update,
     onComplete: () => setShowOnboarding(false)
+  }), showDeficitWarning && /*#__PURE__*/React.createElement(DeficitWarningOverlay, {
+    data: data,
+    deficitStreak: game.deficitStreak,
+    onDismiss: dismissDeficitWarning
   }), levelUpData && /*#__PURE__*/React.createElement(LevelUpOverlay, {
     lvlData: levelUpData,
     onDismiss: () => setLevelUpData(null)
@@ -8275,11 +8941,14 @@ function MainApp(_ref22) {
     dp: dp
   }), /*#__PURE__*/React.createElement(CashFlowForecast, {
     data: data
+  }), /*#__PURE__*/React.createElement(FinancialPlanner, {
+    data: data
   }), /*#__PURE__*/React.createElement(ExpenseLogger, {
     data: data,
     debts: data.debts,
     onAddCash: actions.addCash,
-    onAddCard: actions.addCard
+    onAddCard: actions.addCard,
+    quickFocus: isQuickAdd
   }), /*#__PURE__*/React.createElement(CardStatusSection, {
     debts: data.debts,
     cardTransactions: data.cardTransactions || []
