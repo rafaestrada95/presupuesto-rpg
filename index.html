@@ -552,6 +552,67 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-toast button{background:none;border:0;color:var(--bg);font:inherit;font-weight:800;text-decoration:underline;min-height:40px;padding:0 6px}
 @media (prefers-reduced-motion:reduce){.b-app *,.b-sheet *{animation:none!important;transition:none!important}}
 @media (max-width:360px){.b-hero .b-amount{font-size:2.8rem}.b-strip .v{font-size:1rem}}
+
+/* ── Personaje y progresión ── */
+.b-scene{border-radius:var(--r-c) var(--r-c) 0 0;overflow:hidden;line-height:0}
+.b-scene svg{image-rendering:pixelated}
+.b-herocard{background:var(--card);border:1px solid var(--border);border-radius:var(--r-l);overflow:hidden}
+.b-herocard .b-scene{border-radius:0}
+.b-herocard-body{padding:16px 18px 18px}
+.b-lvl-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.b-lvl-n{font-size:.78rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.b-lvl-t{font-size:1.35rem;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.b-lvl-stats{display:flex;gap:12px;font-size:.85rem;font-weight:700;color:var(--dim);flex-wrap:wrap}
+.b-lvl-story{color:var(--dim);font-size:.92rem;margin:10px 0 0}
+.b-lvl-next{margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
+.b-lvl-next-h{font-size:.9rem;color:var(--dim);margin-bottom:6px}
+.b-lvl-next-h b{color:var(--text)}
+.b-req{display:flex;gap:10px;align-items:flex-start;padding:7px 0;font-size:.92rem}
+.b-req-dot{width:20px;height:20px;border-radius:50%;border:2px solid var(--border);flex:none;display:grid;place-items:center;font-size:.72rem;font-weight:800;color:#fff;margin-top:1px}
+.b-req.ok .b-req-dot{background:var(--emerald);border-color:var(--emerald)}
+.b-req.ok .b-req-l{color:var(--muted)}
+.b-req-l{flex:1;min-width:0}
+.b-req-bar{display:block;height:6px;border-radius:99px;background:var(--surface);overflow:hidden;margin-top:6px}
+.b-req-bar i{display:block;height:100%;background:var(--violet);border-radius:99px}
+.b-roadmap{display:grid;grid-template-columns:repeat(5,1fr);gap:10px 6px}
+.b-road{display:flex;flex-direction:column;align-items:center;text-align:center;opacity:.45}
+.b-road.done{opacity:.8}
+.b-road.cur{opacity:1}
+.b-road-hero{width:44px;height:54px}
+.b-road-hero svg{image-rendering:pixelated}
+.b-road-n{font-size:.72rem;font-weight:800;color:var(--muted);margin-top:2px}
+.b-road.cur .b-road-n{color:#fff;background:var(--violet);border-radius:99px;padding:0 7px}
+.b-road-t{font-size:.7rem;font-weight:600;line-height:1.2;margin-top:2px}
+.b-app .b-game{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;align-items:center}
+.b-game>.b-game-hero{grid-row:span 4;width:52px;height:64px;background:rgba(255,255,255,.16);border-radius:12px;padding:4px}
+.b-game>.b-game-hero svg{image-rendering:pixelated}
+.b-game-next{font-size:.86rem;opacity:.92;margin-top:10px}
+
+/* Tienda */
+.b-shop-bits{font-weight:800}
+.b-seg{display:flex;gap:18px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.b-app .b-seg button{padding:10px 0;min-height:44px;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.b-app .b-seg button.on{color:var(--text);border-color:var(--indigo)}
+.b-shop-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:14px}
+.b-shop-item{display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px;border-radius:var(--r-c);background:var(--card);border:1px solid var(--border);text-align:center}
+.b-shop-item.on{border:2px solid var(--indigo);padding:11px}
+.b-shop-prev{width:100%;aspect-ratio:16/10;display:grid;place-items:center;background:var(--surface);border-radius:var(--r-s);overflow:hidden;max-width:100%}
+.b-shop-prev svg{image-rendering:pixelated;max-height:100%}
+.b-shop-name{font-weight:700;font-size:.92rem;display:flex;align-items:center;gap:6px}
+.b-swatch{width:12px;height:12px;border-radius:4px;display:inline-block}
+.b-shop-state{font-size:.82rem;color:var(--muted);font-weight:600;min-height:44px;display:flex;align-items:center}
+.b-app .b-secondary.buy{background:var(--mango);color:#18212F}
+.b-app .b-secondary:disabled{opacity:.45}
+.b-app .b-secondary.danger{color:var(--danger)}
+
+/* Formularios nuevos */
+.b-form{display:flex;flex-direction:column;gap:12px;margin-top:10px;padding:16px;border-radius:var(--r-c);background:var(--card);border:1px solid var(--border)}
+.b-field{display:flex;flex-direction:column;gap:6px;font-size:.88rem;font-weight:600;color:var(--dim)}
+.b-field input{font:inherit;font-size:1.05rem;font-weight:600;color:var(--text);background:transparent;border:0;border-bottom:2px solid var(--border);padding:8px 0;border-radius:0;outline:none}
+.b-field input:focus{border-color:var(--indigo)}
+.b-form-btns{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.b-app .b-primary.sm{width:auto;min-height:44px;padding:0 20px;font-size:.95rem}
+.b-app .b-primary.ghost{background:var(--surface);color:var(--text);margin-top:12px;min-height:52px}
 </style>
 </head>
 <body>
@@ -662,114 +723,668 @@ const PIN_KEY = 'mipres-pin',
   GAME_KEY = 'mipres-game-v5',
   NAME_KEY = 'mipres-name';
 
-/* ── 12 LEVELS ── */
+/* ════════ BUDGY · PERSONAJE Y MUNDO (pixel art) ════════
+   Cada nivel es una etapa de vida financiera. El arte se genera como SVG en
+   una cuadrícula de pixeles: personaje de 18×30 sobre un escenario de 160×90. */
+const ART = {
+  skin: '#F2C29B', skinSh: '#DDA47C', blush: '#F4A09A', eye: '#1F2430',
+  hair: '#3B2A20', white: '#FFFFFF', ink: '#18212F'
+};
+
+// Paletas que se pueden comprar en la tienda: cambian la prenda principal
+const ART_COLORS = {
+  indigo: ['#4F46E5', '#3F37C9'], esmeralda: ['#10B981', '#0C9469'], coral: ['#FF6B5E', '#E2574A'],
+  mango: ['#FBBF24', '#D99E12'], violeta: ['#8B5CF6', '#7042E0'], carbon: ['#374151', '#1F2937']
+};
+
+function artRects() {
+  const out = [];
+  const R = (x, y, w, h, c) => out.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${c}"/>`);
+  return { out, R };
+}
+
+/* ── Personaje ── */
+const OUTFITS = [
+  // 0 Mendigo
+  { hair: 'messy', main: '#9C8B74', mainSh: '#857560', sleeves: 'torn', pants: '#6E6A5E', pantsSh: '#5C584D', shoes: '#6B4A2F', worn: true },
+  // 1 Chambitas
+  { hair: 'cap', capC: '#F59E0B', main: '#14B8A6', mainSh: '#0F9488', sleeves: 'short', pants: '#3B6EA8', pantsSh: '#2F5A8A', shoes: '#E5E7EB', soles: '#9CA3AF' },
+  // 2 Godín
+  { hair: 'neat', main: '#BFDBFE', mainSh: '#93C5FD', sleeves: 'long', tie: '#1E3A8A', badge: true, pants: '#374151', pantsSh: '#2B3340', shoes: '#1F2937' },
+  // 3 Dándose sus gustos
+  { hair: 'quiff', main: '#FF6B5E', mainSh: '#E2574A', inner: '#FFFFFF', sleeves: 'long', pants: '#1F2937', pantsSh: '#111827', shoes: '#FFFFFF', soles: '#E5E7EB', shades: true, phones: true },
+  // 4 Ahorrador
+  { hair: 'neat', main: '#10B981', mainSh: '#0C9469', collar: '#6EE7B7', sleeves: 'short', pants: '#3B6EA8', pantsSh: '#2F5A8A', shoes: '#4B5563' },
+  // 5 Financieramente despierto
+  { hair: 'neat', main: '#1E3A8A', mainSh: '#172E6E', collarTips: '#FFFFFF', sleeves: 'long', pants: '#C8B08A', pantsSh: '#B39A73', shoes: '#6B4A2F', glasses: true },
+  // 6 Inversionista
+  { hair: 'side', main: '#374151', mainSh: '#1F2937', inner: '#F9FAFB', sleeves: 'long', pants: '#1F2937', pantsSh: '#111827', shoes: '#111827', watch: '#FBBF24' },
+  // 7 Constructor de patrimonio
+  { hair: 'side', main: '#E0E7FF', mainSh: '#C7D2FE', vest: '#7C5A3A', vestSh: '#6A4B30', sleeves: 'long', pants: '#4B5563', pantsSh: '#374151', shoes: '#3F2A1B', watch: '#D1D5DB' },
+  // 8 Millonario
+  { hair: 'slick', main: '#1E293B', mainSh: '#0F172A', inner: '#FFFFFF', tie: '#B91C1C', sleeves: 'long', pants: '#1E293B', pantsSh: '#0F172A', shoes: '#0B0F19', watch: '#FBBF24', shadesUp: true },
+  // 9 Millonario inteligente
+  { hair: 'silver', main: '#F5EBDD', mainSh: '#E6D6BF', sleeves: 'rolled', sweater: '#1E3A8A', pants: '#D9CBB4', pantsSh: '#C7B79D', shoes: '#7A4B2A', watch: '#D1D5DB' }
+];
+
+function drawHero(level, custom) {
+  const { out, R } = artRects();
+  const o = { ...OUTFITS[Math.max(0, Math.min(9, level))] };
+  const c = custom || {};
+  if (c.color && ART_COLORS[c.color]) {
+    o.main = ART_COLORS[c.color][0];
+    o.mainSh = ART_COLORS[c.color][1];
+  }
+  const S = ART.skin, SS = ART.skinSh;
+  // sombra en el piso
+  R(3, 29, 13, 1, 'rgba(0,0,0,.18)');
+  // piernas y zapatos
+  R(5, 21, 8, 3, o.pants);
+  R(5, 24, 3, 4, o.pants); R(10, 24, 3, 4, o.pants);
+  R(7, 24, 1, 4, o.pantsSh); R(12, 24, 1, 4, o.pantsSh);
+  if (o.worn) { R(10, 25, 2, 2, '#8A7D5C'); R(10, 25, 1, 1, '#A89A73'); }
+  R(4, 28, 4, 2, o.shoes); R(10, 28, 4, 2, o.shoes);
+  if (o.soles) { R(4, 29, 4, 1, o.soles); R(10, 29, 4, 1, o.soles); }
+  if (o.worn) { R(4, 28, 1, 1, S); R(13, 29, 1, 1, '#4A3220'); }
+  // torso
+  R(4, 13, 10, 8, o.main);
+  R(4, 19, 10, 2, o.mainSh);
+  if (o.inner) { R(7, 13, 4, 7, o.inner); R(4, 13, 3, 8, o.main); R(11, 13, 3, 8, o.main); R(6, 13, 1, 6, o.mainSh); R(11, 13, 1, 6, o.mainSh); }
+  if (o.vest) { R(5, 14, 8, 6, o.vest); R(8, 14, 2, 3, o.main); R(5, 19, 8, 1, o.vestSh); R(9, 17, 1, 1, '#D4B483'); R(9, 18, 1, 1, '#D4B483'); }
+  if (o.collar) { R(7, 13, 4, 1, o.collar); R(9, 14, 1, 2, o.mainSh); }
+  if (o.collarTips) { R(7, 13, 1, 1, o.collarTips); R(10, 13, 1, 1, o.collarTips); }
+  if (o.tie) { R(8, 13, 2, 1, o.tie); R(8, 14, 2, 5, o.tie); R(8, 18, 2, 1, o.tie); }
+  if (o.badge) { R(6, 13, 1, 4, '#4F46E5'); R(11, 13, 1, 4, '#4F46E5'); R(10, 17, 3, 2, ART.white); R(10, 17, 3, 1, '#4F46E5'); }
+  if (o.worn) { R(5, 15, 2, 2, '#6B8E5A'); R(11, 18, 2, 2, '#B5651D'); R(8, 20, 1, 1, '#857560'); }
+  if (o.sweater) { R(4, 13, 10, 2, o.sweater); R(6, 15, 2, 2, o.sweater); R(10, 15, 2, 2, o.sweater); R(8, 15, 2, 1, '#172E6E'); }
+  // brazos
+  if (o.sleeves === 'long') {
+    R(2, 13, 2, 7, o.main); R(14, 13, 2, 7, o.main); R(2, 18, 2, 2, o.mainSh); R(14, 18, 2, 2, o.mainSh);
+  } else if (o.sleeves === 'short') {
+    R(2, 13, 2, 3, o.main); R(14, 13, 2, 3, o.main); R(2, 16, 2, 4, S); R(14, 16, 2, 4, S);
+  } else if (o.sleeves === 'rolled') {
+    R(2, 13, 2, 4, o.main); R(14, 13, 2, 4, o.main); R(2, 17, 2, 1, o.mainSh); R(14, 17, 2, 1, o.mainSh); R(2, 18, 2, 2, S); R(14, 18, 2, 2, S);
+  } else if (o.sleeves === 'torn') {
+    R(2, 13, 2, 6, o.main); R(2, 18, 1, 1, o.mainSh); R(14, 13, 2, 2, o.main); R(15, 15, 1, 1, o.main); R(14, 15, 1, 5, S); R(15, 16, 1, 4, S);
+  }
+  R(2, 20, 2, 1, S); R(14, 20, 2, 1, S);
+  if (o.watch) R(2, 19, 2, 1, o.watch);
+  // cuello y cabeza
+  R(8, 12, 2, 1, SS);
+  R(5, 4, 8, 8, S);
+  R(4, 7, 1, 2, S); R(13, 7, 1, 2, S);
+  R(5, 11, 8, 1, SS);
+  // ojos, mejillas y sonrisa
+  R(7, 7, 1, 1, ART.eye); R(10, 7, 1, 1, ART.eye);
+  R(6, 9, 1, 1, ART.blush); R(11, 9, 1, 1, ART.blush);
+  R(7, 9, 4, 1, '#8A3B2E'); R(8, 10, 2, 1, '#E27D6E');
+  if (o.worn) { R(6, 10, 1, 1, '#B98C6E'); R(11, 10, 1, 1, '#B98C6E'); R(9, 11, 1, 1, '#B98C6E'); }
+  // pelo
+  const H = ART.hair;
+  if (o.hair === 'messy') {
+    R(5, 3, 8, 2, H); R(4, 4, 1, 3, H); R(13, 4, 1, 2, H); R(6, 2, 1, 1, H); R(9, 1, 2, 2, H); R(12, 2, 1, 1, H); R(5, 5, 1, 1, H); R(11, 5, 2, 1, H);
+    // gorro tejido con parche
+    R(5, 2, 8, 2, '#B4533A'); R(5, 3, 8, 1, '#9A4430'); R(10, 2, 2, 1, '#6B8E5A'); R(8, 1, 2, 1, '#B4533A');
+  } else if (o.hair === 'cap') {
+    R(5, 4, 1, 3, H); R(12, 4, 1, 2, H);
+    R(5, 2, 8, 3, o.capC); R(12, 4, 4, 1, o.capC); R(5, 4, 8, 1, '#D97706'); R(8, 2, 2, 1, '#FCD34D');
+  } else if (o.hair === 'neat') {
+    R(5, 2, 8, 3, H); R(5, 5, 1, 1, H); R(12, 5, 1, 1, H); R(9, 3, 3, 1, '#57402F');
+  } else if (o.hair === 'quiff') {
+    R(5, 2, 8, 3, H); R(6, 1, 6, 1, H); R(9, 0, 3, 1, H); R(5, 5, 1, 1, H); R(12, 5, 1, 1, H); R(10, 1, 2, 1, '#57402F');
+  } else if (o.hair === 'side') {
+    R(5, 2, 8, 3, H); R(5, 5, 2, 1, H); R(12, 5, 1, 1, H); R(6, 2, 1, 1, '#57402F'); R(4, 4, 1, 2, H);
+  } else if (o.hair === 'slick') {
+    R(5, 2, 8, 3, '#1B1410'); R(5, 5, 1, 1, '#1B1410'); R(12, 5, 1, 1, '#1B1410'); R(7, 2, 4, 1, '#3E2F25');
+  } else if (o.hair === 'silver') {
+    R(5, 2, 8, 3, '#A8ADB6'); R(5, 5, 1, 2, '#A8ADB6'); R(12, 5, 1, 2, '#A8ADB6'); R(7, 2, 4, 1, '#D1D5DB'); R(4, 4, 1, 2, '#A8ADB6');
+  }
+  // lentes
+  if (o.glasses) {
+    R(6, 7, 3, 1, '#CFE8FF'); R(9, 7, 3, 1, '#CFE8FF'); R(6, 6, 6, 1, '#374151'); R(7, 7, 1, 1, ART.eye); R(10, 7, 1, 1, ART.eye);
+  }
+  if (o.shades || c.acc === 'lentes') { R(6, 7, 3, 1, '#111827'); R(9, 7, 3, 1, '#111827'); R(7, 7, 1, 1, '#4B5563'); R(10, 7, 1, 1, '#4B5563'); }
+  if (o.shadesUp) { R(6, 3, 6, 1, '#111827'); R(7, 3, 1, 1, '#4B5563'); }
+  if (o.phones || c.acc === 'audifonos') { R(6, 12, 6, 1, '#111827'); R(5, 12, 1, 2, '#374151'); R(12, 12, 1, 2, '#374151'); }
+  if (c.acc === 'gorra' && o.hair !== 'cap' && o.hair !== 'messy') { R(5, 1, 8, 3, '#4F46E5'); R(12, 3, 4, 1, '#4F46E5'); R(5, 3, 8, 1, '#3F37C9'); }
+  if (c.acc === 'reloj') R(14, 19, 2, 1, '#FBBF24');
+  if (c.acc === 'bufanda') { R(5, 12, 8, 2, '#FF6B5E'); R(10, 14, 2, 3, '#FF6B5E'); R(10, 16, 2, 1, '#E2574A'); }
+  // objetos en mano por nivel
+  switch (level) {
+    case 0: // bastón con itacate
+      R(15, 19, 1, 1, '#7A5230'); R(16, 17, 1, 2, '#7A5230'); R(17, 15, 1, 2, '#7A5230'); R(18, 13, 1, 2, '#7A5230');
+      R(16, 8, 6, 5, '#E05A4E'); R(17, 7, 4, 1, '#E05A4E'); R(17, 9, 1, 1, ART.white); R(20, 10, 1, 1, ART.white); R(18, 11, 1, 1, ART.white); R(19, 13, 1, 1, '#B9433A');
+      break;
+    case 1: // caja de herramientas
+      R(-2, 20, 6, 1, '#1F2937'); R(-2, 21, 6, 4, '#DC2626'); R(-2, 22, 6, 1, '#B91C1C'); R(0, 22, 2, 1, '#9CA3AF');
+      break;
+    case 2: // correa y maletín de laptop
+      [[5, 13], [6, 14], [7, 15], [8, 16], [9, 17], [10, 18], [11, 19], [12, 20]].forEach(p => R(p[0], p[1], 1, 1, '#1F2937'));
+      R(12, 21, 5, 4, '#374151'); R(12, 21, 5, 1, '#4B5563');
+      break;
+    case 3: // bolsas de compras
+      R(-2, 21, 4, 5, '#8B5CF6'); R(-1, 20, 2, 1, '#6D28D9'); R(16, 21, 4, 5, '#FBBF24'); R(17, 20, 2, 1, '#D99E12'); R(17, 23, 2, 1, '#FFFFFF');
+      break;
+    case 4: // cochinito
+      R(5, 17, 8, 5, '#F9A8D4'); R(6, 16, 1, 1, '#F472B6'); R(13, 18, 1, 3, '#F472B6'); R(8, 17, 3, 1, '#9D174D');
+      R(11, 18, 1, 1, ART.eye); R(6, 22, 1, 1, '#F472B6'); R(11, 22, 1, 1, '#F472B6'); R(4, 18, 1, 1, '#F472B6');
+      R(9, 15, 1, 2, '#FBBF24'); R(9, 15, 1, 1, '#FDE68A');
+      break;
+    case 5: // tablet con gráfica
+      R(15, 16, 5, 6, '#1F2937'); R(16, 17, 3, 4, '#E0F2FE'); R(16, 20, 1, 1, '#10B981'); R(17, 19, 1, 1, '#10B981'); R(18, 18, 1, 1, '#10B981');
+      break;
+    case 6: // celular con gráfica
+      R(15, 17, 3, 5, '#111827'); R(16, 18, 1, 3, '#34D399');
+      break;
+    case 7: // plano enrollado
+      R(14, 15, 6, 2, '#3B82F6'); R(19, 15, 1, 2, '#DBEAFE'); R(15, 15, 1, 2, '#2563EB');
+      break;
+    case 8: // portafolio
+      R(15, 21, 6, 5, '#3F2A1B'); R(17, 20, 2, 1, '#1F140C'); R(17, 22, 2, 1, '#FBBF24');
+      break;
+    case 9: // café
+      R(16, 17, 3, 4, '#FFFFFF'); R(16, 17, 3, 1, '#E5E7EB'); R(19, 18, 1, 2, '#FFFFFF'); R(17, 15, 1, 1, 'rgba(255,255,255,.7)'); R(18, 14, 1, 1, 'rgba(255,255,255,.5)');
+      break;
+  }
+  return out.join('');
+}
+
+/* ── Mascotas ── */
+function drawPet(kind) {
+  const { out, R } = artRects();
+  if (kind === 'perro') {
+    R(0, 9, 12, 1, 'rgba(0,0,0,.15)');
+    R(2, 3, 8, 4, '#C08457'); R(8, 0, 4, 4, '#C08457'); R(8, 0, 1, 2, '#7A4B2A'); R(11, 2, 1, 1, ART.eye); R(12, 3, 1, 1, '#1F2430');
+    R(2, 7, 1, 2, '#C08457'); R(4, 7, 1, 2, '#C08457'); R(7, 7, 1, 2, '#C08457'); R(9, 7, 1, 2, '#C08457'); R(0, 2, 2, 1, '#C08457'); R(3, 4, 4, 1, '#E3B489');
+  } else if (kind === 'gato') {
+    R(0, 9, 10, 1, 'rgba(0,0,0,.15)');
+    R(1, 4, 7, 4, '#6B7280'); R(6, 1, 4, 4, '#6B7280'); R(6, 0, 1, 1, '#6B7280'); R(9, 0, 1, 1, '#6B7280'); R(7, 2, 1, 1, '#FDE68A'); R(9, 2, 1, 1, '#FDE68A');
+    R(0, 2, 1, 3, '#6B7280'); R(2, 8, 1, 1, '#6B7280'); R(6, 8, 1, 1, '#6B7280'); R(3, 5, 3, 1, '#9CA3AF');
+  } else if (kind === 'perico') {
+    R(3, 9, 5, 1, 'rgba(0,0,0,.15)');
+    R(3, 2, 4, 6, '#22C55E'); R(4, 0, 3, 3, '#22C55E'); R(6, 1, 1, 1, ART.eye); R(7, 1, 2, 2, '#F59E0B'); R(3, 5, 2, 3, '#16A34A'); R(2, 7, 2, 2, '#3B82F6');
+    R(4, 8, 1, 1, '#F59E0B'); R(6, 8, 1, 1, '#F59E0B');
+  }
+  return out.join('');
+}
+
+/* ── Escenarios ── */
+const SKIES = [
+  ['#BFD9F2', '#EAF2FA'], ['#8EC5F0', '#DDEFFC'], ['#7FB8EE', '#D6EAFB'], ['#F7A48B', '#FDE2C8'], ['#8ED0F5', '#E3F4FD'],
+  ['#6FC0F2', '#D8F0FD'], ['#5DB4EE', '#CFEBFC'], ['#4FA8EA', '#C8E6FB'], ['#3C8FD9', '#BFE0F8'], ['#F59E6B', '#FCD9A0']
+];
+
+function drawScene(level, custom) {
+  const { out, R } = artRects();
+  const c = custom || {};
+  const L = Math.max(0, Math.min(9, level));
+  const T = (x, y, txt, col, size) => out.push(`<text x="${x}" y="${y}" font-family="ui-monospace,Menlo,monospace" font-weight="700" font-size="${size || 4}" fill="${col}">${txt}</text>`);
+  const cloud = (x, y, s) => { R(x, y + 2, 12 * s, 3, 'rgba(255,255,255,.85)'); R(x + 3 * s, y, 6 * s, 3, 'rgba(255,255,255,.85)'); };
+  const tree = (x, y, top, trunk) => { R(x + 3, y + 8, 2, 6, trunk || '#7A5230'); R(x, y + 2, 8, 7, top); R(x + 1, y, 6, 2, top); R(x + 1, y + 3, 2, 2, 'rgba(255,255,255,.15)'); };
+  const palm = (x, y) => { R(x + 4, y + 5, 2, 17, '#8B6A43'); R(x, y + 3, 10, 2, '#16A34A'); R(x - 2, y + 5, 4, 1, '#16A34A'); R(x + 8, y + 5, 4, 1, '#16A34A'); R(x + 2, y + 1, 6, 2, '#22C55E'); };
+  const car = (x, y, body, dark, sport) => {
+    if (sport) { R(x, y + 5, 30, 5, body); R(x + 7, y + 1, 14, 4, body); R(x + 9, y + 2, 10, 3, '#9CC9F0'); R(x, y + 8, 30, 2, dark); }
+    else { R(x, y + 4, 28, 6, body); R(x + 5, y, 16, 5, body); R(x + 7, y + 1, 5, 3, '#9CC9F0'); R(x + 14, y + 1, 5, 3, '#9CC9F0'); R(x, y + 8, 28, 2, dark); }
+    R(x + 4, y + 9, 5, 5, '#111827'); R(x + 6, y + 11, 1, 1, '#9CA3AF'); R(x + 20, y + 9, 5, 5, '#111827'); R(x + 22, y + 11, 1, 1, '#9CA3AF');
+    R(x + (sport ? 28 : 26), y + 6, 2, 1, '#FDE68A');
+  };
+  const win = (x, y, lit) => R(x, y, 4, 4, lit ? '#FDE68A' : '#BFDBFE');
+  out.push(`<defs><linearGradient id="sky${L}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${SKIES[L][0]}"/><stop offset="1" stop-color="${SKIES[L][1]}"/></linearGradient></defs>`);
+  out.push(`<rect width="160" height="90" fill="url(#sky${L})"/>`);
+  const ground = L === 9 ? '#E7C58B' : L <= 1 ? '#9CA3AF' : '#7CC576';
+  const groundSh = L === 9 ? '#D8B070' : L <= 1 ? '#8B929C' : '#6AB064';
+
+  if (L === 0) {
+    R(122, 8, 8, 8, '#FDE68A');
+    cloud(18, 10, 1); cloud(90, 16, 1);
+    // ciudad de fondo
+    R(0, 40, 22, 40, '#C9CFD8'); R(22, 30, 18, 50, '#B8C0CB'); R(40, 46, 26, 34, '#C9CFD8'); R(120, 36, 22, 44, '#B8C0CB'); R(142, 48, 18, 32, '#C9CFD8');
+    for (let i = 0; i < 4; i++) { win(26, 34 + i * 9, false); win(33, 34 + i * 9, false); win(124, 40 + i * 9, false); win(133, 40 + i * 9, false); }
+    // pasto del parque y banqueta
+    R(0, 74, 160, 6, '#8FBF7F'); R(0, 80, 160, 10, ground); R(0, 80, 160, 1, groundSh);
+    // banca
+    R(20, 66, 34, 3, '#A0692F'); R(20, 62, 34, 2, '#B87A3C'); R(22, 69, 2, 11, '#374151'); R(50, 69, 2, 11, '#374151'); R(20, 64, 34, 1, '#8A5A28');
+    // cartón con letrero
+    R(24, 70, 26, 10, '#C9A36B'); R(24, 70, 26, 1, '#B28B53'); T(25.5, 74.5, '¡HOY', '#5B4632', 3.4); T(25.5, 78.8, 'EMPIEZO!', '#5B4632', 3.4);
+    // farol
+    R(108, 44, 2, 36, '#374151'); R(105, 40, 8, 5, '#374151'); R(106, 42, 6, 2, '#FDE68A');
+    // bote de basura y paloma
+    R(124, 70, 8, 10, '#4B5563'); R(123, 69, 10, 2, '#374151'); R(125, 72, 1, 6, '#6B7280');
+    R(96, 77, 5, 3, '#9CA3AF'); R(100, 76, 2, 2, '#9CA3AF'); R(101, 76, 1, 1, ART.eye); R(102, 77, 1, 1, '#F59E0B'); R(96, 78, 2, 1, '#6B7280');
+  } else if (L === 1) {
+    R(128, 8, 8, 8, '#FDE68A');
+    cloud(14, 12, 1); cloud(96, 8, 1);
+    // edificio de cuartos
+    R(8, 28, 50, 52, '#E8D5B7'); R(8, 28, 50, 3, '#C9A36B');
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 4; j++) win(13 + j * 11, 35 + i * 11, (i + j) % 3 === 0);
+    R(26, 64, 12, 16, '#7A5230'); R(35, 71, 1, 2, '#FBBF24');
+    R(40, 60, 16, 7, '#FFFFFF'); T(41, 65, 'CUARTO', '#DC2626', 3.2);
+    // parada de camión
+    R(122, 44, 2, 36, '#6B7280'); R(116, 38, 14, 8, '#2563EB'); T(119.5, 44, 'BUS', '#FFFFFF', 4);
+    R(0, 80, 160, 10, ground); R(0, 80, 160, 1, groundSh); R(0, 84, 160, 1, '#B4BAC3');
+    // bici
+    R(95, 70, 1, 6, '#1F2937'); R(90, 70, 10, 1, '#0EA5E9');     out.push('<circle cx="89" cy="76" r="4" fill="none" stroke="#1F2937" stroke-width="1.2"/><circle cx="103" cy="76" r="4" fill="none" stroke="#1F2937" stroke-width="1.2"/>');
+    R(89, 72, 14, 1, '#0EA5E9'); R(96, 72, 1, 4, '#0EA5E9'); R(101, 69, 3, 1, '#1F2937');
+  } else if (L === 2) {
+    R(130, 8, 8, 8, '#FDE68A');
+    cloud(40, 10, 1);
+    // oficinas y depa
+    R(92, 14, 36, 66, '#94A3B8'); for (let i = 0; i < 7; i++) for (let j = 0; j < 4; j++) R(96 + j * 8, 18 + i * 8, 5, 5, '#DBEAFE');
+    R(130, 34, 26, 46, '#CBD5E1'); for (let i = 0; i < 4; i++) { win(134, 38 + i * 10, i === 1); win(145, 38 + i * 10, false); }
+    R(4, 36, 40, 44, '#F1E3C8'); R(4, 36, 40, 3, '#D6BE93');
+    for (let i = 0; i < 3; i++) { win(9, 43 + i * 11, i === 0); win(20, 43 + i * 11, false); win(31, 43 + i * 11, i === 2); }
+    R(19, 68, 10, 12, '#5B4632'); T(8, 34, 'DEPA', '#6B7280', 4);
+    R(0, 80, 160, 10, ground); R(0, 80, 160, 1, groundSh);
+    // escritorio con laptop y taza
+    R(100, 68, 26, 3, '#A0692F'); R(102, 71, 2, 9, '#7A5230'); R(122, 71, 2, 9, '#7A5230');
+    R(106, 62, 10, 6, '#1F2937'); R(107, 63, 8, 4, '#93C5FD'); R(104, 67, 14, 1, '#9CA3AF'); R(119, 64, 3, 4, '#FFFFFF'); R(122, 65, 1, 2, '#FFFFFF');
+    tree(54, 62, '#4ADE80');
+  } else if (L === 3) {
+    R(20, 8, 9, 9, '#FDE68A');
+    cloud(110, 10, 1);
+    // calle de tiendas y restaurante
+    R(0, 30, 58, 50, '#FBCFE8'); R(0, 30, 58, 3, '#F472B6');
+    R(4, 44, 50, 6, '#FF6B5E'); for (let i = 0; i < 10; i += 2) R(4 + i * 5, 44, 5, 6, '#FFFFFF');
+    R(8, 52, 18, 14, '#FDE68A'); R(32, 52, 18, 14, '#FDE68A'); R(22, 66, 12, 14, '#7A5230');
+    T(10, 40, 'BISTRÓ', '#9D174D', 5);
+    R(112, 26, 48, 54, '#DDD6FE'); R(112, 26, 48, 3, '#8B5CF6'); R(118, 40, 36, 24, '#EDE9FE'); T(121, 55, 'SALE', '#7C3AED', 8);
+    R(0, 80, 160, 10, ground); R(0, 80, 160, 1, groundSh); R(0, 80, 160, 3, '#B4BAC3');
+    // coche financiado con etiqueta
+    car(104, 66, '#DC2626', '#991B1B', true);
+    R(111, 57, 20, 8, '#FFFFFF'); R(111, 57, 20, 1, '#E5E7EB'); T(112, 63, '48 MSI', '#DC2626', 4); R(120, 65, 1, 2, '#9CA3AF');
+  } else if (L === 4) {
+    R(126, 8, 8, 8, '#FDE68A');
+    cloud(20, 12, 1); cloud(78, 6, 1);
+    // casita propia rentada con jardín
+    R(12, 44, 44, 36, '#FDE7C4'); out.push('<polygon points="8,46 34,26 60,46" fill="#E2574A"/>');
+    R(28, 62, 10, 18, '#7A5230'); win(16, 52, true); win(44, 52, false); R(16, 52, 4, 1, '#D97706');
+    R(14, 58, 8, 2, '#10B981'); R(42, 58, 8, 2, '#10B981');
+    R(0, 80, 160, 10, ground); R(0, 80, 160, 1, groundSh);
+    // cerca y árbol
+    for (let x = 60; x < 160; x += 6) R(x, 70, 2, 10, '#FFFFFF'); R(60, 73, 100, 1, '#FFFFFF'); R(60, 77, 100, 1, '#FFFFFF');
+    tree(128, 54, '#22C55E');
+    // frasco de monedas
+    R(110, 70, 8, 10, 'rgba(219,234,254,.9)'); R(110, 69, 8, 2, '#9CA3AF'); R(111, 75, 6, 5, '#FBBF24'); R(112, 73, 3, 2, '#FCD34D');
+    R(110, 74, 8, 3, '#FFFFFF'); T(110.3, 76.6, 'META', '#047857', 2.6);
+  } else if (L === 5) {
+    R(128, 6, 10, 10, '#FDE68A');
+    cloud(26, 10, 1); cloud(90, 14, 1);
+    // casa ordenada de dos pisos
+    R(6, 32, 52, 48, '#E0E7FF'); R(6, 32, 52, 3, '#A5B4FC'); out.push('<polygon points="2,34 32,18 62,34" fill="#4F46E5"/>');
+    win(12, 40, true); win(24, 40, false); win(36, 40, true); win(48, 40, false);
+    R(12, 56, 10, 8, '#BFDBFE'); R(42, 56, 10, 8, '#BFDBFE'); R(27, 62, 10, 18, '#1E3A8A');
+    R(8, 78, 48, 2, '#86EFAC');
+    R(0, 80, 160, 10, ground); R(0, 80, 160, 1, groundSh);
+    car(124, 66, '#2563EB', '#1E3A8A', false);
+    // pizarrón con metas
+    R(102, 56, 14, 14, '#FFFFFF'); R(102, 56, 14, 1, '#CBD5E1'); R(104, 59, 2, 2, '#10B981'); R(107, 59, 7, 1, '#9CA3AF'); R(104, 63, 2, 2, '#10B981'); R(107, 63, 7, 1, '#9CA3AF'); R(104, 67, 2, 1, '#10B981'); R(108, 70, 1, 10, '#6B7280');
+  } else if (L === 6) {
+    R(134, 6, 10, 10, '#FDE68A');
+    cloud(50, 8, 1);
+    // casa con cochera
+    R(4, 38, 58, 42, '#F8FAFC'); R(4, 38, 58, 4, '#334155'); R(40, 54, 22, 26, '#CBD5E1'); for (let y = 57; y < 80; y += 4) R(40, y, 22, 1, '#94A3B8');
+    R(10, 48, 10, 10, '#BFDBFE'); R(24, 48, 10, 10, '#FDE68A'); R(14, 64, 10, 16, '#475569');
+    R(0, 80, 160, 10, ground); R(0, 80, 160, 1, groundSh);
+    car(130, 66, '#9CA3AF', '#6B7280', false);
+    // árbol de dinero
+    R(111, 56, 3, 24, '#7A5230'); R(103, 40, 20, 18, '#16A34A'); R(105, 36, 16, 6, '#22C55E');
+    [[106, 42], [115, 39], [119, 47], [108, 50], [113, 45]].forEach(p => { R(p[0], p[1], 3, 3, '#FBBF24'); R(p[0], p[1], 1, 1, '#FDE68A'); });
+    // gráfica que sube
+    R(126, 22, 30, 20, '#FFFFFF'); R(126, 22, 30, 1, '#E5E7EB');
+    [[129, 37], [133, 35], [137, 36], [141, 31], [145, 29], [149, 25]].forEach((p, i, a) => { R(p[0], p[1], 4, 1, '#10B981'); if (a[i + 1]) R(p[0] + 3, Math.min(p[1], a[i + 1][1]), 1, Math.abs(p[1] - a[i + 1][1]) + 1, '#10B981'); });
+  } else if (L === 7) {
+    R(136, 6, 10, 10, '#FDE68A');
+    // grúa de fondo
+    R(66, 10, 2, 50, '#F59E0B'); R(50, 10, 44, 2, '#F59E0B'); R(90, 12, 1, 12, '#374151'); R(88, 24, 5, 3, '#6B7280');
+    // casa principal
+    R(4, 40, 46, 40, '#FEF3C7'); out.push('<polygon points="0,42 27,24 54,42" fill="#7C2D12"/>'); R(20, 62, 10, 18, '#7A5230'); win(10, 48, true); win(36, 48, true); win(10, 60, false); win(36, 60, false);
+    // casa en renta
+    R(100, 50, 26, 30, '#E0E7FF'); out.push('<polygon points="97,52 113,40 129,52" fill="#4F46E5"/>'); R(109, 66, 8, 14, '#1E3A8A'); win(103, 56, false); win(119, 56, true);
+    R(99, 70, 13, 6, '#FFFFFF'); T(99.5, 74.5, 'RENTA', '#047857', 3.2); R(104, 76, 1, 4, '#6B7280');
+    // negocio
+    R(130, 44, 30, 36, '#FFFFFF'); R(130, 44, 30, 6, '#10B981'); for (let i = 0; i < 5; i++) R(130 + i * 6, 50, 3, 4, '#10B981'); R(134, 58, 12, 12, '#BFDBFE'); R(149, 60, 8, 20, '#7A5230');
+    T(131.5, 48.5, 'NEGOCIO', '#FFFFFF', 3.4);
+    R(0, 80, 160, 10, ground); R(0, 80, 160, 1, groundSh);
+  } else if (L === 8) {
+    R(24, 8, 10, 10, '#FDE68A');
+    // avión
+    R(100, 12, 22, 3, '#FFFFFF'); R(108, 9, 6, 3, '#E5E7EB'); R(119, 9, 3, 3, '#DC2626'); R(104, 15, 8, 2, '#E5E7EB'); R(102, 13, 18, 1, '#93C5FD');
+    // mansión moderna
+    R(88, 30, 70, 50, '#F8FAFC'); R(88, 30, 70, 4, '#1E293B'); R(110, 20, 48, 12, '#F8FAFC'); R(110, 20, 48, 3, '#1E293B');
+    R(114, 24, 40, 6, '#93C5FD'); R(94, 40, 28, 18, '#93C5FD'); R(126, 40, 28, 18, '#FDE68A'); R(140, 62, 12, 18, '#1E293B');
+    // alberca
+    R(92, 74, 40, 6, '#38BDF8'); R(92, 74, 40, 1, '#BAE6FD');
+    R(0, 80, 160, 10, ground); R(0, 80, 160, 1, groundSh);
+    palm(4, 56); palm(150, 58);
+    car(10, 66, '#111827', '#000000', true); R(18, 71, 3, 1, '#FBBF24');
+  } else if (L === 9) {
+    // atardecer y mar
+    R(118, 34, 18, 18, '#FDE68A'); R(114, 38, 26, 10, '#FCD34D');
+    R(0, 52, 160, 28, '#3B82F6'); R(0, 52, 160, 2, '#93C5FD'); R(20, 60, 30, 1, '#93C5FD'); R(80, 66, 40, 1, '#93C5FD'); R(110, 56, 30, 1, '#FDE68A');
+    // velero
+    R(126, 40, 1, 16, '#FFFFFF'); out.push('<polygon points="127,40 127,54 137,54" fill="#FFFFFF"/>'); R(120, 56, 20, 3, '#7C2D12');
+    // acantilado con casa espectacular
+    R(0, 44, 70, 36, '#B8A898'); R(0, 44, 70, 3, '#65A30D'); R(0, 47, 70, 1, '#4D7C0F'); R(4, 54, 20, 1, '#9C8B7A'); R(30, 60, 28, 1, '#9C8B7A'); R(10, 68, 18, 1, '#9C8B7A'); R(46, 50, 16, 1, '#9C8B7A'); R(62, 44, 8, 36, '#A8988A');
+    R(6, 26, 56, 18, '#FAFAF9'); R(6, 26, 56, 3, '#44403C'); R(22, 16, 40, 10, '#FAFAF9'); R(22, 16, 40, 2, '#44403C');
+    R(10, 32, 22, 10, '#FCD34D'); R(36, 32, 22, 10, '#FDE68A'); R(26, 20, 32, 5, '#FCD34D');
+    // paneles solares
+    R(24, 13, 10, 3, '#1E3A8A'); R(36, 13, 10, 3, '#1E3A8A'); R(24, 14, 22, 1, '#3B82F6');
+    // playa
+    R(70, 76, 90, 4, '#FDE3B0');
+    R(0, 80, 160, 10, ground); R(0, 80, 160, 1, groundSh);
+    palm(140, 56);
+    car(12, 66, '#14532D', '#052E16', false);
+  }
+  // decoración comprada
+  if (c.deco === 'plantas') { R(4, 74, 6, 6, '#B45309'); R(3, 69, 8, 5, '#22C55E'); R(150, 74, 6, 6, '#B45309'); R(149, 69, 8, 5, '#16A34A'); }
+  if (c.deco === 'foquitos') { R(0, 4, 160, 1, '#374151'); for (let x = 4; x < 160; x += 10) R(x, 5, 2, 2, ['#FBBF24', '#FF6B5E', '#38BDF8', '#8B5CF6', '#10B981'][(x / 10 | 0) % 5]); }
+  if (c.deco === 'bandera') { R(150, 40, 1, 40, '#6B7280'); R(151, 40, 4, 8, '#16A34A'); R(155, 40, 4, 8, '#FFFFFF'); R(159, 40, 1, 8, '#DC2626'); R(156, 43, 2, 2, '#A16207'); }
+  // mascota (en nivel 9 el perro viene incluido)
+  const pet = c.pet || (L === 9 ? 'perro' : null);
+  if (pet) out.push(`<g transform="translate(99,67.4) scale(1.3)">${drawPet(pet)}</g>`);
+  // personaje
+  out.push(`<g transform="translate(64,39.5) scale(1.35)">${drawHero(L, c)}</g>`);
+  return out.join('');
+}
+
+function sceneSVG(level, custom) {
+  return `<svg viewBox="0 0 160 90" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" style="display:block;width:100%;height:auto">${drawScene(level, custom)}</svg>`;
+}
+function heroSVG(level, custom) {
+  return `<svg viewBox="-3 -1 26 32" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" style="display:block;width:100%;height:100%">${drawHero(level, custom)}</svg>`;
+}
+
+/* ── 10 NIVELES: la historia financiera del personaje ──
+   Se sube con XP (hábitos) + requisitos reales (tu situación financiera).
+   La XP sola no basta: nadie llega a Millonario inteligente solo por anotar. */
 const LEVELS = [{
-  n: 1,
-  min: 0,
-  max: 99,
-  title: "Novato Financiero",
-  emoji: "🌱",
-  color: "#059669",
-  story: "Empezaste desde cero. Sin lana, sin plan. Pero al menos ya tienes la app."
+  n: 0, min: 0, title: "Mendigo", emoji: "🥴", color: "#6B7280",
+  story: "Cero patrimonio y modo supervivencia. Todos empezamos en algún lado: hoy empieza tu historia."
 }, {
-  n: 2,
-  min: 100,
-  max: 299,
-  title: "Chilango Pelado",
-  emoji: "📱",
-  color: "#0284C7",
-  story: "La quincena llega a cero el día 14. Te lo sabes de memoria."
+  n: 1, min: 100, title: "El Chambitas", emoji: "🛠️", color: "#0284C7",
+  story: "Ya entra dinero. Chambitas aquí y allá, bici y un cuartito. Lo importante: ya sabes cuánto ganas."
 }, {
-  n: 3,
-  min: 300,
-  max: 599,
-  title: "Ya con Ritmo",
-  emoji: "🎧",
-  color: "#7C3AED",
-  story: "Anotas tus gastos, controlas algo. El cambio empieza aquí."
+  n: 2, min: 300, title: "Godín", emoji: "💼", color: "#4F46E5",
+  story: "Estabilidad: quincena fija, laptop y depa compartido. Ya anotas en qué se te va el dinero."
 }, {
-  n: 4,
-  min: 600,
-  max: 1099,
-  title: "Empleado Organizado",
-  emoji: "💼",
-  color: "#DB2777",
-  story: "Sin deudas chicas. Ya sabes exactamente en qué se va tu dinero."
+  n: 3, min: 700, title: "Dándose sus gustos", emoji: "😎", color: "#E2574A",
+  story: "Ganas más y se nota: salidas, gadgets y coche a meses. Ojo: parecer rico no es ser rico."
 }, {
-  n: 5,
-  min: 1100,
-  max: 1999,
-  title: "Inquilino sin Dramas",
-  emoji: "🏠",
-  color: "#D97706",
-  story: "Renta cubierta, algo de ahorro. Las prioridades claras."
+  n: 4, min: 1300, title: "Ahorrador", emoji: "🐷", color: "#DB2777",
+  story: "Empiezas a guardar. Tu fondo de emergencia crece y los imprevistos ya no te tumban."
 }, {
-  n: 6,
-  min: 2000,
-  max: 3499,
-  title: "Mid-level Financiero",
-  emoji: "🚗",
-  color: "#E2574A",
-  story: "Ahorro consistente, deudas bajo control. Esto ya se nota."
+  n: 5, min: 2200, title: "Financieramente despierto", emoji: "🧠", color: "#059669",
+  story: "Controlas tu presupuesto, tus deudas y tus metas. Tu vida se ve más ordenada."
 }, {
-  n: 7,
-  min: 3500,
-  max: 5999,
-  title: "Senior sin Deudas",
-  emoji: "💻",
-  color: "#D92D20",
-  story: "Liquidaste algo importante. Tu historial ya presume."
+  n: 6, min: 3500, title: "Inversionista", emoji: "📈", color: "#0E9F6E",
+  story: "Tu dinero empieza a producir dinero. Mejor casa, buen coche y más calidad de vida."
 }, {
-  n: 8,
-  min: 6000,
-  max: 9999,
-  title: "Gerente de su Vida",
-  emoji: "🧳",
-  color: "#CD7F32",
-  story: "Fondo de emergencia activo. Los imprevistos ya no te quiebran."
+  n: 7, min: 5500, title: "Constructor de patrimonio", emoji: "🏠", color: "#7C3AED",
+  story: "Acumulas activos: casa, propiedades en renta, inversiones importantes y quizá un negocio."
 }, {
-  n: 9,
-  min: 10000,
-  max: 15999,
-  title: "Ejecutivo Financiero",
-  emoji: "👔",
-  color: "#FFD700",
-  story: "Varias fuentes de ingreso. El dinero empieza a trabajar para ti."
+  n: 8, min: 8500, title: "Millonario", emoji: "💎", color: "#B98100",
+  story: "Riqueza real: gran patrimonio, casa premium, coche de lujo y varias fuentes de ingreso. Tienes mucho dinero."
 }, {
-  n: 10,
-  min: 16000,
-  max: 24999,
-  title: "Director General",
-  emoji: "🏙️",
-  color: "#7C3AED",
-  story: "Tus finanzas corren solas. Tú supervisas, nomás."
-}, {
-  n: 11,
-  min: 25000,
-  max: 39999,
-  title: "Inversionista Libre",
-  emoji: "🚀",
-  color: "#E2574A",
-  story: "Portfolio activo, deudas cero, ingresos pasivos. La neta."
-}, {
-  n: 12,
-  min: 40000,
-  max: 999999,
-  title: "Libre Financiero",
-  emoji: "💎",
-  color: "#D92D20",
-  story: "Libertad total. El dinero trabaja mientras tú decides qué hacer hoy."
+  n: 9, min: 13000, title: "Millonario inteligente", emoji: "🧠👑", color: "#4338CA",
+  story: "Lujo discreto, patrimonio y libertad. Tu dinero trabaja para ti y eres dueño de tu tiempo."
 }];
-const getLvl = xp => LEVELS.find(l => xp >= l.min && xp <= l.max) || LEVELS[LEVELS.length - 1];
+LEVELS.forEach((l, i) => l.max = LEVELS[i + 1] ? LEVELS[i + 1].min - 1 : 999999);
+
+const ASSET_TYPES = [{
+  key: 'inversion', label: 'Inversión', hint: 'CETES, fondos, acciones, Afore voluntaria…'
+}, {
+  key: 'propiedad', label: 'Propiedad', hint: 'Casa, departamento o terreno'
+}, {
+  key: 'negocio', label: 'Negocio', hint: 'Tu parte de un negocio'
+}, {
+  key: 'otro', label: 'Otro', hint: 'Auto, ahorro a plazo, etc.'
+}];
+function getWealth(data) {
+  const assets = data.assets || [];
+  const assetsTotal = assets.reduce((s, a) => s + (+a.value || 0), 0);
+  const invested = assets.filter(a => a.type === 'inversion').reduce((s, a) => s + (+a.value || 0), 0);
+  const passive = assets.reduce((s, a) => s + (+a.monthlyIncome || 0), 0);
+  const emer = +data.emerSaved || 0;
+  const debt = getTotalDebt(data);
+  const monthlyExp = (data.exps || []).reduce((s, e) => s + (+e.amount || 0), 0) + (data.varExps || []).reduce((s, e) => s + (+e.amount || 0), 0);
+  const cardDebt = (data.debts || []).filter(d => d.type === 'tarjeta').reduce((s, d) => s + (+d.balance || 0), 0);
+  return {
+    assetsTotal, invested, passive, emer, debt, monthlyExp, cardDebt,
+    netWorth: assetsTotal + emer - debt
+  };
+}
+const moneyShort = n => n >= 1e6 ? '$' + (n / 1e6).toLocaleString('es-MX', { maximumFractionDigits: 1 }) + ' M' : fmt(n);
+
+// Requisitos reales para ESTAR en el nivel n (además de la XP)
+function levelReqs(n, data, game) {
+  const w = getWealth(data);
+  const income = (+data.q1 || 0) + (+data.q2 || 0);
+  const days = new Set([...(data.cashTransactions || []), ...(data.cardTransactions || [])].map(t => t.date)).size;
+  const goal = +data.emerGoal || 0;
+  const emerPct = goal > 0 ? (+data.emerSaved || 0) / goal : 0;
+  const dp = calcDP(data);
+  const pctTxt = p => Math.min(100, Math.round(p * 100)) + '%';
+  switch (n) {
+    case 1: return [{ label: 'Registra cuánto ganas por quincena', ok: income > 0, where: 'perfil' }];
+    case 2: return [{ label: `Anota tus gastos en 10 días distintos (${Math.min(days, 10)}/10)`, ok: days >= 10, where: 'add' }];
+    case 3: return [
+      { label: 'Registra tus gastos fijos (renta, luz, etc.)', ok: (data.exps || []).length > 0, where: 'presupuesto' },
+      { label: 'Mantén tu quincena en verde', ok: dp.income > 0 && dp.remaining >= 0, where: 'inicio' }
+    ];
+    case 4: return [{ label: `Fondo de emergencia al 25% (vas en ${pctTxt(emerPct)})`, ok: emerPct >= 0.25, where: 'metas' }];
+    case 5: return [
+      { label: `Fondo de emergencia al 50% (vas en ${pctTxt(emerPct)})`, ok: emerPct >= 0.5, where: 'metas' },
+      { label: `15 días dentro de tu presupuesto (${Math.min(game.budgetDays || 0, 15)}/15)`, ok: (game.budgetDays || 0) >= 15, where: 'add' }
+    ];
+    case 6: return [
+      { label: `Fondo de emergencia completo (vas en ${pctTxt(emerPct)})`, ok: emerPct >= 1, where: 'metas' },
+      { label: 'Registra tu primera inversión', ok: w.invested > 0, where: 'metas' }
+    ];
+    case 7: return [{ label: `Patrimonio neto de $500,000 (llevas ${moneyShort(Math.max(0, w.netWorth))})`, ok: w.netWorth >= 500000, where: 'metas' }];
+    case 8: return [{ label: `Patrimonio neto de $1,000,000 (llevas ${moneyShort(Math.max(0, w.netWorth))})`, ok: w.netWorth >= 1000000, where: 'metas' }];
+    case 9: return [
+      { label: 'Tus ingresos pasivos cubren tus gastos del mes', ok: w.monthlyExp > 0 && w.passive >= w.monthlyExp, where: 'metas' },
+      { label: 'Cero deuda en tarjetas de crédito', ok: w.cardDebt === 0, where: 'metas' }
+    ];
+    default: return [];
+  }
+}
+// El nivel más alto que tu situación real permite
+function computeLevelCap(data, game) {
+  let cap = 0;
+  for (let n = 1; n < LEVELS.length; n++) {
+    if (levelReqs(n, data, game).every(r => r.ok)) cap = n;else break;
+  }
+  return cap;
+}
+window.__budgyCap = 9;
+const xpLevel = xp => [...LEVELS].reverse().find(l => xp >= l.min) || LEVELS[0];
+const getLvl = xp => LEVELS[Math.min(xpLevel(xp || 0).n, window.__budgyCap)];
 const getXPProg = xp => {
   const l = getLvl(xp);
-  const r = l.max - l.min + 1;
+  const next = LEVELS[l.n + 1];
+  if (!next) return { pct: 100, cur: 0, need: 0, blocked: false, next: null };
+  const need = next.min - l.min;
+  const cur = Math.max(0, (xp || 0) - l.min);
   return {
-    pct: Math.round((xp - l.min) / r * 100),
-    cur: xp - l.min,
-    need: r
+    pct: Math.min(100, Math.round(cur / need * 100)),
+    cur: Math.min(cur, need),
+    need,
+    blocked: (xp || 0) >= next.min,
+    next
   };
 };
+
+/* ── Tienda: personaliza a tu personaje dentro de tu nivel ── */
+const SHOP_CATS = [{ key: 'color', label: 'Colores' }, { key: 'acc', label: 'Accesorios' }, { key: 'pet', label: 'Mascota' }, { key: 'deco', label: 'Escenario' }];
+const SHOP_ITEMS = [
+  { id: 'color_none', cat: 'color', name: 'Original', price: 0, minLevel: 0, val: '' },
+  { id: 'color_indigo', cat: 'color', name: 'Índigo', price: 20, minLevel: 0, val: 'indigo', swatch: '#4F46E5' },
+  { id: 'color_esmeralda', cat: 'color', name: 'Esmeralda', price: 20, minLevel: 0, val: 'esmeralda', swatch: '#10B981' },
+  { id: 'color_coral', cat: 'color', name: 'Coral', price: 30, minLevel: 1, val: 'coral', swatch: '#FF6B5E' },
+  { id: 'color_mango', cat: 'color', name: 'Mango', price: 30, minLevel: 1, val: 'mango', swatch: '#FBBF24' },
+  { id: 'color_violeta', cat: 'color', name: 'Violeta', price: 40, minLevel: 2, val: 'violeta', swatch: '#8B5CF6' },
+  { id: 'color_carbon', cat: 'color', name: 'Carbón', price: 40, minLevel: 2, val: 'carbon', swatch: '#374151' },
+  { id: 'acc_none', cat: 'acc', name: 'Ninguno', price: 0, minLevel: 0, val: '' },
+  { id: 'acc_gorra', cat: 'acc', name: 'Gorra', price: 25, minLevel: 0, val: 'gorra' },
+  { id: 'acc_audifonos', cat: 'acc', name: 'Audífonos', price: 40, minLevel: 1, val: 'audifonos' },
+  { id: 'acc_bufanda', cat: 'acc', name: 'Bufanda', price: 40, minLevel: 2, val: 'bufanda' },
+  { id: 'acc_lentes', cat: 'acc', name: 'Lentes de sol', price: 60, minLevel: 3, val: 'lentes' },
+  { id: 'acc_reloj', cat: 'acc', name: 'Reloj', price: 90, minLevel: 4, val: 'reloj' },
+  { id: 'pet_none', cat: 'pet', name: 'Sin mascota', price: 0, minLevel: 0, val: '' },
+  { id: 'pet_gato', cat: 'pet', name: 'Gato', price: 80, minLevel: 1, val: 'gato' },
+  { id: 'pet_perro', cat: 'pet', name: 'Perro', price: 120, minLevel: 2, val: 'perro' },
+  { id: 'pet_perico', cat: 'pet', name: 'Perico', price: 150, minLevel: 4, val: 'perico' },
+  { id: 'deco_none', cat: 'deco', name: 'Sin decoración', price: 0, minLevel: 0, val: '' },
+  { id: 'deco_plantas', cat: 'deco', name: 'Macetas', price: 30, minLevel: 0, val: 'plantas' },
+  { id: 'deco_foquitos', cat: 'deco', name: 'Foquitos', price: 60, minLevel: 2, val: 'foquitos' },
+  { id: 'deco_bandera', cat: 'deco', name: 'Bandera', price: 80, minLevel: 3, val: 'bandera' }
+];
+// Precios de la tienda anterior (viviendas, vehículos, ropa, lujos): se reembolsan al migrar
+const OLD_SHOP_PRICES = { depto: 80, casa: 350, mansion: 1500, penthouse: 6000, bici: 30, moto: 150, auto: 500, suv: 1200, ferrari: 4000, heli: 10000, negocio: 100, streetwear: 400, premium_fit: 1800, luxury_fit: 7000, tv: 50, gym: 200, piscina: 800, jet: 5000, isla: 20000 };
+function customFromEquipped(eq) {
+  const val = id => (SHOP_ITEMS.find(i => i.id === id) || {}).val || '';
+  const e = eq || {};
+  return { color: val(e.color), acc: val(e.acc), pet: val(e.pet), deco: val(e.deco) };
+}
+
+/* ── Componentes del personaje ── */
+function PixelHero(_p) {
+  return React.createElement('div', {
+    style: { width: '100%', height: '100%' },
+    'aria-hidden': 'true',
+    dangerouslySetInnerHTML: { __html: heroSVG(_p.level ?? 0, customFromEquipped(_p.equipped)) }
+  });
+}
+function HeroScene(_p) {
+  return React.createElement('div', {
+    className: 'b-scene',
+    role: 'img',
+    'aria-label': `Tu personaje: ${LEVELS[_p.level].title}`,
+    dangerouslySetInnerHTML: { __html: sceneSVG(_p.level, customFromEquipped(_p.equipped)) }
+  });
+}
+function GameHeroCard(_p) {
+  const game = _p.game,
+    data = _p.data;
+  const lvl = getLvl(game.xp);
+  const prog = getXPProg(game.xp);
+  const reqs = prog.next && data ? levelReqs(prog.next.n, data, game) : [];
+  return React.createElement('section', { className: 'b-herocard' },
+    React.createElement(HeroScene, { level: lvl.n, equipped: game.equipped }),
+    React.createElement('div', { className: 'b-herocard-body' },
+      React.createElement('div', { className: 'b-lvl-top' },
+        React.createElement('div', null,
+          React.createElement('div', { className: 'b-lvl-n' }, 'Nivel ', lvl.n, ' de 9'),
+          React.createElement('div', { className: 'b-lvl-t' }, lvl.emoji, ' ', lvl.title)),
+        React.createElement('div', { className: 'b-lvl-stats' },
+          React.createElement('span', null, '⭐ ', (game.xp || 0).toLocaleString('es-MX'), ' XP'),
+          React.createElement('span', null, '🔥 ', game.streak || 0, ' días'),
+          React.createElement('span', null, '🪙 ', (game.bits || 0).toLocaleString('es-MX')))),
+      React.createElement('p', { className: 'b-lvl-story' }, lvl.story),
+      prog.next ? React.createElement('div', { className: 'b-lvl-next' },
+        React.createElement('div', { className: 'b-lvl-next-h' }, 'Para llegar a ', React.createElement('b', null, prog.next.emoji, ' ', prog.next.title)),
+        React.createElement('div', { className: 'b-req' + (prog.blocked ? ' ok' : '') },
+          React.createElement('span', { className: 'b-req-dot' }, prog.blocked ? '✓' : ''),
+          React.createElement('span', { className: 'b-req-l' }, prog.blocked ? `Ya tienes la XP (${prog.next.min.toLocaleString('es-MX')})` : `${prog.cur.toLocaleString('es-MX')} de ${prog.need.toLocaleString('es-MX')} XP`,
+            !prog.blocked && React.createElement('span', { className: 'b-req-bar' }, React.createElement('i', { style: { width: prog.pct + '%' } })))),
+        reqs.map((r, i) => React.createElement('div', { key: i, className: 'b-req' + (r.ok ? ' ok' : '') },
+          React.createElement('span', { className: 'b-req-dot' }, r.ok ? '✓' : ''),
+          React.createElement('span', { className: 'b-req-l' }, r.label)))) :
+        React.createElement('p', { className: 'b-lvl-story' }, '👑 Llegaste al nivel máximo. Tu dinero trabaja para ti.')));
+}
+function LevelRoadmap(_p) {
+  const cur = getLvl(_p.game.xp).n;
+  return React.createElement('section', null,
+    React.createElement('div', { className: 'b-sh' }, React.createElement('h2', null, 'Tu camino')),
+    React.createElement('div', { className: 'b-roadmap' }, LEVELS.map(l => React.createElement('div', {
+      key: l.n,
+      className: 'b-road' + (l.n === cur ? ' cur' : l.n < cur ? ' done' : '')
+    },
+      React.createElement('div', { className: 'b-road-hero' }, React.createElement(PixelHero, { level: l.n })),
+      React.createElement('div', { className: 'b-road-n' }, l.n),
+      React.createElement('div', { className: 'b-road-t' }, l.title)))));
+}
+
+/* ── Tienda ── */
+function TabTienda(_p) {
+  const game = _p.game;
+  const [cat, setCat] = useState('color');
+  const bits = game.bits || 0;
+  const inv = game.inventory || [];
+  const eq = game.equipped || {};
+  const lvlN = getLvl(game.xp).n;
+  return React.createElement('section', { className: 'b-shop' },
+    React.createElement('div', { className: 'b-sh' },
+      React.createElement('h2', null, 'Tienda'),
+      React.createElement('span', { className: 'b-shop-bits' }, '🪙 ', bits.toLocaleString('es-MX'))),
+    React.createElement('p', { className: 'b-note', style: { marginTop: 0 } }, 'Tu casa, tu coche y tu ropa los define tu nivel. Aquí personalizas tu estilo con las monedas que ganas por buenos hábitos.'),
+    React.createElement('div', { className: 'b-seg', role: 'tablist' }, SHOP_CATS.map(c => React.createElement('button', {
+      key: c.key, role: 'tab', 'aria-selected': cat === c.key, className: cat === c.key ? 'on' : '', onClick: () => setCat(c.key)
+    }, c.label))),
+    React.createElement('div', { className: 'b-shop-grid' }, SHOP_ITEMS.filter(i => i.cat === cat).map(item => {
+      const owned = item.price === 0 || inv.includes(item.id);
+      const on = (eq[item.cat] || item.cat + '_none') === item.id;
+      const locked = lvlN < item.minLevel;
+      const afford = bits >= item.price;
+      const preview = { ...customFromEquipped(eq), [item.cat]: item.val };
+      return React.createElement('div', { key: item.id, className: 'b-shop-item' + (on ? ' on' : '') },
+        React.createElement('div', {
+          className: 'b-shop-prev',
+          'aria-hidden': 'true',
+          dangerouslySetInnerHTML: { __html: item.cat === 'deco' || item.cat === 'pet' ? sceneSVG(lvlN, preview) : heroSVG(lvlN, preview) }
+        }),
+        React.createElement('div', { className: 'b-shop-name' }, item.swatch && React.createElement('span', { className: 'b-swatch', style: { background: item.swatch } }), item.name),
+        on ? React.createElement('span', { className: 'b-shop-state' }, 'Lo traes puesto') :
+          locked ? React.createElement('span', { className: 'b-shop-state' }, '🔒 Nivel ', item.minLevel) :
+            owned ? React.createElement('button', { className: 'b-secondary', onClick: () => _p.onEquipItem(item.id) }, 'Usar') :
+              React.createElement('button', { className: 'b-secondary buy', disabled: !afford, onClick: () => _p.onBuyItem(item.id) }, '🪙 ', item.price));
+    })));
+}
+
+/* ── Patrimonio (Metas) ── */
+function WealthSection(_p) {
+  const data = _p.data;
+  const w = getWealth(data);
+  const assets = data.assets || [];
+  const [form, setForm] = useState(null);
+  const save = () => {
+    if (!form.name || !(+form.value >= 0)) return;
+    const next = form.id ? assets.map(a => a.id === form.id ? { ...form, value: +form.value || 0, monthlyIncome: +form.monthlyIncome || 0 } : a)
+      : [...assets, { ...form, id: 'a' + Date.now(), value: +form.value || 0, monthlyIncome: +form.monthlyIncome || 0 }];
+    _p.onChange({ assets: next });
+    setForm(null);
+  };
+  const t = ASSET_TYPES.find(x => x.key === (form && form.type)) || ASSET_TYPES[0];
+  return React.createElement('section', null,
+    React.createElement('div', { className: 'b-sh' }, React.createElement('h2', null, 'Mi patrimonio')),
+    React.createElement('div', { className: 'b-debt-sum' },
+      React.createElement('span', { className: 'b-amount sm' + (w.netWorth < 0 ? ' neg' : '') }, React.createElement(Money, { n: w.netWorth })),
+      React.createElement('span', { className: 'b-cap' }, 'patrimonio neto: lo que tienes menos lo que debes')),
+    React.createElement('div', { className: 'b-strip', style: { marginTop: 14 } },
+      React.createElement('div', null, React.createElement('div', { className: 'k' }, 'Tienes'), React.createElement('div', { className: 'v' }, moneyShort(w.assetsTotal + w.emer))),
+      React.createElement('div', null, React.createElement('div', { className: 'k' }, 'Debes'), React.createElement('div', { className: 'v' }, moneyShort(w.debt))),
+      React.createElement('div', null, React.createElement('div', { className: 'k' }, 'Te pagan solos'), React.createElement('div', { className: 'v' }, moneyShort(w.passive)), React.createElement('div', { className: 's' }, 'al mes'))),
+    React.createElement('div', { className: 'b-rows', style: { marginTop: 8 } }, assets.map(a => React.createElement('button', { key: a.id, onClick: () => setForm({ ...a }) },
+      React.createElement('div', { className: 'b-m' },
+        React.createElement('div', { className: 'b-n' }, a.name),
+        React.createElement('div', { className: 'b-d' }, (ASSET_TYPES.find(x => x.key === a.type) || {}).label, a.monthlyIncome ? ` · te deja ${fmt(a.monthlyIncome)} al mes` : '')),
+      React.createElement('span', { className: 'b-n b-num' }, fmt(a.value))))),
+    form ? React.createElement('div', { className: 'b-form' },
+      React.createElement('div', { className: 'b-seg' }, ASSET_TYPES.map(x => React.createElement('button', {
+        key: x.key, className: form.type === x.key ? 'on' : '', onClick: () => setForm({ ...form, type: x.key })
+      }, x.label))),
+      React.createElement('p', { className: 'b-note', style: { marginTop: 6 } }, t.hint),
+      React.createElement('label', { className: 'b-field' }, '¿Qué es?', React.createElement('input', { value: form.name || '', placeholder: 'Ej. CETES, depa en renta…', onChange: e => setForm({ ...form, name: e.target.value }) })),
+      React.createElement('label', { className: 'b-field' }, '¿Cuánto vale hoy?', React.createElement('input', { inputMode: 'numeric', value: form.value ?? '', placeholder: '$0', onChange: e => setForm({ ...form, value: e.target.value.replace(/[^0-9.]/g, '') }) })),
+      React.createElement('label', { className: 'b-field' }, '¿Cuánto te deja al mes? (rentas, rendimientos)', React.createElement('input', { inputMode: 'numeric', value: form.monthlyIncome ?? '', placeholder: '$0 si no te deja nada', onChange: e => setForm({ ...form, monthlyIncome: e.target.value.replace(/[^0-9.]/g, '') }) })),
+      React.createElement('div', { className: 'b-form-btns' },
+        form.id && React.createElement('button', { className: 'b-secondary danger', onClick: () => { _p.onChange({ assets: assets.filter(a => a.id !== form.id) }); setForm(null); } }, 'Borrar'),
+        React.createElement('button', { className: 'b-secondary', onClick: () => setForm(null) }, 'Cancelar'),
+        React.createElement('button', { className: 'b-primary sm', onClick: save }, 'Guardar'))) :
+      React.createElement('button', { className: 'b-primary ghost', onClick: () => setForm({ type: 'inversion', name: '', value: '', monthlyIncome: '' }) }, 'Agregar inversión o propiedad'));
+}
+
 
 /* ── MISSIONS ── */
 const ALL_MISSIONS = [{
@@ -928,27 +1543,27 @@ const ACHIEVEMENTS = [{
 }, {
   id: "level3",
   icon: "🎧",
-  title: "Ya con ritmo",
-  desc: "Nivel 3 alcanzado",
-  check: g => g.xp >= 300
+  title: "Godín oficial",
+  desc: "Llegaste al nivel Godín",
+  check: g => (g.maxLevel || 0) >= 2
 }, {
   id: "level6",
   icon: "🚗",
-  title: "Mid-level financiero",
-  desc: "Nivel 6 alcanzado",
-  check: g => g.xp >= 2000
+  title: "Ahorrador",
+  desc: "Llegaste al nivel Ahorrador",
+  check: g => (g.maxLevel || 0) >= 4
 }, {
   id: "level9",
   icon: "👔",
-  title: "Ejecutivo financiero",
-  desc: "Nivel 9 alcanzado",
-  check: g => g.xp >= 10000
+  title: "Inversionista",
+  desc: "Tu dinero ya produce dinero",
+  check: g => (g.maxLevel || 0) >= 6
 }, {
   id: "level12",
   icon: "💎",
-  title: "Libre Financiero",
-  desc: "Nivel máximo. Leyenda.",
-  check: g => g.xp >= 40000
+  title: "Millonario inteligente",
+  desc: "Nivel máximo: dueño de tu tiempo",
+  check: g => (g.maxLevel || 0) >= 9
 }, {
   id: "missions3",
   icon: "🎯",
@@ -1159,6 +1774,7 @@ const INIT = {
   loans: [],
   incomeTransactions: [],
   cardPayments: [],
+  assets: [],
   onboardingComplete: false
 };
 
@@ -1803,1165 +2419,6 @@ function getCountdowns(data) {
 }
 
 /* ════════ SVG WARRIOR ════════ */
-function PixelHero(_ref) {
-  let level = _ref.level,
-    equipped = _ref.equipped || {};
-  const n = Math.min(12, Math.max(1, level));
-  const SK = '#FDBCB4',
-    HAIR = '#784212';
-  // Modern clothing palette — shirt/jacket per level
-  const SHIRTS = ['#dde1e7', '#444444', '#3a5fa0', '#2980B9', '#1d6a9e', '#17406b', '#212f3d', '#5a2d82', '#9A7D0A', '#0d0d2e', '#f0f3f4', '#fdf6d0'];
-  // Outfits comprados en la Tienda — si hay uno equipado, pisa la paleta por nivel
-  const OUTFIT_PALETTES = {
-    negocio: {
-      shirt: '#1C2833',
-      pants: '#0a0a1a',
-      shoes: '#0a0a0a'
-    },
-    streetwear: {
-      shirt: '#E74C3C',
-      pants: '#2C3E50',
-      shoes: '#ECF0F1'
-    },
-    premium_fit: {
-      shirt: '#5a2d82',
-      pants: '#1a1a1a',
-      shoes: '#0a0a0a'
-    },
-    luxury_fit: {
-      shirt: '#9A7D0A',
-      pants: '#0a0a1a',
-      shoes: '#0a0a0a'
-    }
-  };
-  const VEHICLE_ICONS = {
-    bici: '🚲',
-    moto: '🏍️',
-    auto: '🚗',
-    suv: '🚙',
-    ferrari: '🏎️',
-    heli: '🚁'
-  };
-  const HOME_ICONS = {
-    cuarto: '🛏️',
-    depto: '🏢',
-    casa: '🏠',
-    mansion: '🏡',
-    penthouse: '🌆'
-  };
-  const outfitPal = OUTFIT_PALETTES[equipped.outfit];
-  const SHIRT = outfitPal ? outfitPal.shirt : SHIRTS[n - 1];
-  const PANTS = outfitPal ? outfitPal.pants : n >= 10 ? '#0a0a1a' : n >= 7 ? '#1C2833' : n >= 4 ? '#2C3E50' : '#3d2b1f';
-  const SHOES = outfitPal ? outfitPal.shoes : n >= 9 ? '#0a0a0a' : n >= 5 ? '#2c2c2c' : '#5D4037';
-  const hasCap = n >= 4 && n <= 7 || equipped.outfit === 'streetwear';
-  const hasSunglasses = n >= 8 || equipped.outfit === 'premium_fit' || equipped.outfit === 'luxury_fit';
-  const vehicleIcon = VEHICLE_ICONS[equipped.vehicle];
-  const homeIcon = HOME_ICONS[equipped.home];
-  const vH = n >= 11 ? 130 : 92;
-  return /*#__PURE__*/React.createElement("svg", {
-    viewBox: `0 0 60 ${vH}`,
-    width: "100%",
-    height: "100%"
-  }, homeIcon && /*#__PURE__*/React.createElement("text", {
-    x: "2",
-    y: "11",
-    fontSize: "11"
-  }, homeIcon), vehicleIcon && /*#__PURE__*/React.createElement("text", {
-    x: "44",
-    y: "11",
-    fontSize: "11"
-  }, vehicleIcon), n === 11 && /*#__PURE__*/React.createElement("g", {
-    transform: "translate(0,73)"
-  }, /*#__PURE__*/React.createElement("rect", {
-    x: "5",
-    y: "13",
-    width: "52",
-    height: "24",
-    rx: "5",
-    fill: "#1a6bcc"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "11",
-    y: "3",
-    width: "38",
-    height: "18",
-    rx: "6",
-    fill: "#2480e8"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "14",
-    y: "5",
-    width: "13",
-    height: "12",
-    rx: "2",
-    fill: "#AED6F1",
-    opacity: "0.85"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "31",
-    y: "5",
-    width: "13",
-    height: "12",
-    rx: "2",
-    fill: "#AED6F1",
-    opacity: "0.85"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "3",
-    y: "26",
-    width: "55",
-    height: "5",
-    rx: "1",
-    fill: "#0f4a99"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "16",
-    cy: "38",
-    rx: "8",
-    ry: "8",
-    fill: "#1a1a1a"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "16",
-    cy: "38",
-    rx: "4",
-    ry: "4",
-    fill: "#555"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "46",
-    cy: "38",
-    rx: "8",
-    ry: "8",
-    fill: "#1a1a1a"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "46",
-    cy: "38",
-    rx: "4",
-    ry: "4",
-    fill: "#555"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "55",
-    y: "18",
-    width: "4",
-    height: "8",
-    rx: "2",
-    fill: "#F9E79F",
-    opacity: "0.9"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "4",
-    y: "22",
-    width: "48",
-    height: "2",
-    rx: "1",
-    fill: "rgba(255,255,255,0.15)"
-  })), n === 12 && /*#__PURE__*/React.createElement("g", {
-    transform: "translate(-2,62)"
-  }, /*#__PURE__*/React.createElement("ellipse", {
-    cx: "31",
-    cy: "26",
-    rx: "29",
-    ry: "10",
-    fill: "#ECF0F1"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M2,26 Q30,16 62,26 Q30,36 2,26Z",
-    fill: "#D5D8DC"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M60,23 Q76,26 62,29 Z",
-    fill: "#BDC3C7"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M4,26 L0,15 L12,24 Z",
-    fill: "#BDC3C7"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M20,33 L10,48 L38,35 Z",
-    fill: "#BDC3C7"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M35,34 L26,48 L52,36 Z",
-    fill: "#BDC3C7"
-  }), [26, 34, 42].map((x, i) => /*#__PURE__*/React.createElement("rect", {
-    key: i,
-    x: String(x),
-    y: "20",
-    width: "6",
-    height: "5",
-    rx: "2",
-    fill: "#AED6F1",
-    opacity: "0.85"
-  })), /*#__PURE__*/React.createElement("rect", {
-    x: "8",
-    y: "28",
-    width: "46",
-    height: "2",
-    rx: "1",
-    fill: "#F9E79F",
-    opacity: "0.8"
-  })), /*#__PURE__*/React.createElement("g", {
-    transform: n >= 11 ? 'translate(4,-14)' : 'translate(4,0)'
-  }, /*#__PURE__*/React.createElement("rect", {
-    x: "0",
-    y: "26",
-    width: "10",
-    height: "18",
-    rx: "4",
-    fill: SHIRT
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "10",
-    y: "22",
-    width: "30",
-    height: "27",
-    fill: SHIRT
-  }), n >= 2 && n <= 4 && /*#__PURE__*/React.createElement("rect", {
-    x: "10",
-    y: "22",
-    width: "30",
-    height: "3",
-    fill: "#222",
-    opacity: "0.3"
-  }), n >= 5 && n <= 8 && /*#__PURE__*/React.createElement("rect", {
-    x: "22",
-    y: "22",
-    width: "6",
-    height: "14",
-    rx: "2",
-    fill: "rgba(255,255,255,0.1)"
-  }), n >= 9 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("path", {
-    d: "M16,22 L23,32 L23,49 L10,49 Z",
-    fill: "rgba(0,0,0,0.15)"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M34,22 L27,32 L27,49 L40,49 Z",
-    fill: "rgba(0,0,0,0.15)"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "21",
-    y: "22",
-    width: "8",
-    height: "20",
-    rx: "2",
-    fill: n >= 10 ? '#9B59B6' : '#C0392B',
-    opacity: "0.8"
-  })), /*#__PURE__*/React.createElement("rect", {
-    x: "40",
-    y: "26",
-    width: "10",
-    height: "18",
-    rx: "4",
-    fill: SHIRT
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "10",
-    y: "49",
-    width: "12",
-    height: "24",
-    rx: "4",
-    fill: PANTS
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "28",
-    y: "49",
-    width: "12",
-    height: "24",
-    rx: "4",
-    fill: PANTS
-  }), n >= 3 && /*#__PURE__*/React.createElement("g", {
-    transform: "translate(48,28)"
-  }, /*#__PURE__*/React.createElement("rect", {
-    x: "0",
-    y: "0",
-    width: "7",
-    height: "11",
-    rx: "2",
-    fill: n >= 9 ? '#0a0a0a' : '#2C3E50'
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "1",
-    y: "1",
-    width: "5",
-    height: "7",
-    rx: "1",
-    fill: "#AED6F1",
-    opacity: "0.75"
-  })), n >= 5 && /*#__PURE__*/React.createElement("g", {
-    transform: "translate(-14,30)"
-  }, /*#__PURE__*/React.createElement("rect", {
-    x: "0",
-    y: "2",
-    width: "12",
-    height: "9",
-    rx: "2",
-    fill: n >= 9 ? '#7D6608' : n >= 7 ? '#1C2833' : '#6B4423'
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "4",
-    y: "0",
-    width: "4",
-    height: "3",
-    rx: "1",
-    fill: "none",
-    stroke: n >= 9 ? '#9A7D0A' : '#8a5a33',
-    strokeWidth: "1.5"
-  })), /*#__PURE__*/React.createElement("rect", {
-    x: "8",
-    y: "71",
-    width: "16",
-    height: "8",
-    rx: "4",
-    fill: SHOES
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "26",
-    y: "71",
-    width: "16",
-    height: "8",
-    rx: "4",
-    fill: SHOES
-  }), /*#__PURE__*/React.createElement("g", null, /*#__PURE__*/React.createElement("rect", {
-    x: "12",
-    y: "2",
-    width: "26",
-    height: "26",
-    rx: "8",
-    fill: SK
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "10",
-    y: "2",
-    width: "30",
-    height: "12",
-    rx: "6",
-    fill: HAIR
-  }), n <= 2 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
-    x: "8",
-    y: "4",
-    width: "6",
-    height: "18",
-    rx: "3",
-    fill: HAIR
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "36",
-    y: "4",
-    width: "6",
-    height: "18",
-    rx: "3",
-    fill: HAIR
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "14",
-    y: "0",
-    width: "8",
-    height: "5",
-    rx: "3",
-    fill: HAIR
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "24",
-    y: "-1",
-    width: "6",
-    height: "5",
-    rx: "3",
-    fill: HAIR
-  })), n >= 3 && n <= 6 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
-    x: "10",
-    y: "4",
-    width: "6",
-    height: "14",
-    rx: "3",
-    fill: HAIR
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "34",
-    y: "4",
-    width: "6",
-    height: "12",
-    rx: "3",
-    fill: HAIR
-  })), /*#__PURE__*/React.createElement("rect", {
-    x: "16",
-    y: "12",
-    width: "6",
-    height: "5",
-    rx: "1",
-    fill: "#1C2833"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "28",
-    y: "12",
-    width: "6",
-    height: "5",
-    rx: "1",
-    fill: "#1C2833"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "18",
-    y: "13",
-    width: "2",
-    height: "3",
-    rx: "1",
-    fill: "#fff",
-    opacity: "0.5"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "30",
-    y: "13",
-    width: "2",
-    height: "3",
-    rx: "1",
-    fill: "#fff",
-    opacity: "0.5"
-  }), n <= 4 ? /*#__PURE__*/React.createElement("path", {
-    d: "M18,22 Q25,27 32,22",
-    stroke: "#B03A2E",
-    strokeWidth: "2",
-    fill: "none"
-  }) : /*#__PURE__*/React.createElement("rect", {
-    x: "17",
-    y: "22",
-    width: "16",
-    height: "2",
-    rx: "1",
-    fill: "#1C2833"
-  }), n >= 9 && /*#__PURE__*/React.createElement("rect", {
-    x: "15",
-    y: "20",
-    width: "20",
-    height: "8",
-    rx: "4",
-    fill: HAIR,
-    opacity: "0.45"
-  }), hasCap && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
-    x: "10",
-    y: "2",
-    width: "30",
-    height: "7",
-    rx: "4",
-    fill: n >= 6 ? '#1C2833' : '#2C3E50'
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "8",
-    y: "7",
-    width: "34",
-    height: "3",
-    rx: "1",
-    fill: n >= 6 ? '#151f29' : '#1e2d3d'
-  })), hasSunglasses && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
-    x: "14",
-    y: "11",
-    width: "10",
-    height: "6",
-    rx: "2",
-    fill: "rgba(0,0,0,0.8)"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "26",
-    y: "11",
-    width: "10",
-    height: "6",
-    rx: "2",
-    fill: "rgba(0,0,0,0.8)"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "24",
-    y: "13",
-    width: "2",
-    height: "2",
-    fill: "#555"
-  })), n >= 10 && /*#__PURE__*/React.createElement("rect", {
-    x: "19",
-    y: "26",
-    width: "12",
-    height: "3",
-    rx: "1",
-    fill: "#F9E79F",
-    opacity: "0.75"
-  }))));
-}
-
-/* ════════ WORLD SCENE ════════ */
-function WorldScene(_ref2) {
-  let level = _ref2.level;
-  const s = level <= 2 ? 0 : level <= 4 ? 1 : level <= 6 ? 2 : level <= 8 ? 3 : level <= 10 ? 4 : 5;
-  const skyGrads = [['#87CEEB', '#c8e8ff'], ['#2980B9', '#5DADE2'], ['#1a6b9e', '#4A90D9'], ['#d45c1e', '#f0a940'], ['#B03A2E', '#E67E22'], ['#050510', '#0d0d2e']];
-  const grounds = ['#4a7c3f', '#5a8c4f', '#6B8F3A', '#7a6848', '#7a6848', '#2c1a0e'];
-  const _skyGrads$s = _slicedToArray(skyGrads[s], 2),
-    skyTop = _skyGrads$s[0],
-    skyBot = _skyGrads$s[1];
-  const ground = grounds[s];
-  return /*#__PURE__*/React.createElement("svg", {
-    viewBox: "0 0 320 155",
-    xmlns: "http://www.w3.org/2000/svg",
-    className: "world-scene"
-  }, /*#__PURE__*/React.createElement("defs", null, /*#__PURE__*/React.createElement("linearGradient", {
-    id: `sk${s}`,
-    x1: "0",
-    y1: "0",
-    x2: "0",
-    y2: "1"
-  }, /*#__PURE__*/React.createElement("stop", {
-    offset: "0%",
-    stopColor: skyTop
-  }), /*#__PURE__*/React.createElement("stop", {
-    offset: "100%",
-    stopColor: skyBot
-  }))), /*#__PURE__*/React.createElement("rect", {
-    width: "320",
-    height: "155",
-    fill: `url(#sk${s})`
-  }), s === 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
-    x: "0",
-    y: "90",
-    width: "320",
-    height: "50",
-    fill: "rgba(255,255,255,0.12)"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "0",
-    y: "108",
-    width: "320",
-    height: "47",
-    fill: ground
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "120",
-    y: "103",
-    width: "80",
-    height: "52",
-    fill: "#8B7355",
-    opacity: "0.6"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "30",
-    y: "72",
-    width: "60",
-    height: "40",
-    fill: "#8B6F4E"
-  }), /*#__PURE__*/React.createElement("polygon", {
-    points: "20,72 100,72 60,47",
-    fill: "#C0392B"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "52",
-    y: "90",
-    width: "16",
-    height: "22",
-    fill: "#5D4037"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "38",
-    y: "80",
-    width: "12",
-    height: "12",
-    fill: "#AED6F1"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "175",
-    y: "90",
-    width: "8",
-    height: "22",
-    fill: "#6B4423"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "179",
-    cy: "82",
-    rx: "18",
-    ry: "18",
-    fill: "#2E7D32"
-  }), [10, 18, 26, 200, 210, 220].map((x, i) => /*#__PURE__*/React.createElement("ellipse", {
-    key: i,
-    cx: x,
-    cy: "112",
-    rx: "4",
-    ry: "4",
-    fill: ['#E74C3C', '#F39C12', '#9B59B6', '#E74C3C', '#27AE60', '#F39C12'][i]
-  })), /*#__PURE__*/React.createElement("circle", {
-    cx: "270",
-    cy: "30",
-    r: "18",
-    fill: "#FFF176"
-  }), /*#__PURE__*/React.createElement("circle", {
-    cx: "270",
-    cy: "30",
-    r: "14",
-    fill: "#FFEB3B"
-  })), s === 1 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
-    x: "0",
-    y: "103",
-    width: "320",
-    height: "52",
-    fill: ground
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "130",
-    y: "97",
-    width: "60",
-    height: "58",
-    fill: "#9E8A6E",
-    opacity: "0.7"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "20",
-    y: "67",
-    width: "55",
-    height: "45",
-    fill: "#9E8A6E"
-  }), /*#__PURE__*/React.createElement("polygon", {
-    points: "10,67 85,67 47,44",
-    fill: "#8B2500"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "40",
-    y: "87",
-    width: "15",
-    height: "25",
-    fill: "#5D4037"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "25",
-    y: "75",
-    width: "13",
-    height: "13",
-    fill: "#AED6F1"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "200",
-    y: "74",
-    width: "50",
-    height: "38",
-    fill: "#8D6E63"
-  }), /*#__PURE__*/React.createElement("polygon", {
-    points: "192,74 258,74 225,52",
-    fill: "#795548"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "100",
-    y: "84",
-    width: "50",
-    height: "28",
-    fill: "#F39C12",
-    opacity: "0.9"
-  }), /*#__PURE__*/React.createElement("polygon", {
-    points: "95,84 155,84 125,72",
-    fill: "#E67E22"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "268",
-    y: "93",
-    width: "20",
-    height: "20",
-    rx: "2",
-    fill: "#95A5A6"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "165",
-    y: "86",
-    width: "7",
-    height: "26",
-    fill: "#6B4423"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "168",
-    cy: "78",
-    rx: "15",
-    ry: "15",
-    fill: "#2E7D32"
-  }), /*#__PURE__*/React.createElement("circle", {
-    cx: "290",
-    cy: "25",
-    r: "16",
-    fill: "#FFEB3B"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "142",
-    y: "97",
-    width: "8",
-    height: "16",
-    fill: "#E74C3C"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "146",
-    cy: "95",
-    rx: "5",
-    ry: "5",
-    fill: "#FDBCB4"
-  })), s === 2 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
-    x: "0",
-    y: "100",
-    width: "320",
-    height: "55",
-    fill: ground
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "60",
-    cy: "102",
-    rx: "80",
-    ry: "40",
-    fill: "#5a7a32"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "240",
-    cy: "107",
-    rx: "90",
-    ry: "38",
-    fill: "#4a6a28"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M120,103 L200,103 L220,155 L100,155Z",
-    fill: "#9E9E9E",
-    opacity: "0.7"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "130",
-    y: "42",
-    width: "60",
-    height: "70",
-    fill: "#37474F"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "125",
-    y: "37",
-    width: "16",
-    height: "30",
-    fill: "#455A64"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "179",
-    y: "37",
-    width: "16",
-    height: "30",
-    fill: "#455A64"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "147",
-    y: "32",
-    width: "26",
-    height: "25",
-    fill: "#546E7A"
-  }), [125, 131, 137, 179, 185, 191].map((x, i) => /*#__PURE__*/React.createElement("rect", {
-    key: i,
-    x: x,
-    y: "30",
-    width: "4",
-    height: "8",
-    fill: "#37474F"
-  })), /*#__PURE__*/React.createElement("rect", {
-    x: "147",
-    y: "77",
-    width: "26",
-    height: "35",
-    rx: "13",
-    fill: "#0d0d0d"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "100",
-    y: "100",
-    width: "6",
-    height: "20",
-    fill: "#8D6E63"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "214",
-    y: "100",
-    width: "6",
-    height: "20",
-    fill: "#8D6E63"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "50",
-    cy: "25",
-    rx: "30",
-    ry: "12",
-    fill: "rgba(255,255,255,0.7)"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "250",
-    cy: "20",
-    rx: "25",
-    ry: "10",
-    fill: "rgba(255,255,255,0.6)"
-  })), s === 3 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
-    x: "0",
-    y: "100",
-    width: "320",
-    height: "55",
-    fill: ground
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "0",
-    y: "47",
-    width: "320",
-    height: "65",
-    fill: "#546E7A"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "0",
-    y: "40",
-    width: "320",
-    height: "10",
-    fill: "#455A64"
-  }), Array.from({
-    length: 20
-  }, (_, i) => /*#__PURE__*/React.createElement("rect", {
-    key: i,
-    x: i * 18,
-    y: "30",
-    width: "10",
-    height: "12",
-    fill: "#455A64"
-  })), /*#__PURE__*/React.createElement("rect", {
-    x: "0",
-    y: "20",
-    width: "50",
-    height: "82",
-    fill: "#37474F"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "270",
-    y: "20",
-    width: "50",
-    height: "82",
-    fill: "#37474F"
-  }), [2, 10, 18, 26, 34, 42].map((x, i) => /*#__PURE__*/React.createElement("rect", {
-    key: i,
-    x: x,
-    y: "12",
-    width: "6",
-    height: "10",
-    fill: "#263238"
-  })), [272, 280, 288, 296, 304, 312].map((x, i) => /*#__PURE__*/React.createElement("rect", {
-    key: i,
-    x: x,
-    y: "12",
-    width: "6",
-    height: "10",
-    fill: "#263238"
-  })), /*#__PURE__*/React.createElement("rect", {
-    x: "125",
-    y: "62",
-    width: "70",
-    height: "50",
-    rx: "35",
-    fill: "#1a1a1a"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "130",
-    y: "72",
-    width: "60",
-    height: "40",
-    rx: "30",
-    fill: "#0d0d0d"
-  }), [133, 141, 149, 157, 165, 173, 181].map((x, i) => /*#__PURE__*/React.createElement("rect", {
-    key: i,
-    x: x,
-    y: "67",
-    width: "2",
-    height: "40",
-    fill: "#455A64",
-    opacity: "0.7"
-  })), /*#__PURE__*/React.createElement("rect", {
-    x: "70",
-    y: "77",
-    width: "10",
-    height: "25",
-    fill: "#546E7A"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "75",
-    cy: "74",
-    rx: "6",
-    ry: "6",
-    fill: "#7F8C8D"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "240",
-    y: "77",
-    width: "10",
-    height: "25",
-    fill: "#546E7A"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "245",
-    cy: "74",
-    rx: "6",
-    ry: "6",
-    fill: "#7F8C8D"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "22",
-    y: "8",
-    width: "4",
-    height: "30",
-    fill: "#8B6914"
-  }), /*#__PURE__*/React.createElement("polygon", {
-    points: "26,8 45,16 26,24",
-    fill: "#E74C3C"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "294",
-    y: "8",
-    width: "4",
-    height: "30",
-    fill: "#8B6914"
-  }), /*#__PURE__*/React.createElement("polygon", {
-    points: "298,8 317,16 298,24",
-    fill: "#E74C3C"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "0",
-    y: "0",
-    width: "320",
-    height: "155",
-    fill: "rgba(180,80,20,0.12)"
-  })), s === 4 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
-    x: "0",
-    y: "97",
-    width: "320",
-    height: "58",
-    fill: ground
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "80",
-    y: "20",
-    width: "160",
-    height: "90",
-    fill: "#4a3728"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "60",
-    y: "15",
-    width: "40",
-    height: "95",
-    fill: "#3d2e1e"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "220",
-    y: "15",
-    width: "40",
-    height: "95",
-    fill: "#3d2e1e"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "130",
-    y: "5",
-    width: "60",
-    height: "85",
-    fill: "#4a3728"
-  }), [60, 68, 76, 84, 220, 228, 236, 244, 252].map((x, i) => /*#__PURE__*/React.createElement("rect", {
-    key: i,
-    x: x,
-    y: "6",
-    width: "6",
-    height: "11",
-    fill: "#2d1f10"
-  })), [130, 137, 144, 151, 158, 165, 172, 179].map((x, i) => /*#__PURE__*/React.createElement("rect", {
-    key: i,
-    x: x,
-    y: "-2",
-    width: "5",
-    height: "9",
-    fill: "#3d2e1e"
-  })), /*#__PURE__*/React.createElement("rect", {
-    x: "80",
-    y: "20",
-    width: "160",
-    height: "5",
-    fill: "#D4AC0D",
-    opacity: "0.7"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "138",
-    y: "60",
-    width: "44",
-    height: "50",
-    rx: "22",
-    fill: "#0d0d0d"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "143",
-    y: "68",
-    width: "34",
-    height: "40",
-    rx: "17",
-    fill: "#050505"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "152",
-    y: "30",
-    width: "16",
-    height: "22",
-    fill: "#D4AC0D"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "160",
-    cy: "28",
-    rx: "8",
-    ry: "8",
-    fill: "#FDBCB4"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "155",
-    y: "20",
-    width: "10",
-    height: "8",
-    fill: "#FFD700"
-  }), [0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300].map((x, i) => /*#__PURE__*/React.createElement("g", {
-    key: i,
-    transform: `translate(${x},92)`
-  }, /*#__PURE__*/React.createElement("rect", {
-    x: "2",
-    y: "-18",
-    width: "8",
-    height: "18",
-    fill: "#546E7A"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "6",
-    cy: "-20",
-    rx: "5",
-    ry: "5",
-    fill: "#607D8B"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "9",
-    y: "-22",
-    width: "2",
-    height: "10",
-    fill: "#8B6914"
-  }), /*#__PURE__*/React.createElement("polygon", {
-    points: "11,-22 18,-19 11,-16",
-    fill: "#E74C3C"
-  }))), /*#__PURE__*/React.createElement("rect", {
-    x: "0",
-    y: "0",
-    width: "320",
-    height: "155",
-    fill: "rgba(200,100,10,0.15)"
-  })), s === 5 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
-    x: "0",
-    y: "103",
-    width: "320",
-    height: "52",
-    fill: ground
-  }), /*#__PURE__*/React.createElement("polygon", {
-    points: "0,103 80,30 160,103",
-    fill: "#1C2833"
-  }), /*#__PURE__*/React.createElement("polygon", {
-    points: "80,103 170,25 260,103",
-    fill: "#212F3D"
-  }), /*#__PURE__*/React.createElement("polygon", {
-    points: "160,103 250,40 320,103",
-    fill: "#1C2833"
-  }), /*#__PURE__*/React.createElement("polygon", {
-    points: "80,30 95,58 65,58",
-    fill: "#ECF0F1"
-  }), /*#__PURE__*/React.createElement("polygon", {
-    points: "170,25 185,55 155,55",
-    fill: "#ECF0F1"
-  }), [10, 30, 60, 90, 130, 180, 220, 260, 290, 310, 50, 150, 250].map((x, i) => /*#__PURE__*/React.createElement("circle", {
-    key: i,
-    cx: x,
-    cy: 5 + i * 7 % 40,
-    r: i % 3 === 0 ? 2 : 1.5,
-    fill: "#FFFFFF",
-    opacity: 0.6 + i % 4 * 0.1
-  })), /*#__PURE__*/React.createElement("circle", {
-    cx: "280",
-    cy: "25",
-    r: "18",
-    fill: "#BDC3C7"
-  }), /*#__PURE__*/React.createElement("circle", {
-    cx: "288",
-    cy: "20",
-    r: "14",
-    fill: skyTop
-  }), /*#__PURE__*/React.createElement("g", {
-    transform: "translate(60,15) rotate(-10)"
-  }, /*#__PURE__*/React.createElement("path", {
-    d: "M0,15 L30,0 L22,28Z",
-    fill: "#0f3d1e",
-    opacity: "0.9"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M50,15 L20,0 L28,28Z",
-    fill: "#0f3d1e",
-    opacity: "0.9"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "25",
-    cy: "22",
-    rx: "22",
-    ry: "14",
-    fill: "#1a5c2e"
-  }), /*#__PURE__*/React.createElement("ellipse", {
-    cx: "42",
-    cy: "10",
-    rx: "12",
-    ry: "9",
-    fill: "#1a5c2e"
-  }), /*#__PURE__*/React.createElement("circle", {
-    cx: "47",
-    cy: "7",
-    r: "2.5",
-    fill: "#FF6600"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M52,10 Q60,7 66,5 Q60,14 57,20Z",
-    fill: "#FF6600",
-    opacity: "0.9"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M54,10 Q63,5 72,3 Q63,14 59,22Z",
-    fill: "#FFAA00",
-    opacity: "0.6"
-  })), [30, 55, 80, 105, 180, 210, 240, 270].map((x, i) => /*#__PURE__*/React.createElement("rect", {
-    key: i,
-    x: x,
-    y: "105",
-    width: "12",
-    height: "15",
-    fill: "#2d1f0e"
-  })), [30, 55, 80, 105, 180, 210, 240, 270].map((x, i) => /*#__PURE__*/React.createElement("rect", {
-    key: i,
-    x: x + 2,
-    y: "103",
-    width: "8",
-    height: "4",
-    rx: "1",
-    fill: "#F39C12",
-    opacity: "0.6"
-  })), /*#__PURE__*/React.createElement("rect", {
-    x: "0",
-    y: "98",
-    width: "320",
-    height: "57",
-    fill: "rgba(180,60,0,0.15)"
-  })));
-}
-
-/* ════════ GAME HERO CARD ════════ */
-function GameHeroCard(_ref3) {
-  let game = _ref3.game,
-    userName = _ref3.userName;
-  const lvl = getLvl(game.xp);
-  const prog = getXPProg(game.xp);
-  const c = lvl.color;
-  const next = LEVELS.find(l => l.n === lvl.n + 1);
-  return /*#__PURE__*/React.createElement("div", {
-    className: "hero-card",
-    style: {
-      borderColor: c + '44'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "hero-aura",
-    style: {
-      background: c
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: 'relative'
-    }
-  }, /*#__PURE__*/React.createElement(WorldScene, {
-    level: lvl.n
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: 'absolute',
-      bottom: -18,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      width: 66,
-      height: 100,
-      zIndex: 2
-    }
-  }, /*#__PURE__*/React.createElement(PixelHero, {
-    level: lvl.n,
-    equipped: game.equipped || {}
-  }))), /*#__PURE__*/React.createElement("div", {
-    className: "hero-bottom",
-    style: {
-      paddingTop: 26,
-      background: `linear-gradient(180deg,${c}08,transparent)`
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    className: "hero-name",
-    style: {
-      color: c
-    }
-  }, userName || 'Jugador'), /*#__PURE__*/React.createElement("div", {
-    className: "hero-title",
-    style: {
-      color: c + 'cc'
-    }
-  }, lvl.title), /*#__PURE__*/React.createElement("div", {
-    className: "hero-badge",
-    style: {
-      color: c,
-      borderColor: c + '44',
-      background: c + '15'
-    }
-  }, "Niv. ", lvl.n, " \xB7 ", game.xp, " XP"), (game.bits || 0) > 0 && /*#__PURE__*/React.createElement("div", {
-    className: "hero-badge",
-    style: {
-      marginTop: 4,
-      color: '#0284C7',
-      borderColor: '#0284C744',
-      background: '#0284C715'
-    }
-  }, "💎 ", (game.bits || 0).toLocaleString('es-MX'), " Bits")), /*#__PURE__*/React.createElement("div", {
-    className: "streak-badge"
-  }, "\uD83D\uDD25 ", game.streak, " ", game.streak === 1 ? 'día' : 'días')), /*#__PURE__*/React.createElement("div", {
-    className: "xp-bar-bg"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "xp-bar-fill",
-    style: {
-      width: `${prog.pct}%`,
-      background: `linear-gradient(90deg,${c}80,${c})`
-    }
-  })), /*#__PURE__*/React.createElement("div", {
-    className: "xp-labels"
-  }, /*#__PURE__*/React.createElement("span", null, prog.cur, "/", prog.need, " XP \u2192 Niv. ", lvl.n + 1), /*#__PURE__*/React.createElement("span", null, prog.pct, "%")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: c + '88',
-      fontStyle: 'italic',
-      lineHeight: 1.5
-    }
-  }, lvl.story), next && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: 'var(--muted)',
-      marginTop: 4
-    }
-  }, "Pr\xF3ximo: ", next.emoji, " ", next.title)));
-}
-
-/* ════════ LEVEL UP ════════ */
 function LevelUpOverlay(_ref4) {
   let lvlData = _ref4.lvlData,
     onDismiss = _ref4.onDismiss;
@@ -3284,11 +2741,11 @@ function OnboardingFlow(_ref5) {
     style: {
       color: ac
     }
-  }, "Bienvenido al gremio"), /*#__PURE__*/React.createElement("div", {
+  }, "Bienvenido a Budgy"), /*#__PURE__*/React.createElement("div", {
     className: "ob-title"
   }, "Hola, ", userName || 'jefe', ". \uD83D\uDC4B"), /*#__PURE__*/React.createElement("div", {
     className: "ob-sub"
-  }, "Esta app convierte tus finanzas en un juego. Cada gasto que anotas, cada deuda que atacas, cada d\xEDa que no te pasas... te da XP y sube de nivel a tu guerrero."), /*#__PURE__*/React.createElement("div", {
+  }, "Budgy te dice cu\xE1nto puedes gastar sin quedarte corto antes de tu pr\xF3xima quincena. Anota tus gastos y nosotros hacemos las cuentas."), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 16,
       display: 'flex',
@@ -3301,18 +2758,18 @@ function OnboardingFlow(_ref5) {
       height: 70
     }
   }, /*#__PURE__*/React.createElement(PixelHero, {
-    level: 1
+    level: 0
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
       color: 'var(--dim)',
       lineHeight: 1.7
     }
-  }, "Este es tu personaje ahora.", /*#__PURE__*/React.createElement("br", null), "Tu meta: llevarlo hasta", /*#__PURE__*/React.createElement("br", null), "el ", /*#__PURE__*/React.createElement("strong", {
+  }, "Este es tu personaje: empieza desde cero.", /*#__PURE__*/React.createElement("br", null), "Con buenos h\xE1bitos lo llevas hasta", /*#__PURE__*/React.createElement("br", null), "", /*#__PURE__*/React.createElement("strong", {
     style: {
       color: ac
     }
-  }, "Libre Financiero \uD83D\uDCB8")))), step === 1 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "Millonario inteligente \uD83E\uDDE0\uD83D\uDC51")))), step === 1 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "ob-icon"
   }, "\uD83D\uDCB5"), /*#__PURE__*/React.createElement("div", {
     className: "ob-step-num",
@@ -3378,14 +2835,14 @@ function OnboardingFlow(_ref5) {
     className: "ob-title"
   }, "Ya est\xE1s configurado."), /*#__PURE__*/React.createElement("div", {
     className: "ob-sub"
-  }, "Tu aventura financiera empieza ahora. Las misiones de hoy ya te est\xE1n esperando."), /*#__PURE__*/React.createElement("div", {
+  }, "Ya puedes ver cu\xE1nto puedes gastar hoy. Empieza anotando tu primer gasto con el bot\xF3n +."), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 16,
       display: 'flex',
       justifyContent: 'center',
       gap: 16
     }
-  }, [1, 4, 8, 12].map(n => /*#__PURE__*/React.createElement("div", {
+  }, [0, 3, 6, 9].map(n => /*#__PURE__*/React.createElement("div", {
     key: n,
     style: {
       width: 40,
@@ -3400,7 +2857,7 @@ function OnboardingFlow(_ref5) {
       textAlign: 'center',
       marginTop: 10
     }
-  }, "De aqu\xED a convertirte en el Libre Financiero \uD83D\uDCB8"))), /*#__PURE__*/React.createElement("div", {
+  }, "De Mendigo a Millonario inteligente: tus h\xE1bitos reales lo hacen crecer."))), /*#__PURE__*/React.createElement("div", {
     className: "ob-body",
     style: {
       padding: '0 0 16px'
@@ -3909,7 +3366,7 @@ function OnboardingFlow(_ref5) {
       background: ac
     },
     onClick: finish
-  }, "\xA1Comenzar mi aventura! \uD83C\uDFAE"), step > 0 && step < TOTAL - 1 && /*#__PURE__*/React.createElement("div", {
+  }, "Empezar"), step > 0 && step < TOTAL - 1 && /*#__PURE__*/React.createElement("div", {
     className: "ob-skip",
     onClick: () => go(step + 1, false)
   }, "Saltar este paso"))));
@@ -6671,367 +6128,6 @@ function TabHistorial(_ref26) {
 }
 
 /* ════════ SHOP ════════ */
-const SHOP_ITEMS = [{
-  id: 'cuarto',
-  name: 'Cuarto de alquiler',
-  cat: 'home',
-  price: 0,
-  icon: '🛏️',
-  desc: 'Tu punto de partida.',
-  free: true
-}, {
-  id: 'depto',
-  name: 'Departamento',
-  cat: 'home',
-  price: 80,
-  icon: '🏢',
-  desc: 'Primer paso real.'
-}, {
-  id: 'casa',
-  name: 'Casa propia',
-  cat: 'home',
-  price: 350,
-  icon: '🏠',
-  desc: 'El sue\xF1o cumplido.'
-}, {
-  id: 'mansion',
-  name: 'Mansi\xF3n residencial',
-  cat: 'home',
-  price: 1500,
-  icon: '🏡',
-  desc: 'Llegaste lejos.'
-}, {
-  id: 'penthouse',
-  name: 'Penthouse',
-  cat: 'home',
-  price: 6000,
-  icon: '🌆',
-  desc: 'Vista desde arriba.'
-}, {
-  id: 'bici',
-  name: 'Bicicleta',
-  cat: 'vehicle',
-  price: 30,
-  icon: '🚲',
-  desc: 'Eco y chido.'
-}, {
-  id: 'moto',
-  name: 'Moto',
-  cat: 'vehicle',
-  price: 150,
-  icon: '🏍️',
-  desc: 'Velocidad pura.'
-}, {
-  id: 'auto',
-  name: 'Auto sed\xE1n',
-  cat: 'vehicle',
-  price: 500,
-  icon: '🚗',
-  desc: 'La independencia.'
-}, {
-  id: 'suv',
-  name: 'SUV familiar',
-  cat: 'vehicle',
-  price: 1200,
-  icon: '🚙',
-  desc: 'Espacio de sobra.'
-}, {
-  id: 'ferrari',
-  name: 'Ferrari',
-  cat: 'vehicle',
-  price: 4000,
-  icon: '🏎️',
-  desc: 'El sue\xF1o.'
-}, {
-  id: 'heli',
-  name: 'Helic\xF3ptero',
-  cat: 'vehicle',
-  price: 10000,
-  icon: '🚁',
-  desc: 'Por encima de todo.'
-}, {
-  id: 'casual',
-  name: 'Ropa casual',
-  cat: 'outfit',
-  price: 0,
-  icon: '👕',
-  desc: 'El d\xEDa a d\xEDa.',
-  free: true
-}, {
-  id: 'negocio',
-  name: 'Traje de negocios',
-  cat: 'outfit',
-  price: 100,
-  icon: '👔',
-  desc: 'Pro mode ON.'
-}, {
-  id: 'streetwear',
-  name: 'Streetwear',
-  cat: 'outfit',
-  price: 400,
-  icon: '🧢',
-  desc: 'Hoodie, sneakers, vibras.'
-}, {
-  id: 'premium_fit',
-  name: 'Look Premium',
-  cat: 'outfit',
-  price: 1800,
-  icon: '🕶️',
-  desc: 'Ropa de marca, actitud.'
-}, {
-  id: 'luxury_fit',
-  name: 'Outfit de Lujo',
-  cat: 'outfit',
-  price: 7000,
-  icon: '🤵',
-  desc: 'Dise\xF1ador de pies a cabeza.'
-}, {
-  id: 'tv',
-  name: 'Smart TV 65"',
-  cat: 'extra',
-  price: 50,
-  icon: '📺',
-  desc: 'Entretenimiento VIP.'
-}, {
-  id: 'gym',
-  name: 'Home Gym',
-  cat: 'extra',
-  price: 200,
-  icon: '💪',
-  desc: 'Mens sana...'
-}, {
-  id: 'piscina',
-  name: 'Piscina',
-  cat: 'extra',
-  price: 800,
-  icon: '🏊',
-  desc: 'Status m\xE1ximo.'
-}, {
-  id: 'jet',
-  name: 'Jet privado',
-  cat: 'extra',
-  price: 5000,
-  icon: '✈️',
-  desc: 'Para el mundo.'
-}, {
-  id: 'isla',
-  name: 'Isla privada',
-  cat: 'extra',
-  price: 20000,
-  icon: '🏝️',
-  desc: 'Endgame definitivo.'
-}];
-const SHOP_CATS = [{
-  key: 'home',
-  label: 'Viviendas',
-  icon: '🏠'
-}, {
-  key: 'vehicle',
-  label: 'Veh\xEDculos',
-  icon: '🚗'
-}, {
-  key: 'outfit',
-  label: 'Ropa',
-  icon: '👕'
-}, {
-  key: 'extra',
-  label: 'Lujos',
-  icon: '✨'
-}];
-function ShopItem(_ref_si) {
-  let item = _ref_si.item,
-    bits = _ref_si.bits,
-    inventory = _ref_si.inventory,
-    equipped = _ref_si.equipped,
-    onBuyItem = _ref_si.onBuyItem,
-    onEquipItem = _ref_si.onEquipItem;
-  const owned = item.free || inventory.includes(item.id);
-  const isEquipped = equipped[item.cat] === item.id || item.cat === 'extra' && owned;
-  const canAfford = bits >= item.price;
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: isEquipped ? 'rgba(2,132,199,.12)' : 'var(--card)',
-      border: isEquipped ? '1px solid rgba(2,132,199,.5)' : '1px solid var(--border)',
-      borderRadius: 14,
-      padding: '14px 10px',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: 6
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 36,
-      lineHeight: '1'
-    }
-  }, item.icon), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      fontWeight: 700,
-      color: 'var(--text)',
-      textAlign: 'center',
-      lineHeight: '1.3'
-    }
-  }, item.name), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: 'var(--muted)',
-      textAlign: 'center',
-      lineHeight: '1.4'
-    }
-  }, item.desc), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 13,
-      fontWeight: 700,
-      color: item.free ? 'var(--accent)' : canAfford ? '#0284C7' : 'var(--danger)',
-      marginTop: 2
-    }
-  }, item.free ? 'Gratis' : `💎 ${item.price.toLocaleString('es-MX')}`), isEquipped ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: '100%',
-      padding: '7px 0',
-      borderRadius: 10,
-      background: 'rgba(2,132,199,.2)',
-      color: '#0284C7',
-      fontSize: 11,
-      fontWeight: 700,
-      textAlign: 'center'
-    }
-  }, "✓ Equipado") : owned ? /*#__PURE__*/React.createElement("button", {
-    onClick: () => onEquipItem(item.id),
-    style: {
-      width: '100%',
-      padding: '7px 0',
-      borderRadius: 10,
-      border: 'none',
-      background: 'var(--accent)',
-      color: '#000',
-      fontSize: 11,
-      fontWeight: 700,
-      cursor: 'pointer',
-      lineHeight: '1.4',
-      textAlign: 'center',
-      fontFamily: 'inherit'
-    }
-  }, "Equipar") : /*#__PURE__*/React.createElement("button", {
-    onClick: () => canAfford && onBuyItem(item.id),
-    style: {
-      width: '100%',
-      padding: '7px 0',
-      borderRadius: 10,
-      border: 'none',
-      background: canAfford ? '#0284C7' : 'rgba(var(--fg-rgb),.08)',
-      color: canAfford ? '#000' : 'var(--muted)',
-      fontSize: 11,
-      fontWeight: 700,
-      cursor: canAfford ? 'pointer' : 'default',
-      lineHeight: '1.4',
-      textAlign: 'center',
-      fontFamily: 'inherit'
-    }
-  }, canAfford ? 'Comprar' : 'Sin Bits'));
-}
-function TabTienda(_ref_tt) {
-  let game = _ref_tt.game,
-    onBuyItem = _ref_tt.onBuyItem,
-    onEquipItem = _ref_tt.onEquipItem;
-  const _useState121 = useState('home'),
-    _useState122 = _slicedToArray2(_useState121, 2),
-    cat = _useState122[0],
-    setCat = _useState122[1];
-  const bits = game.bits || 0;
-  const inventory = game.inventory || [];
-  const equipped = game.equipped || {};
-  const items = SHOP_ITEMS.filter(i => i.cat === cat);
-  const equippedIcons = ['home', 'vehicle', 'outfit'].map(slot => SHOP_ITEMS.find(i => i.id === (equipped[slot] || ''))).filter(Boolean).map(i => i.icon).join('');
-  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: 'linear-gradient(135deg,rgba(2,132,199,.18),rgba(5,150,105,.12))',
-      border: '1px solid rgba(2,132,199,.3)',
-      borderRadius: 16,
-      padding: '16px 18px',
-      marginBottom: 12,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between'
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: 'var(--muted)',
-      letterSpacing: .5,
-      fontWeight: 700
-    }
-  }, "TU SALDO"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 34,
-      fontWeight: 700,
-      color: '#0284C7',
-      fontFamily: "var(--font)",
-      lineHeight: '1.1'
-    }
-  }, "💎 ", bits.toLocaleString('es-MX'))), equippedIcons && /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: 'right'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: 'var(--muted)',
-      marginBottom: 4
-    }
-  }, "Equipado"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 24,
-      letterSpacing: 4
-    }
-  }, equippedIcons))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: 'var(--muted)',
-      textAlign: 'center',
-      marginBottom: 14,
-      lineHeight: 1.5
-    }
-  }, "💎 Gana Bits anotando gastos, pagando deudas y abriendo cofres"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 6,
-      marginBottom: 14
-    }
-  }, SHOP_CATS.map(c => /*#__PURE__*/React.createElement("button", {
-    key: c.key,
-    onClick: () => setCat(c.key),
-    style: {
-      flex: 1,
-      padding: '7px 2px',
-      borderRadius: 10,
-      border: cat === c.key ? '1px solid rgba(2,132,199,.6)' : '1px solid var(--border)',
-      background: cat === c.key ? 'rgba(2,132,199,.15)' : 'transparent',
-      color: cat === c.key ? '#0284C7' : 'var(--muted)',
-      fontSize: 10,
-      fontWeight: 700,
-      cursor: 'pointer',
-      lineHeight: '1.4',
-      textAlign: 'center',
-      fontFamily: 'inherit'
-    }
-  }, c.icon, " ", c.label))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: 10
-    }
-  }, items.map(item => /*#__PURE__*/React.createElement(ShopItem, {
-    key: item.id,
-    item: item,
-    bits: bits,
-    inventory: inventory,
-    equipped: equipped,
-    onBuyItem: onBuyItem,
-    onEquipItem: onEquipItem
-  }))));
-}
 function TabGastos(_ref18) {
   let data = _ref18.data,
     onAddExp = _ref18.onAddExp,
@@ -8881,6 +7977,7 @@ function HomeScreen(_p) {
   const suggestion = !simple && (getSmartSuggestions(data, dp)[0] || null);
   const lvl = getLvl(game.xp || 0),
     prog = getXPProg(game.xp || 0);
+  const nextReq = prog.next ? prog.blocked ? (levelReqs(prog.next.n, data, game).find(r => !r.ok) || {}).label : `${prog.need - prog.cur} XP más` : null;
   const todayStr = now.toISOString().slice(0, 10);
   const missions = getDailyMissions(todayStr);
   const missionsDone = missions.filter(m => (game.completedMissions || {})[`${todayStr}-${m.id}`]).length;
@@ -9017,10 +8114,15 @@ function HomeScreen(_p) {
     onClick: () => _p.onTab('juego'),
     'aria-label': 'Abrir el modo juego'
   }, h('div', {
+    className: 'b-game-hero',
+    dangerouslySetInnerHTML: {
+      __html: heroSVG(lvl.n, customFromEquipped(game.equipped))
+    }
+  }), h('div', {
     className: 'b-game-lv'
   }, h('span', {
     className: 'b-game-n'
-  }, lvl.emoji, ' Nivel ', lvl.n, ' · ', lvl.title), h('span', {
+  }, lvl.emoji, ' ', lvl.title), h('span', {
     className: 'b-game-xp'
   }, '⭐ ', game.xp || 0, ' XP')), h('div', {
     className: 'b-game-t'
@@ -9032,7 +8134,7 @@ function HomeScreen(_p) {
     className: 'b-game-stats'
   }, h('span', null, '🔥 ', game.streak || 0, (game.streak || 0) === 1 ? ' día' : ' días', ' de racha'), h('span', null, '🪙 ', game.bits || 0)), h('div', {
     className: 'b-game-ch'
-  }, h('b', null, '🏆 Misiones de hoy: ', missionsDone, ' de ', missions.length), h('span', null, 'Ver mi personaje, misiones y tienda'))), suggestion && h('button', {
+  }, h('b', null, '🏆 Misiones de hoy: ', missionsDone, ' de ', missions.length), nextReq && h('span', null, 'Para ', prog.next.title, ': ', nextReq))), suggestion && h('button', {
     className: 'b-insight',
     onClick: () => _p.onTab('presupuesto')
   }, h('span', {
@@ -9279,7 +8381,10 @@ function MetasScreen(_p) {
   }, 'La meta recomendada es un mes de tu ingreso.'), h('button', {
     className: 'b-goal-btn',
     onClick: () => _p.onTab('perfil')
-  }, 'Crear mi meta')), h('section', null, h('div', {
+  }, 'Crear mi meta')), h(WealthSection, {
+    data: data,
+    onChange: _p.onUpdate
+  }), h('section', null, h('div', {
     className: 'b-sh'
   }, h('h2', null, 'Salir de deudas')), totalDebt > 0 ? h('div', {
     className: 'b-debt-sum'
@@ -9419,14 +8524,16 @@ function JuegoScreen(_p) {
     back: () => _p.onTab('inicio')
   }), h('h1', {
     className: 'b-title'
-  }, 'Modo juego'), h('div', {
-    className: 'b-legacy'
-  }, h(GameHeroCard, {
+  }, 'Modo juego'), h(GameHeroCard, {
     game: g.game,
-    userName: g.userName
-  }), g.showChest && h(SurpriseChest, {
+    data: g.data
+  }), g.showChest && h('div', {
+    className: 'b-legacy'
+  }, h(SurpriseChest, {
     onOpen: g.onOpenChest
-  }), h(StreakWarning, {
+  })), h('div', {
+    className: 'b-legacy'
+  }, h(StreakWarning, {
     game: g.game,
     todayStr: g.todayStr
   }), h(DailyMissions, {
@@ -9434,17 +8541,21 @@ function JuegoScreen(_p) {
     game: g.game,
     todayStr: g.todayStr,
     onComplete: g.onCompleteMission
-  }), h(NightSummary, {
+  })), h(LevelRoadmap, {
+    game: g.game
+  }), h(TabTienda, {
+    game: g.game,
+    onBuyItem: g.onBuyItem,
+    onEquipItem: g.onEquipItem
+  }), h('div', {
+    className: 'b-legacy'
+  }, h(NightSummary, {
     data: g.data,
     game: g.game,
     todayStr: g.todayStr,
     dp: g.dp
   }), h(AchievementsPanel, {
     game: g.game
-  }), h(TabTienda, {
-    game: g.game,
-    onBuyItem: g.onBuyItem,
-    onEquipItem: g.onEquipItem
   })));
 }
 
@@ -9769,6 +8880,57 @@ function MainApp(_ref22) {
     game = _useState66[0],
     setGame = _useState66[1];
 
+  // Nivel = XP + requisitos reales (ver levelReqs)
+  window.__budgyCap = computeLevelCap(data, game);
+  const curLevelN = getLvl(game.xp).n;
+  useEffect(() => {
+    const seen = game.levelSeen;
+    const max0 = game.maxLevel || 0;
+    const migrate = !game.shopV2;
+    let patch = null,
+      bitsAdd = 0,
+      up = null;
+    if (seen == null) patch = {
+      levelSeen: curLevelN,
+      maxLevel: Math.max(max0, curLevelN)
+    };else if (curLevelN !== seen) {
+      const nm = Math.max(max0, curLevelN);
+      patch = {
+        levelSeen: curLevelN,
+        maxLevel: nm
+      };
+      bitsAdd = 25 * (nm - max0);
+      if (curLevelN > seen) up = LEVELS[curLevelN];
+    }
+    if (!patch && !migrate) return;
+    setGame(prev => {
+      let g = {
+        ...prev,
+        ...(patch || {})
+      };
+      if (migrate && !prev.shopV2) {
+        // Tienda nueva: se reembolsan las compras de la tienda anterior
+        const refund = (prev.inventory || []).reduce((s, id) => s + (OLD_SHOP_PRICES[id] || 0), 0);
+        g = {
+          ...g,
+          bits: (g.bits || 0) + refund,
+          inventory: [],
+          equipped: {},
+          shopV2: true
+        };
+      }
+      g.bits = (g.bits || 0) + bitsAdd;
+      const unlocked = new Set(g.unlockedIds || []);
+      ACHIEVEMENTS.forEach(a => {
+        if (!unlocked.has(a.id) && a.check(g)) unlocked.add(a.id);
+      });
+      g.unlockedIds = [...unlocked];
+      saveLS(GAME_KEY, g);
+      return g;
+    });
+    if (up) setTimeout(() => setLevelUpData(up), 400);
+  }, [curLevelN]);
+
   // Check onboarding
   useEffect(() => {
     const d = loadLS(DATA_KEY);
@@ -9807,10 +8969,6 @@ function MainApp(_ref22) {
       });
       patch.unlockedIds = [...unlocked];
       saveLS(GAME_KEY, patch);
-      if (newLvl.n > prevLvl.n) {
-        patch.bits = (prev.bits || 0) + 25;
-        setTimeout(() => setLevelUpData(newLvl), 300);
-      }
       return patch;
     });
     showXPFloat(amount, getLvl(game.xp).color);
@@ -10247,6 +9405,7 @@ function MainApp(_ref22) {
     game,
     prefs,
     userName,
+    onUpdate: update,
     onTab: goTab,
     onAdd: () => setQuickOpen(true)
   };
@@ -10451,7 +9610,7 @@ function PinScreen(_ref25) {
     className: "pin-logo"
   }, "Budgy"), /*#__PURE__*/React.createElement("div", {
     className: "pin-title"
-  }, step === 'enter' ? `¡Hola${loadLS(NAME_KEY) ? ', ' + loadLS(NAME_KEY) : ''}! 👋` : step === 'create' ? '¡Bienvenido al gremio!' : 'Confirma tu PIN'), /*#__PURE__*/React.createElement("div", {
+  }, step === 'enter' ? `¡Hola${loadLS(NAME_KEY) ? ', ' + loadLS(NAME_KEY) : ''}! 👋` : step === 'create' ? '¡Bienvenido a Budgy!' : 'Confirma tu PIN'), /*#__PURE__*/React.createElement("div", {
     className: "pin-sub"
   }, step === 'enter' ? 'Mete tu PIN para ver tu progreso' : step === 'create' ? '¿Cómo te llamas?' : 'Repite el PIN para confirmarlo'), !hasPIN && step === 'create' && /*#__PURE__*/React.createElement("input", {
     className: "pin-name-inp",
