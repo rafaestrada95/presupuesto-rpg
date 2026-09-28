@@ -2,10 +2,15 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="theme-color" content="#F7F7F5"/>
 <meta name="apple-mobile-web-app-title" content="Budgy"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<link rel="manifest" href="manifest.webmanifest"/>
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"/>
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png"/>
 <title>Budgy</title>
 <style>
 
@@ -718,8 +723,8 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-app .b-check{width:32px;height:32px;border-radius:50%;border:2px solid var(--border);display:grid;place-items:center;color:#fff;font-weight:800;flex:none;text-align:center}
 .b-app .b-check.on{background:var(--emerald);border-color:var(--emerald)}
 .b-chips{display:flex;flex-wrap:wrap;gap:8px}
-.b-app .b-chip{min-height:40px;padding:0 14px;border-radius:var(--r-b);background:var(--surface);font-weight:600;font-size:.86rem}
-.b-app .b-chip.on{background:var(--indigo);color:#fff}
+.b-app .b-chip,.b-sheet .b-chip{min-height:40px;padding:0 14px;border-radius:var(--r-b);background:var(--surface);font-weight:600;font-size:.86rem}
+.b-app .b-chip.on,.b-sheet .b-chip.on{background:var(--indigo);color:#fff}
 .b-in-inline{width:96px;font:inherit;font-weight:700;text-align:right;border:0;border-bottom:2px solid var(--border);background:transparent;color:var(--text);padding:6px 0;outline:none;font-family:var(--font)}
 .b-in-inline:focus{border-color:var(--indigo)}
 
@@ -740,6 +745,18 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-form.flat{background:transparent;border:0;padding:0;margin:0}
 .b-photo{display:flex;align-items:center;justify-content:center;min-height:52px;border:2px dashed var(--border);border-radius:var(--r-b);color:var(--dim);font-weight:600;font-size:.9rem;cursor:pointer;overflow:hidden}
 .b-photo img{max-height:160px;border-radius:var(--r-s)}
+
+/* ── Fase 6: instalar y comentarios ── */
+.b-install{display:flex;gap:14px;align-items:flex-start;background:var(--as);border-radius:var(--r-c);padding:16px}
+.b-install-ic img{width:48px;height:48px;border-radius:12px;display:block;image-rendering:pixelated}
+.b-install b{font-weight:800}
+.b-install p{margin:4px 0 0;font-size:.9rem;color:var(--dim)}
+.b-install .b-steps{margin-top:8px}
+.b-app .b-install .b-secondary{background:var(--indigo);color:#fff}
+.b-app .b-feedback-link{display:block;width:100%;text-align:center;color:var(--muted);font-size:.86rem;font-weight:600;min-height:44px;text-decoration:underline;text-underline-offset:3px}
+.b-textarea.big{min-height:120px;font-size:1rem}
+.b-sheet a.b-primary{text-decoration:none}
+.b-sheet a.b-primary.off{opacity:.4;pointer-events:none}
 </style>
 </head>
 <body>
@@ -780,6 +797,7 @@ function attachBtn(id,fn){var el=document.getElementById(id);if(!el)return;var t
 ['1','2','3','4','5','6','7','8','9','0'].forEach(function(n){attachBtn('b'+n,function(){pinPress(n);});});
 attachBtn('bc',pinClear);
 pinInit();
+if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js').catch(function(){});});}
 
 </script>
 <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
@@ -8300,7 +8318,14 @@ function HomeScreen(_p) {
     className: 'b-insight-t'
   }, suggestion.text), h('span', {
     className: 'b-insight-go'
-  }, 'Ver tu presupuesto'))));
+  }, 'Ver tu presupuesto'))), !prefs.installDismissed && h(InstallCard, {
+    onDismiss: () => _p.setPrefs({
+      installDismissed: true
+    })
+  }), h('button', {
+    className: 'b-feedback-link',
+    onClick: _p.onFeedback
+  }, '¿Algo no se entiende o tienes una idea? Cuéntanos'));
 }
 
 /* ════ MOVIMIENTOS ════ */
@@ -8620,6 +8645,16 @@ function PerfilScreen(_p) {
   }, h('li', null, 'En el navegador toca ', h('b', null, 'Compartir'), ' (iPhone) o el menú ', h('b', null, '⋮'), ' (Android).'), h('li', null, 'Elige ', h('b', null, 'Agregar a pantalla de inicio'), '.')))), h(ReminderSection), h(MyInfo, _p.infoProps), h('section', {
     className: 'b-rows'
   }, h('button', {
+    onClick: _p.onFeedback
+  }, h('div', {
+    className: 'b-m'
+  }, h('div', {
+    className: 'b-n'
+  }, 'Enviar un comentario'), h('div', {
+    className: 'b-d'
+  }, 'Algo no se entiende, una idea o algo que falla')), h('span', {
+    className: 'b-textbtn'
+  }, 'Escribir')), h('button', {
     onClick: _p.onTutorial
   }, h('div', {
     className: 'b-m'
@@ -9611,6 +9646,68 @@ function AdvancedLogger(_p) {
     msg && e('p', { className: 'b-calm', role: 'status' }, e(Icon, { d: IC.check }), msg));
 }
 
+/* ════ FASE 6: Budgy como app y comentarios ════ */
+// Número de WhatsApp que recibe los comentarios (código de país + número, sin "+").
+// Vacío: WhatsApp abre para que la persona elija a quién mandarlo.
+const FEEDBACK_WA = '';
+const isStandalone = () => window.matchMedia && window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+window.addEventListener('beforeinstallprompt', ev => {
+  ev.preventDefault();
+  window.__budgyInstall = ev;
+  window.dispatchEvent(new Event('budgy-install-ready'));
+});
+
+function InstallCard(_p) {
+  const [ready, setReady] = useState(!!window.__budgyInstall);
+  const [steps, setSteps] = useState(false);
+  useEffect(() => {
+    const on = () => setReady(true);
+    window.addEventListener('budgy-install-ready', on);
+    return () => window.removeEventListener('budgy-install-ready', on);
+  }, []);
+  if (isStandalone()) return null;
+  const install = async () => {
+    if (window.__budgyInstall) {
+      window.__budgyInstall.prompt();
+      const choice = await window.__budgyInstall.userChoice.catch(() => null);
+      window.__budgyInstall = null;
+      if (choice && choice.outcome === 'accepted') _p.onDismiss();
+    } else setSteps(true);
+  };
+  return e('section', { className: 'b-install' },
+    e('div', { className: 'b-install-ic', 'aria-hidden': 'true' }, e('img', { src: 'icons/icon-192.png', alt: '' })),
+    e('div', { className: 'b-m' },
+      e('b', null, 'Instala Budgy en tu cel'),
+      e('p', null, 'Ábrela como cualquier app, en pantalla completa y aunque no tengas internet.'),
+      steps || isIOS() && !ready ? e('ol', { className: 'b-steps' },
+        isIOS() ? [e('li', { key: 1 }, 'Toca ', e('b', null, 'Compartir'), ' (el cuadro con la flecha hacia arriba).'), e('li', { key: 2 }, 'Elige ', e('b', null, 'Agregar a pantalla de inicio'), '.'), e('li', { key: 3 }, 'Toca ', e('b', null, 'Agregar'), '.')] :
+          [e('li', { key: 1 }, 'Toca el menú ', e('b', null, '⋮'), ' del navegador.'), e('li', { key: 2 }, 'Elige ', e('b', null, 'Instalar app'), ' o ', e('b', null, 'Agregar a pantalla de inicio'), '.')]) : null,
+      e('div', { className: 'b-notice-btns' },
+        !(isIOS() && !ready) && !steps && e('button', { className: 'b-secondary', onClick: install }, 'Instalar'),
+        e('button', { className: 'b-textbtn', onClick: _p.onDismiss }, 'Ahora no'))));
+}
+
+const SCREEN_NAMES = { inicio: 'Inicio', movs: 'Movimientos', presupuesto: 'Presupuesto', metas: 'Metas', juego: 'Modo juego', perfil: 'Perfil', anotar: 'Anotar gasto' };
+function FeedbackSheet(_p) {
+  const [kind, setKind] = useState('duda');
+  const [screen, setScreen] = useState(_p.screen || 'inicio');
+  const [text, setText] = useState('');
+  const kinds = [['duda', 'Algo no se entiende'], ['idea', 'Tengo una idea'], ['error', 'Algo falla']];
+  const kindLabel = kinds.find(k => k[0] === kind)[1];
+  const device = `${isIOS() ? 'iPhone' : /android/i.test(navigator.userAgent) ? 'Android' : 'Otro'} · ${isStandalone() ? 'app instalada' : 'navegador'} · ${window.innerWidth}px`;
+  const msg = `💬 Budgy · ${kindLabel}\nPantalla: ${SCREEN_NAMES[screen] || screen}\n\n${text.trim()}\n\n(${device})`;
+  const href = (FEEDBACK_WA ? `https://wa.me/${FEEDBACK_WA}` : 'https://wa.me/') + '?text=' + encodeURIComponent(msg);
+  return e(Sheet, { title: 'Cuéntanos', label: 'Enviar un comentario', onClose: _p.onClose },
+    e('div', { className: 'b-wiz-q' }, '¿Qué nos quieres contar?'),
+    e('div', { className: 'b-chips' }, kinds.map(k => e('button', { key: k[0], className: 'b-chip' + (kind === k[0] ? ' on' : ''), onClick: () => setKind(k[0]) }, k[1]))),
+    e('div', { className: 'b-field' }, '¿En qué pantalla?', e('div', { className: 'b-chips' }, ['inicio', 'anotar', 'movs', 'presupuesto', 'metas', 'juego', 'perfil'].map(s => e('button', { key: s, className: 'b-chip' + (screen === s ? ' on' : ''), onClick: () => setScreen(s) }, SCREEN_NAMES[s])))),
+    e('label', { className: 'b-field' }, kind === 'idea' ? 'Tu idea' : kind === 'error' ? '¿Qué pasó?' : '¿Qué no se entiende?',
+      e('textarea', { className: 'b-textarea big', value: text, autoFocus: true, placeholder: kind === 'idea' ? 'Me gustaría que Budgy…' : kind === 'error' ? 'Toqué… y pasó…' : 'No entendí qué significa…', onChange: ev => setText(ev.target.value) })),
+    e('a', { className: 'b-primary' + (text.trim() ? '' : ' off'), href: text.trim() ? href : undefined, target: '_blank', rel: 'noopener', onClick: () => text.trim() && setTimeout(_p.onClose, 400) }, 'Enviar por WhatsApp'),
+    e('p', { className: 'b-note', style: { textAlign: 'center' } }, 'Se abre WhatsApp con tu mensaje listo. Solo toca enviar.'));
+}
+
 function MainApp(_ref22) {
   let onLock = _ref22.onLock;
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -9651,6 +9748,8 @@ function MainApp(_ref22) {
   }, [prefs]);
   const _qs = new URLSearchParams(window.location.search);
   const [quickOpen, setQuickOpen] = useState(isQuickAdd);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const lastTabRef = useRef('inicio');
   const [quickAmount, setQuickAmount] = useState(() => (_qs.get('monto') || '').replace(/[^0-9.]/g, ''));
   const [toast, setToast] = useState(null);
   const saveTimer = useRef(null);
@@ -10269,6 +10368,7 @@ function MainApp(_ref22) {
   const showDeficitWarning = !showOnboarding && (game.deficitStreak || 0) >= 2 && game.deficitWarningDismissedMonth !== monthKey;
   const gameOn = prefs.game && !prefs.simple;
   const goTab = k => {
+    if (tab !== 'perfil') lastTabRef.current = tab;
     setTab(k);
     window.scrollTo(0, 0);
   };
@@ -10285,6 +10385,8 @@ function MainApp(_ref22) {
     game,
     prefs,
     userName,
+    setPrefs: updatePrefs,
+    onFeedback: () => setFeedbackOpen(true),
     onUpdate: update,
     onPatchGame: p => setGame(prev => {
       const g = {
@@ -10405,6 +10507,9 @@ function MainApp(_ref22) {
         onUndo: () => undoQuick(t)
       });
     }
+  }), feedbackOpen && _h(FeedbackSheet, {
+    screen: tab === 'perfil' ? lastTabRef.current : tab,
+    onClose: () => setFeedbackOpen(false)
   }), toast && _h(Toast, {
     toast: toast,
     onDone: () => setToast(null)
