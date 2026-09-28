@@ -695,6 +695,51 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-textarea{font:inherit;font-size:.85rem;min-height:80px;border:1px solid var(--border);border-radius:var(--r-b);padding:10px;background:var(--card);color:var(--text)}
 .b-ticket{max-width:100%;border-radius:var(--r-b)}
 .b-app .b-rows .b-textbtn{min-height:40px}
+
+/* ── Fase 4: Presupuesto ── */
+.b-health{display:flex;align-items:center;gap:16px}
+.b-health .v{font-size:2.8rem;font-weight:800;line-height:1}
+.b-health .l{font-weight:800}
+.b-meter{display:flex;gap:4px;margin:6px 0 4px}
+.b-meter i{width:26px;height:6px;border-radius:99px;background:var(--surface)}
+.b-factors{margin-top:10px}
+.b-tips>div{align-items:flex-start!important;font-size:.93rem}
+.b-tip-ic{font-size:1.2rem;line-height:1.3;width:26px;text-align:center;flex:none}
+.b-verdict{border-radius:var(--r-c);padding:14px 16px;margin-top:14px}
+.b-verdict.ok{background:var(--gs)}
+.b-verdict.no{background:var(--ws)}
+.b-verdict b{display:block}
+.b-verdict p{margin:4px 0 0;font-size:.92rem;color:var(--dim)}
+.b-more-body>*+*{margin-top:12px}
+.b-cmp{display:grid;grid-template-columns:1fr auto auto;gap:8px 16px;font-size:.9rem;align-items:baseline}
+.b-cmp .h{font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.b-cardrow{flex-direction:column;align-items:stretch!important;gap:8px!important}
+.b-cardrow-top{display:flex;justify-content:space-between;gap:10px}
+.b-app .b-check{width:32px;height:32px;border-radius:50%;border:2px solid var(--border);display:grid;place-items:center;color:#fff;font-weight:800;flex:none;text-align:center}
+.b-app .b-check.on{background:var(--emerald);border-color:var(--emerald)}
+.b-chips{display:flex;flex-wrap:wrap;gap:8px}
+.b-app .b-chip{min-height:40px;padding:0 14px;border-radius:var(--r-b);background:var(--surface);font-weight:600;font-size:.86rem}
+.b-app .b-chip.on{background:var(--indigo);color:#fff}
+.b-in-inline{width:96px;font:inherit;font-weight:700;text-align:right;border:0;border-bottom:2px solid var(--border);background:transparent;color:var(--text);padding:6px 0;outline:none;font-family:var(--font)}
+.b-in-inline:focus{border-color:var(--indigo)}
+
+/* ── Fase 5: juego y anotado avanzado ── */
+.b-xp{font-size:.8rem;font-weight:800;color:var(--purple);white-space:nowrap}
+.b-done .b-n{color:var(--muted);text-decoration:line-through}
+.b-ach{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.b-ach-i{display:flex;flex-direction:column;gap:2px;padding:12px;border-radius:var(--r-c);background:var(--surface);opacity:.6}
+.b-ach-i.on{background:var(--ps);opacity:1}
+.b-ach-ic{font-size:1.4rem}
+.b-ach-t{font-weight:700;font-size:.9rem}
+.b-ach-d{font-size:.78rem;color:var(--muted)}
+.b-app .b-chest{display:flex;gap:14px;align-items:center;width:100%;background:var(--mango);color:#18212F;border-radius:var(--r-l);padding:18px 20px}
+.b-chest-ic{font-size:2.2rem;animation:chestBounce 1.5s ease infinite}
+.b-chest.opening .b-chest-ic{animation:none}
+.b-chest b{display:block;font-size:1.05rem}
+.b-chest span span{font-size:.88rem}
+.b-form.flat{background:transparent;border:0;padding:0;margin:0}
+.b-photo{display:flex;align-items:center;justify-content:center;min-height:52px;border:2px dashed var(--border);border-radius:var(--r-b);color:var(--dim);font-weight:600;font-size:.9rem;cursor:pointer;overflow:hidden}
+.b-photo img{max-height:160px;border-radius:var(--r-s)}
 </style>
 </head>
 <body>
@@ -8055,7 +8100,13 @@ function HomeScreen(_p) {
   const monthName = now.toLocaleDateString('es-MX', {
     month: 'long'
   });
-  const attention = _p.upcoming.slice().sort((a, b) => (a.urg.daysLeft ?? 99) - (b.urg.daysLeft ?? 99)).slice(0, simple ? 1 : 2);
+  const monthKeyA = now.toISOString().slice(0, 7);
+  const fixedDue = (data.exps || []).filter(x => x.day && !(data.paidExps || {})[`${x.id}_${monthKeyA}`]).map(x => ({
+    kind: 'exp', id: 'e' + x.id, x, name: x.name, pay: +x.amount || 0, days: +x.day - now.getDate()
+  })).filter(x => x.days >= 0 && x.days <= 3);
+  const attention = [..._p.upcoming.map(d => ({
+    kind: 'debt', id: d.id, d, name: d.name, pay: debtPay(d), days: d.urg.daysLeft ?? 99
+  })), ...fixedDue].sort((a, b) => a.days - b.days).slice(0, simple ? 1 : 3);
   const suggestion = !simple && (getSmartSuggestions(data, dp)[0] || null);
   const lvl = getLvl(game.xp || 0),
     prog = getXPProg(game.xp || 0);
@@ -8151,12 +8202,12 @@ function HomeScreen(_p) {
     onClick: () => _p.onTab('metas')
   }, 'Ver todo')), h('div', {
     className: 'b-rows'
-  }, attention.map(d => {
-    const pay = debtPay(d);
+  }, attention.map(it => {
+    const pay = it.pay;
     return h('div', {
-      key: d.id
+      key: it.id
     }, h(CatIcon, {
-      c: {
+      c: it.kind === 'exp' ? quickCat(FIXED_CAT_IC[+it.x.catId] || 'v6') : {
         fg: 'var(--dim)',
         bg: 'var(--surface)',
         p: IC.card
@@ -8165,13 +8216,18 @@ function HomeScreen(_p) {
       className: 'b-m'
     }, h('div', {
       className: 'b-n'
-    }, pay > 0 ? `Pagar ${fmt(pay)} a ${d.name}` : `Pagar a ${d.name}`), h('div', {
+    }, it.kind === 'exp' ? `Pagar ${it.name}${pay > 0 ? ` (${fmt(pay)})` : ''}` : pay > 0 ? `Pagar ${fmt(pay)} a ${it.name}` : `Pagar a ${it.name}`), h('div', {
       className: 'b-d'
-    }, dueLabel(d.urg.daysLeft))), h('button', {
+    }, dueLabel(it.days))), h('button', {
       className: 'b-secondary',
-      onClick: () => d.type === 'plan' ? _p.onMarkPlan(d.id) : _p.onMarkPaid(d.id, pay)
+      onClick: () => it.kind === 'exp' ? _p.onUpdate({
+        paidExps: {
+          ...(data.paidExps || {}),
+          [`${it.x.id}_${monthKeyA}`]: true
+        }
+      }) : it.d.type === 'plan' ? _p.onMarkPlan(it.d.id) : _p.onMarkPaid(it.d.id, pay)
     }, 'Ya pagué'));
-  }))) : data.debts.length > 0 && h('section', {
+  }))) : (data.debts.length > 0 || (data.exps || []).length > 0) && h('section', {
     className: 'b-calm'
   }, h(Icon, {
     d: IC.check
@@ -8202,7 +8258,7 @@ function HomeScreen(_p) {
     n: cardUsed
   })), cardLimit > 0 && h('div', {
     className: 's'
-  }, 'de tu límite')))), gameOn && _p.showChest && h(SurpriseChest, {
+  }, 'de tu límite')))), gameOn && _p.showChest && h(ChestNative, {
     onOpen: _p.onOpenChest
   }), gameOn && h('button', {
     className: 'b-game',
@@ -8268,16 +8324,12 @@ function MovsScreen(_p) {
   }, `gastados en ${monthName}`), spent.total > 0 && h('div', {
     className: 'b-split'
   }, h('span', null, 'Débito ', h('b', null, fmt(spent.debit))), h('span', null, 'Efectivo ', h('b', null, fmt(spent.cash))), h('span', null, 'Tarjeta ', h('b', null, fmt(spent.card))))), h('section', null, h(More, {
-    title: 'Anotar con foto, descripción o varios a la vez'
-  }, h('div', {
-    className: 'b-legacy'
-  }, h(ExpenseLogger, {
+    title: 'Anotar con más detalle: fecha, nota o foto'
+  }, h(AdvancedLogger, {
     data: data,
-    debts: data.debts,
     onAddCash: _p.onAddCash,
-    onAddCard: _p.onAddCard,
-    quickFocus: false
-  })))), h(HistoryList, {
+    onAddCard: _p.onAddCard
+  }))), h(HistoryList, {
     data: data,
     onUpdate: _p.onUpdate,
     onDelCash: _p.actions.delCash,
@@ -8381,56 +8433,42 @@ function PresupuestoScreen(_p) {
         background: 'var(--sky)'
       }
     })));
-  })), h('section', {
-    className: 'b-legacy'
-  }, h(HealthScore, {
+  })), h(HealthNative, {
     data: data,
-    game: _p.game,
-    dp: dp
-  }), h(SmartSuggestions, {
-    data: data,
-    dp: dp
-  })), h('section', null, h(More, {
-    title: '¿Me alcanza para una compra?'
-  }, h('div', {
-    className: 'b-legacy'
-  }, h(FinancialPlanner, {
-    data: data
-  }))), !simple && h(More, {
-    title: 'Tus próximos 3 meses'
-  }, h('div', {
-    className: 'b-legacy'
-  }, h(CashFlowForecast, {
-    data: data
-  }))), !simple && h(More, {
-    title: 'Este mes contra el anterior'
-  }, h('div', {
-    className: 'b-legacy'
-  }, h(SpendingBreakdown, {
-    data: data
-  }), h(MonthVsMonth, {
+    dp: dp,
     game: _p.game
-  }))), (data.debts || []).some(d => d.type === 'tarjeta') && h(More, {
-    title: 'Tus tarjetas de crédito'
-  }, h('div', {
-    className: 'b-legacy'
-  }, h(CardStatusSection, {
-    debts: data.debts,
-    cardTransactions: data.cardTransactions || []
-  }))), h(More, {
-    title: 'Tus gastos fijos y variables'
-  }, h('div', {
-    className: 'b-legacy'
-  }, h(TabGastos, {
+  }), h(TipsNative, {
     data: data,
-    onAddExp: _p.actions.addExp,
-    onDelExp: _p.actions.delExp,
-    onAddVar: _p.actions.addVar,
-    onDelVar: _p.actions.delVar,
-    onAddCash: _p.actions.addCash,
-    onAddCard: _p.actions.addCard,
-    onToggleVarPaid: _p.actions.toggleVarPaid
-  })))));
+    dp: dp
+  }), h('section', null, h(More, {
+    title: '¿Me alcanza para una compra?'
+  }, h(AffordTool, {
+    data: data
+  })), !simple && h(More, {
+    title: 'Tus próximos 3 meses'
+  }, h(CashFlowNative, {
+    data: data
+  })), !simple && h(More, {
+    title: 'Este mes contra el anterior'
+  }, h(CompareNative, {
+    data: data,
+    game: _p.game
+  })), (data.debts || []).some(d => d.type === 'tarjeta') && h(More, {
+    title: 'Tus tarjetas de crédito'
+  }, h(CardsNative, {
+    data: data
+  })), h(More, {
+    title: 'Tus gastos fijos'
+  }, h(FixedExpenses, {
+    data: data,
+    actions: _p.actions,
+    onUpdate: _p.onUpdate
+  })), h(More, {
+    title: 'Tus gastos variables'
+  }, h(VariableEstimates, {
+    data: data,
+    actions: _p.actions
+  }))));
 }
 
 /* ════ METAS ════ */
@@ -8614,36 +8652,25 @@ function JuegoScreen(_p) {
   }, 'Modo juego'), h(GameHeroCard, {
     game: g.game,
     data: g.data
-  }), g.showChest && h('div', {
-    className: 'b-legacy'
-  }, h(SurpriseChest, {
+  }), g.showChest && h(ChestNative, {
     onOpen: g.onOpenChest
-  })), h('div', {
-    className: 'b-legacy'
-  }, h(StreakWarning, {
+  }), h(MissionsNative, {
     game: g.game,
     todayStr: g.todayStr
-  }), h(DailyMissions, {
+  }), h(DayRecap, {
     data: g.data,
     game: g.game,
     todayStr: g.todayStr,
-    onComplete: g.onCompleteMission
-  })), h(LevelRoadmap, {
+    dp: g.dp
+  }), h(LevelRoadmap, {
     game: g.game
   }), h(TabTienda, {
     game: g.game,
     onBuyItem: g.onBuyItem,
     onEquipItem: g.onEquipItem
-  }), h('div', {
-    className: 'b-legacy'
-  }, h(NightSummary, {
-    data: g.data,
-    game: g.game,
-    todayStr: g.todayStr,
-    dp: g.dp
-  }), h(AchievementsPanel, {
+  }), h(AchievementsNative, {
     game: g.game
-  })));
+  }));
 }
 
 /* ════ ANOTAR (3 toques) ════ */
@@ -9346,6 +9373,244 @@ function MyInfo(_p) {
       msg && e('p', { className: 'b-note', role: 'status' }, msg)));
 }
 
+/* ════ FASE 4: Presupuesto nativo ════ */
+const FIXED_CAT_IC = { 1: 'casa', 2: 'comida', 3: 'v2', 4: 'salud', 5: 'v3', 6: 'casa', 7: 'v5', 8: 'v5' };
+
+function HealthNative(_p) {
+  const data = _p.data, dp = _p.dp, game = _p.game;
+  const score = calcHealthScore(data, game, dp);
+  const st = score >= 80 ? ['Excelente', 'var(--good)', 'var(--emerald)'] : score >= 60 ? ['Vas bien', 'var(--good)', 'var(--emerald)'] : score >= 40 ? ['Hay cosas por mejorar', 'var(--warn)', 'var(--mango)'] : ['Necesita atención', 'var(--danger)', 'var(--danger)'];
+  const goal = +data.emerGoal || 0;
+  const emerPct = goal > 0 ? Math.min(100, Math.round((+data.emerSaved || 0) / goal * 100)) : 0;
+  const urgent = (data.debts || []).filter(d => { const u = calcUrgency(d); return u.key === 'critical' || u.key === 'danger'; }).length;
+  const f = [
+    [dp.remaining >= 0, dp.remaining >= 0 ? 'Tu quincena va en verde' : 'Esta quincena sale más de lo que entra'],
+    [urgent === 0, urgent === 0 ? 'Sin pagos urgentes' : `${urgent} ${urgent === 1 ? 'pago urgente' : 'pagos urgentes'}`],
+    [emerPct >= 50, goal > 0 ? `Fondo de emergencia al ${emerPct}%` : 'Todavía no tienes fondo de emergencia'],
+    [(game.streak || 0) >= 3, `Constancia: ${game.streak || 0} ${(game.streak || 0) === 1 ? 'día' : 'días'} seguidos usando Budgy`]
+  ];
+  return e('section', null,
+    e('div', { className: 'b-health' }, e('div', { className: 'v b-num' }, score), e('div', null,
+      e('div', { className: 'l', style: { color: st[1] } }, st[0]),
+      e('div', { className: 'b-meter', 'aria-hidden': 'true' }, [20, 40, 60, 80, 100].map(t => e('i', { key: t, style: score >= t - 19 ? { background: st[2] } : null }))),
+      e('div', { className: 'b-d' }, 'Tu salud financiera, de 0 a 100'))),
+    e('div', { className: 'b-factors' }, f.map((x, i) => e('div', { key: i, className: 'b-req' + (x[0] ? ' ok' : '') }, e('span', { className: 'b-req-dot' }, x[0] ? '✓' : ''), e('span', { className: 'b-req-l' }, x[1])))));
+}
+function TipsNative(_p) {
+  const tips = getSmartSuggestions(_p.data, _p.dp);
+  if (!tips.length) return null;
+  return e('section', null, e('div', { className: 'b-sh' }, e('h2', null, 'Qué te recomienda Budgy')),
+    e('div', { className: 'b-rows b-tips' }, tips.map((t, i) => e('div', { key: i }, e('span', { className: 'b-tip-ic', 'aria-hidden': 'true' }, t.icon), e('div', { className: 'b-m' }, t.text)))));
+}
+function AffordTool(_p) {
+  const data = _p.data;
+  const [amt, setAmt] = useState('');
+  const [months, setMonths] = useState(1);
+  const [extra, setExtra] = useState('');
+  const monthly = getMonthlySurplus(data);
+  const yearly = getYearlyProjection(data);
+  const r = +amt > 0 ? canAfford(data, +amt, months) : null;
+  const need = r && !r.ok && monthly > 0 ? Math.ceil(-r.diff / monthly) : null;
+  const goal = +data.emerGoal || 0, saved = +data.emerSaved || 0;
+  const rem = Math.max(0, goal - saved);
+  const per = monthly + (+extra || 0);
+  return e(React.Fragment, null,
+    e('div', { className: 'b-strip' },
+      e('div', null, e('div', { className: 'k' }, 'Te sobra al mes'), e('div', { className: 'v' }, h(Money, { n: monthly }))),
+      e('div', null, e('div', { className: 'k' }, 'En un año'), e('div', { className: 'v' }, h(Money, { n: yearly })))),
+    e(Field, { label: '¿Cuánto cuesta lo que quieres?', value: amt, ph: '$0', onChange: setAmt }),
+    e('div', { className: 'b-field' }, '¿Para cuándo lo quieres?', e('div', { className: 'b-seg' }, [[1, 'Este mes'], [3, '3 meses'], [6, '6 meses'], [12, '1 año']].map(o => e('button', { key: o[0], className: months === o[0] ? 'on' : '', onClick: () => setMonths(o[0]) }, o[1])))),
+    r && e('div', { className: 'b-verdict ' + (r.ok ? 'ok' : 'no') },
+      e('b', null, r.ok ? 'Sí te alcanza' : 'Todavía no te alcanza'),
+      e('p', null, r.ok ? `Después de comprarlo te quedarían ${fmt(r.diff)} sin afectar tus pagos.` : `Te faltarían ${fmt(-r.diff)}.` + (need && need > 0 ? ` Con lo que te sobra al mes, lo tendrías en unos ${monthsTxt(months + need)}.` : ' Primero hay que liberar dinero cada mes.'))),
+    goal > 0 && e(More, { title: '¿Cuándo completo mi fondo para emergencias?' },
+      rem <= 0 ? e('p', { className: 'b-note good' }, '¡Ya lo completaste!') : e(React.Fragment, null,
+        e('p', { className: 'b-note', style: { marginTop: 0 } }, `Te faltan ${fmt(rem)}.`),
+        e(Field, { label: 'Si aparto extra cada mes', value: extra, ph: '$0', onChange: setExtra }),
+        e('p', { className: 'b-note' + (per > 0 ? ' good' : '') }, per > 0 ? `Lo completas en ${monthsTxt(Math.ceil(rem / per))}.` : 'Con lo que te sobra hoy no alcanza para ahorrar. Aparta aunque sea un poco extra.'))));
+}
+function CashFlowNative(_p) {
+  const months = getCashFlow(_p.data);
+  return e('div', { className: 'b-rows' }, months.map((m, i) => e('div', { key: i },
+    e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, (m.name.charAt(0).toUpperCase() + m.name.slice(1)) + (i === 0 ? ' (este mes)' : '')),
+      e('div', { className: 'b-d' }, `Entra ${fmt(m.income)} · sale ${fmt(m.out)}`)),
+    e('span', { className: 'b-n b-num', style: { color: m.net < 0 ? 'var(--danger)' : 'var(--good)' } }, (m.net >= 0 ? '+' : '−') + fmt(Math.abs(m.net))))));
+}
+function CompareNative(_p) {
+  const data = _p.data, game = _p.game;
+  const now = new Date();
+  const cur = getMonthlySpending(data, now.toISOString().slice(0, 7));
+  const prev = getMonthlySpending(data, new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 7));
+  const diff = cur.total - prev.total;
+  const pm = new Date(now.getFullYear(), now.getMonth() - 1, 1).toLocaleDateString('es-MX', { month: 'long' });
+  const rows = [['Gasto registrado', prev.total, cur.total, true], ['Con débito', prev.debit, cur.debit, true], ['En efectivo', prev.cash, cur.cash, true], ['Con tarjeta', prev.card, cur.card, true],
+    ['Días anotando', game.lastMonthLogs || 0, game.thisMonthLogs || 0, false], ['Días dentro de presupuesto', game.lastMonthBudgetDays || 0, game.thisMonthBudgetDays || 0, false]];
+  return e(React.Fragment, null,
+    prev.total > 0 && e('p', { className: 'b-note', style: { marginTop: 0 } }, diff <= 0 ? `Llevas ${fmt(-diff)} menos que todo ${pm}.` : `Llevas ${fmt(diff)} más que todo ${pm}. El mes aún no termina.`),
+    e('div', { className: 'b-cmp' }, e('span', { className: 'h' }, ''), e('span', { className: 'h' }, pm), e('span', { className: 'h' }, 'Este mes'),
+      rows.map(r => [e('span', { key: r[0] + 'a' }, r[0]), e('span', { key: r[0] + 'b', className: 'b-num' }, r[3] ? fmt(r[1]) : r[1]), e('span', { key: r[0] + 'c', className: 'b-num', style: { fontWeight: 700 } }, r[3] ? fmt(r[2]) : r[2])])));
+}
+function CardsNative(_p) {
+  const cards = (_p.data.debts || []).filter(d => d.type === 'tarjeta');
+  return e('div', { className: 'b-rows' }, cards.map(c => {
+    const info = getCardInfo(c, _p.data.cardTransactions || []);
+    const used = (+c.balance || 0) + info.cycleSpend;
+    const lim = +c.creditLimit || 0;
+    const pct = lim > 0 ? Math.min(100, Math.round(used / lim * 100)) : null;
+    return e('div', { key: c.id, className: 'b-cardrow' },
+      e('div', { className: 'b-cardrow-top' }, e('span', { className: 'b-n' }, c.name), e('span', { className: 'b-n b-num' }, fmt(used))),
+      pct != null && e('span', { className: 'b-track sm' }, e('i', { style: { width: pct + '%', background: pct >= 85 ? 'var(--danger)' : pct >= 60 ? 'var(--mango)' : 'var(--indigo)' } })),
+      e('div', { className: 'b-d' }, [pct != null ? `Usas ${pct}% de tu límite de ${fmt(lim)}` : null, info.cycleSpend > 0 ? `${fmt(info.cycleSpend)} en este corte` : null, info.daysUntilCut != null ? `corte en ${info.daysUntilCut} días` : null, info.daysUntilPay != null ? `pago en ${info.daysUntilPay} días` : null].filter(Boolean).join(' · ')));
+  }));
+}
+function FixedExpenses(_p) {
+  const data = _p.data, a = _p.actions;
+  const month = new Date().toISOString().slice(0, 7);
+  const [f, setF] = useState(null);
+  const list = (data.exps || []).slice().sort((x, y) => (+x.day || 99) - (+y.day || 99));
+  const total = list.reduce((s, x) => s + (+x.amount || 0), 0);
+  const togglePaid = x => _p.onUpdate({ paidExps: { ...(data.paidExps || {}), [`${x.id}_${month}`]: !(data.paidExps || {})[`${x.id}_${month}`] } });
+  return e(React.Fragment, null,
+    e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Lo que pagas cada mes: renta, luz, internet, suscripciones. Budgy lo aparta de la quincena en que cae.'),
+    e('div', { className: 'b-rows' }, list.map(x => {
+      const paid = !!(data.paidExps || {})[`${x.id}_${month}`];
+      const cat = CATS.find(c => c.id === +x.catId);
+      return e('div', { key: x.id },
+        e(CatIcon, { c: quickCat(FIXED_CAT_IC[+x.catId] || 'v6') }),
+        e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, x.name), e('div', { className: 'b-d' }, [x.day ? `Día ${x.day}` : 'Sin día', cat && cat.n].filter(Boolean).join(' · '), paid ? e('span', { className: 'b-ok' }, ' · ✓ pagado') : '')),
+        e('span', { className: 'b-n b-num' }, fmt(x.amount)),
+        e('button', { className: 'b-check' + (paid ? ' on' : ''), 'aria-label': paid ? 'Marcar como no pagado' : 'Marcar como pagado este mes', onClick: () => togglePaid(x) }, paid ? '✓' : ''));
+    })),
+    list.length > 0 && e('div', { className: 'b-kv strong' }, e('span', null, 'Total al mes'), e('span', { className: 'b-num' }, fmt(total))),
+    f ? e('div', { className: 'b-form' },
+      e(Field, { label: '¿Qué pagas?', text: true, value: f.name, ph: 'Ej. Renta, luz, Netflix', onChange: v => setF({ ...f, name: v }) }),
+      e('div', { className: 'b-grid2' }, e(Field, { label: '¿Cuánto?', value: f.amount, ph: '$0', onChange: v => setF({ ...f, amount: v }) }),
+        e(Field, { label: '¿Qué día?', value: f.day, ph: 'Ej. 5', onChange: v => setF({ ...f, day: v.replace(/\D/g, '').slice(0, 2) }) })),
+      e('div', { className: 'b-field' }, 'Tipo', e('div', { className: 'b-chips' }, CATS.map(c => e('button', { key: c.id, className: 'b-chip' + (f.catId === c.id ? ' on' : ''), onClick: () => setF({ ...f, catId: c.id }) }, c.n)))),
+      e('div', { className: 'b-form-btns' }, e('button', { className: 'b-secondary', onClick: () => setF(null) }, 'Cancelar'),
+        e('button', { className: 'b-primary sm', disabled: !f.name || !(+f.amount > 0), onClick: () => { if (a.addExp(f)) setF(null); } }, 'Guardar')))
+      : e('button', { className: 'b-primary ghost', onClick: () => setF({ name: '', amount: '', day: '', catId: 1 }) }, 'Agregar gasto fijo'),
+    list.length > 0 && e(More, { title: 'Quitar un gasto fijo' }, e('div', { className: 'b-rows' }, list.map(x => e('div', { key: x.id }, e('div', { className: 'b-m' }, x.name), e(ConfirmDelete, { label: 'Quitar', onYes: () => a.delExp(x.id) }))))));
+}
+function VariableEstimates(_p) {
+  const data = _p.data, a = _p.actions;
+  const total = (data.varExps || []).reduce((s, x) => s + (+x.amount || 0), 0);
+  return e(React.Fragment, null,
+    e('p', { className: 'b-note', style: { marginTop: 0 } }, '¿Cuánto gastas más o menos al mes en cada cosa? Budgy aparta la mitad en cada quincena.'),
+    e('div', { className: 'b-rows' }, VAR_CATS.map(c => {
+      const cur = (data.varExps || []).find(x => x.catId === c.id);
+      return e('div', { key: c.id },
+        e(CatIcon, { c: quickCat(c.id) || quickCat('v6') }),
+        e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, c.n)),
+        e('input', {
+          className: 'b-in-inline', inputMode: 'decimal', placeholder: '$0', 'aria-label': `Gasto estimado al mes en ${c.n}`,
+          defaultValue: cur ? cur.amount : '',
+          onBlur: ev => { const v = ev.target.value.replace(/[^0-9.]/g, ''); if (+v > 0) a.addVar({ catId: c.id, amount: v });else if (cur) a.delVar(cur.id); }
+        }));
+    })),
+    e('div', { className: 'b-kv strong' }, e('span', null, 'Total al mes'), e('span', { className: 'b-num' }, fmt(total))));
+}
+
+/* ════ FASE 5: juego y anotado avanzado nativos ════ */
+function MissionsNative(_p) {
+  const game = _p.game, today = _p.todayStr;
+  const missions = getDailyMissions(today);
+  const done = missions.filter(m => (game.completedMissions || {})[`${today}-${m.id}`]).length;
+  const now = new Date(), mid = new Date(now);
+  mid.setHours(24, 0, 0, 0);
+  const left = mid - now;
+  return e('section', null,
+    e('div', { className: 'b-sh' }, e('h2', null, '🏆 Misiones de hoy'), e('span', { className: 'b-d' }, done === missions.length ? '¡Completas!' : `Se renuevan en ${Math.floor(left / 36e5)} h ${Math.floor(left % 36e5 / 6e4)} min`)),
+    e('div', { className: 'b-rows' }, missions.map(m => {
+      const ok = !!(game.completedMissions || {})[`${today}-${m.id}`];
+      return e('div', { key: m.id, className: ok ? 'b-done' : '' },
+        e('span', { className: 'b-check' + (ok ? ' on' : ''), 'aria-hidden': 'true' }, ok ? '✓' : ''),
+        e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, m.icon, ' ', m.title), e('div', { className: 'b-d' }, m.desc)),
+        e('span', { className: 'b-xp' }, '+', m.xp, ' XP'));
+    })));
+}
+function DayRecap(_p) {
+  const data = _p.data, game = _p.game, today = _p.todayStr;
+  if (new Date().getHours() < 20) return null;
+  const logs = [...(data.cashTransactions || []), ...(data.cardTransactions || [])].filter(t => t.date === today);
+  if (!logs.length) return null;
+  const missions = getDailyMissions(today);
+  const done = missions.filter(m => (game.completedMissions || {})[`${today}-${m.id}`]).length;
+  return e('section', null, e('div', { className: 'b-sh' }, e('h2', null, '🌙 Así te fue hoy')),
+    e('div', { className: 'b-strip' },
+      e('div', null, e('div', { className: 'k' }, 'Gastos anotados'), e('div', { className: 'v' }, logs.length)),
+      e('div', null, e('div', { className: 'k' }, 'XP ganada'), e('div', { className: 'v' }, '+', game.todayDate === today ? game.todayXP || 0 : 0)),
+      e('div', null, e('div', { className: 'k' }, 'Misiones'), e('div', { className: 'v' }, done, '/', missions.length))),
+    e('p', { className: 'b-note' + (_p.dp.remaining >= 0 ? ' good' : ' warn') }, _p.dp.remaining >= 0 ? 'Cierras el día en verde. Así se construye.' : 'Hoy te pasaste un poco. Mañana es otra oportunidad.'));
+}
+function AchievementsNative(_p) {
+  const got = new Set(_p.game.unlockedIds || []);
+  return e('section', null,
+    e('div', { className: 'b-sh' }, e('h2', null, '🏅 Logros'), e('span', { className: 'b-d' }, `${ACHIEVEMENTS.filter(a => got.has(a.id)).length} de ${ACHIEVEMENTS.length}`)),
+    e('div', { className: 'b-ach' }, ACHIEVEMENTS.map(a => e('div', { key: a.id, className: 'b-ach-i' + (got.has(a.id) ? ' on' : '') },
+      e('span', { className: 'b-ach-ic', 'aria-hidden': 'true' }, got.has(a.id) ? a.icon : '🔒'),
+      e('span', { className: 'b-ach-t' }, a.title),
+      e('span', { className: 'b-ach-d' }, a.desc)))));
+}
+function ChestNative(_p) {
+  const [opening, setOpening] = useState(false);
+  return e('button', {
+    className: 'b-chest' + (opening ? ' opening' : ''),
+    onClick: () => { if (opening) return; setOpening(true); setTimeout(_p.onOpen, 600); }
+  }, e('span', { className: 'b-chest-ic', 'aria-hidden': 'true' }, opening ? '✨' : '🎁'),
+    e('span', null, e('b', null, 'Cofre sorpresa'), e('span', null, opening ? 'Abriendo…' : 'Lo ganaste por anotar seguido. Tócalo para abrirlo.')));
+}
+
+/* ── Anotar con más detalle: descripción, fecha y foto del ticket ── */
+function AdvancedLogger(_p) {
+  const data = _p.data;
+  const cards = (data.debts || []).filter(d => d.type === 'tarjeta');
+  const today = new Date().toISOString().slice(0, 10);
+  const blank = { amount: '', desc: '', cat: '', method: 'debit', cardId: cards[0] ? cards[0].id : '', date: today, photo: '' };
+  const [f, setF] = useState(blank);
+  const [msg, setMsg] = useState('');
+  const onPhoto = ev => {
+    const file = ev.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = re => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 400;
+        let w = img.width, hh = img.height;
+        if (w > hh && w > MAX) { hh = Math.round(hh * MAX / w); w = MAX; } else if (hh > MAX) { w = Math.round(w * MAX / hh); hh = MAX; }
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = hh;
+        cv.getContext('2d').drawImage(img, 0, 0, w, hh);
+        setF(prev => ({ ...prev, photo: cv.toDataURL('image/jpeg', 0.5) }));
+      };
+      img.src = re.target.result;
+    };
+    reader.readAsDataURL(file);
+    ev.target.value = '';
+  };
+  const save = () => {
+    const n = +f.amount;
+    if (!n) return;
+    const c = quickCat(f.cat);
+    const base = { amount: n, desc: f.desc || (c ? c.n : 'Gasto'), date: f.date || today, time: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }), cat: f.cat || undefined, photo: f.photo || undefined };
+    if (f.method === 'card') _p.onAddCard({ ...base, cardId: f.cardId || (cards[0] && cards[0].id) || '' });else _p.onAddCash({ ...base, method: f.method });
+    setMsg(`Guardado: ${fmt(n)}${f.date !== today ? ' el ' + fmtDate(f.date) : ''}.`);
+    setF({ ...blank, method: f.method, cardId: f.cardId });
+  };
+  return e('div', { className: 'b-form flat' },
+    e('div', { className: 'b-grid2' },
+      e(Field, { label: 'Monto', value: f.amount, ph: '$0', onChange: v => setF({ ...f, amount: v }) }),
+      e(Field, { label: 'Fecha', type: 'date', value: f.date, onChange: v => setF({ ...f, date: v || today }) })),
+    e(Field, { label: '¿En qué fue?', text: true, value: f.desc, ph: 'Ej. Comida con la familia', onChange: v => setF({ ...f, desc: v }) }),
+    e('div', { className: 'b-field' }, 'Categoría', e('div', { className: 'b-chips' }, QUICK_CATS.map(c => e('button', { key: c.id, className: 'b-chip' + (f.cat === c.id ? ' on' : ''), onClick: () => setF({ ...f, cat: f.cat === c.id ? '' : c.id }) }, c.n)))),
+    e('div', { className: 'b-field' }, '¿Cómo pagaste?', e('div', { className: 'b-seg' }, [['cash', 'Efectivo'], ['debit', 'Débito'], ['card', 'Tarjeta']].filter(m => m[0] !== 'card' || cards.length).map(m => e('button', { key: m[0], className: f.method === m[0] ? 'on' : '', onClick: () => setF({ ...f, method: m[0] }) }, m[1])))),
+    f.method === 'card' && cards.length > 1 && e('div', { className: 'b-chips' }, cards.map(c => e('button', { key: c.id, className: 'b-chip' + (f.cardId === c.id ? ' on' : ''), onClick: () => setF({ ...f, cardId: c.id }) }, c.name))),
+    e('label', { className: 'b-photo' }, f.photo ? e('img', { src: f.photo, alt: 'Foto del ticket' }) : '📷 Agregar foto del ticket (opcional)', e('input', { type: 'file', accept: 'image/*', onChange: onPhoto, hidden: true })),
+    e('button', { className: 'b-primary', disabled: !(+f.amount > 0), onClick: save }, 'Guardar gasto'),
+    msg && e('p', { className: 'b-calm', role: 'status' }, e(Icon, { d: IC.check }), msg));
+}
+
 function MainApp(_ref22) {
   let onLock = _ref22.onLock;
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -9835,6 +10100,12 @@ function MainApp(_ref22) {
       })()
     });
   }, [data.debts, data.cardPayments, update]);
+  // Las misiones del día se revisan solas, estés en la pantalla que estés
+  useEffect(() => {
+    getDailyMissions(todayStr).forEach(m => {
+      if (!(game.completedMissions || {})[`${todayStr}-${m.id}`] && checkMission(m.id, data, game, todayStr)) completeMission(m.id, m.xp);
+    });
+  }, [data, game]);
   const actions = {
     addExp: ef => {
       if (!ef.name || !ef.amount) return false;
