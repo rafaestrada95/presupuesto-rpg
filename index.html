@@ -664,6 +664,37 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-legacy .exp-row,.b-legacy .log-item,.b-legacy .suggestion-row{background:var(--card);border:0;border-radius:12px}
 .b-legacy .pri-card,.b-legacy .cc-card{border-radius:16px}
 .b-legacy .pbar,.b-legacy .cc-bar-bg{border-radius:99px}
+
+/* ── Fase 3: deudas, historial, mi información ── */
+.b-sheet .b-secondary{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border-radius:var(--r-b);background:var(--surface);font-weight:600;font-size:.9rem;white-space:nowrap}
+.b-sheet .b-secondary.danger,.b-textbtn.danger{color:var(--danger)!important}
+.b-in.sm{font-size:1.2rem;font-weight:700}
+.b-field-help{font-size:.82rem;font-weight:500;color:var(--muted)}
+.b-confirm{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.88rem;font-weight:600}
+.b-debt-head{display:flex;gap:14px;align-items:center}
+.b-debt-head .b-wiz-q{font-size:1.3rem}
+.b-dots{display:flex;flex-wrap:wrap;gap:5px}
+.b-dots i{width:14px;height:14px;border-radius:50%;background:var(--surface);border:1px solid var(--border)}
+.b-dots i.on{background:var(--emerald);border-color:var(--emerald)}
+.b-paid{display:flex;align-items:center;gap:10px;color:var(--good);font-weight:700;background:var(--gs);border-radius:var(--r-b);padding:12px 14px}
+.b-paid span{flex:1}
+.b-payrow{display:flex;flex-direction:column;gap:12px}
+.b-insight-box{background:var(--bs);border-radius:var(--r-c);padding:14px 16px}
+.b-insight-box b{display:block}
+.b-insight-box p{margin:4px 0 0;font-size:.9rem;color:var(--dim)}
+.b-note.good{color:var(--good);font-weight:700}
+.b-months{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;text-align:center;font-size:.76rem;color:var(--muted);font-weight:600}
+.b-months i{display:grid;place-items:center;width:28px;height:28px;margin:0 auto 4px;border-radius:50%;background:var(--surface);font-style:normal;color:#fff;font-weight:800}
+.b-months .on i{background:var(--emerald)}
+.b-sheet-foot{display:flex;justify-content:center;padding-top:6px;border-top:1px solid var(--border)}
+.b-first{font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.b-ok{color:var(--good);font-weight:700}
+.b-rows>button .b-m{text-align:left}
+.b-day{font-size:.78rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-top:20px}
+.b-grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.b-textarea{font:inherit;font-size:.85rem;min-height:80px;border:1px solid var(--border);border-radius:var(--r-b);padding:10px;background:var(--card);color:var(--text)}
+.b-ticket{max-width:100%;border-radius:var(--r-b)}
+.b-app .b-rows .b-textbtn{min-height:40px}
 </style>
 </head>
 <body>
@@ -8246,14 +8277,12 @@ function MovsScreen(_p) {
     onAddCash: _p.onAddCash,
     onAddCard: _p.onAddCard,
     quickFocus: false
-  })))), h('section', {
-    className: 'b-legacy'
-  }, h(TabHistorial, {
+  })))), h(HistoryList, {
     data: data,
+    onUpdate: _p.onUpdate,
     onDelCash: _p.actions.delCash,
-    onDelCard: _p.actions.delCard,
-    onEditCash: _p.actions.editCash
-  })));
+    onDelCard: _p.actions.delCard
+  }));
 }
 
 /* ════ PRESUPUESTO ════ */
@@ -8407,8 +8436,6 @@ function PresupuestoScreen(_p) {
 /* ════ METAS ════ */
 function MetasScreen(_p) {
   const data = _p.data;
-  const [adding, setAdding] = useState(false);
-  const [added, setAdded] = useState('');
   const goal = +data.emerGoal || 0,
     saved = +data.emerSaved || 0;
   const pct = goal > 0 ? Math.min(100, Math.round(saved / goal * 100)) : 0;
@@ -8462,32 +8489,15 @@ function MetasScreen(_p) {
     className: 'b-cap'
   }, 'por pagar en total. Budgy las ordena para que pagues primero la que más te conviene.')) : h('p', {
     className: 'b-note'
-  }, 'No tienes deudas registradas. Si debes algo, agrégala y Budgy te arma el plan.'), added && h('p', {
-    className: 'b-calm',
-    style: {
-      marginTop: 12
-    }
-  }, h(Icon, {
-    d: IC.check
-  }), `Listo: agregamos “${added}” a tu plan.`), h('button', {
-    className: 'b-primary ghost',
-    onClick: () => setAdding(true)
-  }, h(Icon, {
-    d: IC.plus,
-    w: 2.4
-  }), 'Agregar una deuda'), h('div', {
-    className: 'b-legacy'
-  }, h(TabDeudas, {
-    ..._p.debtProps,
-    hideAddForm: true
-  })), adding && h(AddDebtSheet, {
-    onAddDebt: _p.debtProps.onAddDebt,
-    onClose: () => setAdding(false),
-    onDone: name => {
-      setAdding(false);
-      setAdded(name);
-    }
-  })));
+  }, 'No tienes deudas registradas. Si debes algo, agrégala y Budgy te arma el plan.'), h(DebtsSection, {
+    data: data,
+    sorted: _p.debtProps.sorted,
+    actions: _p.debtProps
+  })), h(LoansSection, {
+    data: data,
+    onAddLoan: _p.debtProps.onAddLoan,
+    onDelLoan: _p.debtProps.onDelLoan
+  }));
 }
 
 /* ════ PERFIL ════ */
@@ -8569,13 +8579,7 @@ function PerfilScreen(_p) {
     title: 'Botón en tu pantalla de inicio'
   }, h('ol', {
     className: 'b-steps'
-  }, h('li', null, 'En el navegador toca ', h('b', null, 'Compartir'), ' (iPhone) o el menú ', h('b', null, '⋮'), ' (Android).'), h('li', null, 'Elige ', h('b', null, 'Agregar a pantalla de inicio'), '.')))), h(ReminderSection), h('section', null, h('div', {
-    className: 'b-sh'
-  }, h('h2', null, 'Mi información')), h('p', {
-    className: 'b-note'
-  }, 'Tu quincena, tus saldos, ingresos extra, tu fondo para emergencias y tu respaldo.'), h('div', {
-    className: 'b-legacy'
-  }, h(TabInfo, _p.infoProps))), h('section', {
+  }, h('li', null, 'En el navegador toca ', h('b', null, 'Compartir'), ' (iPhone) o el menú ', h('b', null, '⋮'), ' (Android).'), h('li', null, 'Elige ', h('b', null, 'Agregar a pantalla de inicio'), '.')))), h(ReminderSection), h(MyInfo, _p.infoProps), h('section', {
     className: 'b-rows'
   }, h('button', {
     onClick: _p.onTutorial
@@ -9044,6 +9048,303 @@ function ReminderSection() {
       h('a', { className: 'b-secondary', href: gcal, target: '_blank', rel: 'noopener' }, 'Usar Google Calendar (Android)')));
 }
 
+
+/* ════ FASE 3: deudas, historial y mi información en el diseño de Budgy ════ */
+const e = React.createElement;
+const debtKind = t => DEBT_KINDS.find(k => k.key === t) || DEBT_KINDS[0];
+const debtBalance = (d, cardTx) => d.type === 'plan' ? getPlanInfo(d).remainingAmount : d.type === 'tarjeta' ? +(d.balance || 0) + getCardInfo(d, cardTx || []).cycleSpend : +(d.balance || 0);
+const monthsTxt = m => m >= 12 ? `${Math.floor(m / 12)} ${Math.floor(m / 12) === 1 ? 'año' : 'años'}${m % 12 ? ` y ${m % 12} ${m % 12 === 1 ? 'mes' : 'meses'}` : ''}` : `${m} ${m === 1 ? 'mes' : 'meses'}`;
+
+function Sheet(_p) {
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    const k = ev => { if (ev.key === 'Escape') _p.onClose(); };
+    document.addEventListener('keydown', k);
+    return () => { document.body.style.overflow = ''; document.removeEventListener('keydown', k); };
+  }, []);
+  return e(React.Fragment, null, e('div', { className: 'b-scrim', onClick: _p.onClose }), e('div', {
+    className: 'b-sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': _p.label
+  }, e('div', { className: 'b-sheet-in' },
+    e('div', { className: 'b-grab' }),
+    e('div', { className: 'b-sheet-h' }, e('span', null, _p.title), e('button', { className: 'b-textbtn', onClick: _p.onClose }, 'Cerrar')),
+    _p.children)));
+}
+function Field(_p) {
+  return e('label', { className: 'b-field' }, _p.label, e('input', {
+    className: 'b-in' + (_p.text ? ' text' : ' sm'),
+    value: _p.value ?? '',
+    placeholder: _p.ph,
+    inputMode: _p.text ? undefined : 'decimal',
+    type: _p.type || 'text',
+    autoComplete: 'off',
+    onChange: ev => _p.onChange(_p.text || _p.type === 'date' ? ev.target.value : ev.target.value.replace(/[^0-9.]/g, ''))
+  }), _p.help && e('span', { className: 'b-field-help' }, _p.help));
+}
+function ConfirmDelete(_p) {
+  const [sure, setSure] = useState(false);
+  return sure ? e('div', { className: 'b-confirm' }, e('span', null, _p.question || '¿Seguro? No se puede deshacer.'),
+    e('button', { className: 'b-secondary', onClick: () => setSure(false) }, 'No'),
+    e('button', { className: 'b-secondary danger', onClick: _p.onYes }, 'Sí, borrar')) :
+    e('button', { className: 'b-textbtn danger', onClick: () => setSure(true) }, _p.label || 'Borrar');
+}
+
+/* ── Deudas ── */
+function DebtSheet(_p) {
+  const d = _p.d, a = _p.actions;
+  const month = new Date().toISOString().slice(0, 7);
+  const paidThisMonth = (d.monthlyPayments || []).some(p => p.month === month);
+  const pay = debtPay(d);
+  const bal = debtBalance(d, _p.cardTx);
+  const plan = d.type === 'plan' ? getPlanInfo(d) : null;
+  const [amt, setAmt] = useState(String(pay || ''));
+  const [extra, setExtra] = useState('');
+  const [ef, setEf] = useState({
+    name: d.name || '', balance: String(d.balance ?? ''), pay: String(pay || ''), dueDay: String(d.dueDay || ''),
+    paidPayments: String(d.paidPayments || ''), totalPayments: String(d.totalPayments || ''), interestRate: String(d.interestRate || '')
+  });
+  const interest = getDebtInterestCost(d);
+  const payoff = (d.type === 'tarjeta' || d.type === 'prestamo') && +d.interestRate > 0 ? getPayoffProjection(d.balance, pay, d.interestRate) : null;
+  const extraPayoff = payoff && +extra > 0 ? getPayoffProjection(+(d.balance || 0), pay + +extra, +(d.interestRate || 0)) : null;
+  const saveEdit = () => {
+    const patch = { name: ef.name || d.name, dueDay: ef.dueDay ? +ef.dueDay : d.dueDay };
+    if (d.type === 'plan') {
+      patch.paymentAmount = +ef.pay || d.paymentAmount;
+      patch.paidPayments = ef.paidPayments !== '' ? +ef.paidPayments : d.paidPayments;
+      patch.totalPayments = +ef.totalPayments || d.totalPayments;
+    } else {
+      patch.balance = +ef.balance || 0;
+      if (d.type === 'tarjeta') patch.minPayment = +ef.pay || d.minPayment;
+      else if (d.type === 'prestamo') patch.monthlyPayment = +ef.pay || d.monthlyPayment;
+      else patch.paymentAmount = +ef.pay || d.paymentAmount;
+      if (d.type === 'tarjeta' || d.type === 'prestamo') patch.interestRate = ef.interestRate !== '' ? +ef.interestRate : d.interestRate;
+    }
+    a.onEditDebt(d.id, patch);
+    _p.onClose();
+  };
+  const last6 = [5, 4, 3, 2, 1, 0].map(i => new Date(new Date().getFullYear(), new Date().getMonth() - i, 1));
+  const paidSet = new Set((d.monthlyPayments || []).map(p => p.month));
+  const k = debtKind(d.type);
+  return e(Sheet, { title: k.t, label: d.name, onClose: _p.onClose },
+    e('div', { className: 'b-debt-head' }, e(CatIcon, { c: k, big: true }), e('div', null,
+      e('div', { className: 'b-wiz-q' }, d.name),
+      e('div', { className: 'b-d' }, dueLabel(d.urg ? d.urg.daysLeft : null), pay > 0 ? ` · ${fmt(pay)} al mes` : ''))),
+    e('div', null, e('div', { className: 'b-amount sm' }, e(Money, { n: bal })), e('div', { className: 'b-cap' }, 'te falta por pagar')),
+    plan && e('div', null, e('div', { className: 'b-dots' }, Array.from({ length: Math.min(plan.total, 36) }, (_, i) => e('i', { key: i, className: i < plan.paid ? 'on' : '' }))),
+      e('div', { className: 'b-d', style: { marginTop: 6 } }, `${plan.paid} de ${plan.total} pagos hechos · te faltan ${plan.remaining}`)),
+    // Pago del mes
+    d.type === 'plan' ? e('button', { className: 'b-primary', onClick: () => { a.onMarkPayment(d.id); _p.onClose(); } }, `Registrar pago de ${fmt(plan.amount)}`) :
+      paidThisMonth ? e('div', { className: 'b-paid' }, e(Icon, { d: IC.check }), e('span', null, 'Ya pagaste este mes'), e('button', { className: 'b-textbtn', onClick: () => a.onUndoPaid(d.id) }, 'Deshacer')) :
+        e('div', { className: 'b-payrow' }, e(Field, { label: '¿Cuánto pagaste?', value: amt, ph: '$0', onChange: setAmt }),
+          e('button', { className: 'b-primary', onClick: () => { a.onMarkPaid(d.id, +amt || pay); _p.onClose(); } }, 'Registrar pago')),
+    // Lo que cuesta
+    (interest > 0 || payoff) && e('div', { className: 'b-insight-box' },
+      interest > 0 && e('b', null, `Te cobra unos ${fmt(interest)} al mes de intereses.`),
+      payoff && e('p', null, payoff.neverPaysOff ? 'Pagando solo esto nunca terminas: el pago no alcanza ni para los intereses del mes.' : `Pagando ${fmt(pay)} al mes terminas en ${monthsTxt(payoff.months)} y pagas ${fmt(payoff.totalInterest)} solo de intereses.`)),
+    payoff && e(More, { title: '¿Y si pago un poco más?' },
+      e(Field, { label: 'Pago extra al mes', value: extra, ph: 'Ej. 500', onChange: setExtra }),
+      extraPayoff && !extraPayoff.neverPaysOff && e('p', { className: 'b-note good' }, `Terminas en ${monthsTxt(extraPayoff.months)}` + (payoff.neverPaysOff ? '.' : ` (${monthsTxt(Math.max(0, payoff.months - extraPayoff.months))} antes) y te ahorras ${fmt(Math.max(0, payoff.totalInterest - extraPayoff.totalInterest))} de intereses.`))),
+    d.type !== 'plan' && e('div', null, e('div', { className: 'b-d', style: { marginBottom: 8 } }, 'Tus pagos de los últimos 6 meses'),
+      e('div', { className: 'b-months' }, last6.map(m => {
+        const key = m.toISOString().slice(0, 7);
+        return e('div', { key, className: paidSet.has(key) ? 'on' : '' }, e('i', null, paidSet.has(key) ? '✓' : ''), m.toLocaleDateString('es-MX', { month: 'short' }));
+      }))),
+    e(More, { title: 'Editar datos' },
+      e(Field, { label: 'Nombre', text: true, value: ef.name, onChange: v => setEf({ ...ef, name: v }) }),
+      d.type === 'plan' ? e(React.Fragment, null,
+        e(Field, { label: 'Pago de cada mes', value: ef.pay, onChange: v => setEf({ ...ef, pay: v }) }),
+        e(Field, { label: 'Pagos en total', value: ef.totalPayments, onChange: v => setEf({ ...ef, totalPayments: v }) }),
+        e(Field, { label: 'Pagos hechos', value: ef.paidPayments, onChange: v => setEf({ ...ef, paidPayments: v }) })) :
+        e(React.Fragment, null,
+          e(Field, { label: 'Lo que debes hoy', value: ef.balance, onChange: v => setEf({ ...ef, balance: v }) }),
+          e(Field, { label: d.type === 'tarjeta' ? 'Pago mínimo' : 'Pago al mes', value: ef.pay, onChange: v => setEf({ ...ef, pay: v }) }),
+          (d.type === 'tarjeta' || d.type === 'prestamo') && e(Field, { label: 'Interés al año (%)', value: ef.interestRate, onChange: v => setEf({ ...ef, interestRate: v }) })),
+      e(Field, { label: 'Día de pago', value: ef.dueDay, onChange: v => setEf({ ...ef, dueDay: v.replace(/\D/g, '').slice(0, 2) }) }),
+      e('button', { className: 'b-primary', onClick: saveEdit }, 'Guardar cambios')),
+    e('div', { className: 'b-sheet-foot' }, e(ConfirmDelete, { label: 'Borrar esta deuda', onYes: () => { a.onDelDebt(d.id); _p.onClose(); } })));
+}
+function DebtsSection(_p) {
+  const data = _p.data, a = _p.actions;
+  const list = _p.sorted || [];
+  const [open, setOpen] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState('');
+  const month = new Date().toISOString().slice(0, 7);
+  const payoffs = data.debts.filter(d => (d.type === 'tarjeta' || d.type === 'prestamo') && +d.interestRate > 0).map(d => getPayoffProjection(d.balance, debtPay(d), d.interestRate)).filter(Boolean);
+  const minCost = payoffs.reduce((s, p) => s + (p.neverPaysOff ? 0 : p.totalInterest), 0);
+  const never = payoffs.some(p => p.neverPaysOff);
+  const first = list[0];
+  const firstWhy = first ? first.urg && (first.urg.key === 'critical' || first.urg.key === 'danger') ? 'Vence pronto: atrasarte te cuesta recargos.' : first.interestCost > 0 ? `Es la que más te cobra: unos ${fmt(first.interestCost)} al mes de intereses.` : 'Es la más próxima a vencer.' : '';
+  const openDebt = open && list.find(d => d.id === open);
+  return e(React.Fragment, null,
+    added && e('p', { className: 'b-calm', style: { marginTop: 12 } }, e(Icon, { d: IC.check }), `Listo: agregamos “${added}” a tu plan.`),
+    list.length > 0 && e('div', { className: 'b-rows b-debts' }, list.map((d, i) => {
+      const pay = debtPay(d);
+      const paid = d.type !== 'plan' && (d.monthlyPayments || []).some(p => p.month === month);
+      return e('button', { key: d.id, onClick: () => setOpen(d.id) },
+        e(CatIcon, { c: debtKind(d.type) }),
+        e('div', { className: 'b-m' },
+          i === 0 && list.length > 1 && e('div', { className: 'b-first' }, 'Paga esta primero'),
+          e('div', { className: 'b-n' }, d.name),
+          e('div', { className: 'b-d' }, paid ? e('span', { className: 'b-ok' }, '✓ Pagada este mes') : dueLabel(d.urg ? d.urg.daysLeft : null), pay > 0 && !paid ? ` · ${fmt(pay)}` : ''),
+          i === 0 && list.length > 1 && e('div', { className: 'b-d' }, firstWhy)),
+        e('span', { className: 'b-n b-num' }, fmt(debtBalance(d, data.cardTransactions))));
+    })),
+    (minCost > 0 || never) && e('div', { className: 'b-insight-box', style: { marginTop: 14 } },
+      e('b', null, 'Lo que cuesta pagar solo el mínimo'),
+      e('p', null, never ? 'Al menos una de tus deudas nunca se termina pagando solo el mínimo. Ábrela para ver cuánto más necesitas.' : `Si solo pagas mínimos, vas a pagar ${fmt(minCost)} de intereses que no bajan tu deuda.`)),
+    e('button', { className: 'b-primary ghost', onClick: () => setAdding(true) }, e(Icon, { d: IC.plus, w: 2.4 }), 'Agregar una deuda'),
+    adding && e(AddDebtSheet, { onAddDebt: a.onAddDebt, onClose: () => setAdding(false), onDone: n => { setAdding(false); setAdded(n); } }),
+    openDebt && e(DebtSheet, { d: openDebt, actions: a, cardTx: data.cardTransactions, onClose: () => setOpen(null) }));
+}
+function LoansSection(_p) {
+  const loans = _p.data.loans || [];
+  const [f, setF] = useState(null);
+  const total = loans.reduce((s, l) => s + (+l.amount || 0), 0);
+  return e('section', null,
+    e('div', { className: 'b-sh' }, e('h2', null, 'Te deben'), total > 0 && e('span', { className: 'b-n b-num' }, fmt(total))),
+    loans.length === 0 && !f && e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Si le prestaste a alguien, anótalo para no olvidarlo.'),
+    e('div', { className: 'b-rows' }, loans.map(l => e('div', { key: l.id },
+      e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, l.person), e('div', { className: 'b-d' }, [l.notes, l.date && fmtDate(l.date)].filter(Boolean).join(' · '))),
+      e('span', { className: 'b-n b-num' }, fmt(l.amount)),
+      e(ConfirmDelete, { label: 'Ya me pagó', question: '¿Ya te pagó?', onYes: () => _p.onDelLoan(l.id) })))),
+    f ? e('div', { className: 'b-form' },
+      e(Field, { label: '¿Quién?', text: true, value: f.person, ph: 'Nombre', onChange: v => setF({ ...f, person: v }) }),
+      e(Field, { label: '¿Cuánto?', value: f.amount, ph: '$0', onChange: v => setF({ ...f, amount: v }) }),
+      e(Field, { label: 'Nota (opcional)', text: true, value: f.notes, ph: 'Ej. Cena del viernes', onChange: v => setF({ ...f, notes: v }) }),
+      e('div', { className: 'b-form-btns' }, e('button', { className: 'b-secondary', onClick: () => setF(null) }, 'Cancelar'),
+        e('button', { className: 'b-primary sm', disabled: !f.person || !(+f.amount > 0), onClick: () => { _p.onAddLoan(f); setF(null); } }, 'Guardar')))
+      : e('button', { className: 'b-primary ghost', onClick: () => setF({ person: '', amount: '', notes: '' }) }, 'Anotar que alguien me debe'));
+}
+
+/* ── Historial ── */
+const METHOD_IC = {
+  cash: { n: 'Efectivo', fg: '#0E9F6E', bg: 'rgba(16,185,129,.14)', p: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>' },
+  debit: { n: 'Débito', fg: '#0B8FCC', bg: 'rgba(56,189,248,.16)', p: '<path d="M3.5 10 12 4.5l8.5 5.5M5.5 10v8M10 10v8M14 10v8M18.5 10v8M3.5 20.5h17"/>' },
+  card: { n: 'Tarjeta', fg: '#4F46E5', bg: 'rgba(79,70,229,.13)', p: IC.card },
+  income: { n: 'Ingreso', fg: '#0E9F6E', bg: 'rgba(16,185,129,.14)', p: '<path d="M12 3.5v11M7.5 10l4.5 4.5 4.5-4.5M4.5 20.5h15"/>' }
+};
+function TxSheet(_p) {
+  const t = _p.t;
+  const [f, setF] = useState({ amount: String(t.amount), desc: t.desc || '', cat: t.cat || '' });
+  const save = () => {
+    const key = t.kind === 'card' ? 'cardTransactions' : 'cashTransactions';
+    _p.onUpdate({ [key]: (_p.data[key] || []).map(x => x.id === t.id ? { ...x, amount: +f.amount || x.amount, desc: f.desc || x.desc, cat: f.cat || undefined } : x) });
+    _p.onClose();
+  };
+  return e(Sheet, { title: 'Editar gasto', label: 'Editar gasto', onClose: _p.onClose },
+    e(Field, { label: 'Monto', value: f.amount, onChange: v => setF({ ...f, amount: v }) }),
+    e(Field, { label: '¿En qué fue?', text: true, value: f.desc, onChange: v => setF({ ...f, desc: v }) }),
+    e('div', { className: 'b-field' }, 'Categoría', e('div', { className: 'b-cats' }, QUICK_CATS.map(c => e('button', {
+      key: c.id, className: 'b-cat' + (f.cat === c.id ? ' sel' : ''), onClick: () => setF({ ...f, cat: c.id })
+    }, e(CatIcon, { c }), c.n)))),
+    t.photo && e('img', { src: t.photo, alt: 'Foto del ticket', className: 'b-ticket' }),
+    e('button', { className: 'b-primary', onClick: save }, 'Guardar cambios'),
+    e('div', { className: 'b-sheet-foot' }, e(ConfirmDelete, { label: 'Borrar este gasto', onYes: () => { t.kind === 'card' ? _p.onDelCard(t.id) : _p.onDelCash(t.id); _p.onClose(); } })));
+}
+function HistoryList(_p) {
+  const data = _p.data;
+  const [filter, setFilter] = useState('todo');
+  const [limit, setLimit] = useState(60);
+  const [open, setOpen] = useState(null);
+  const today = new Date().toISOString().slice(0, 10);
+  const yest = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+  const cards = data.debts || [];
+  const spend = [...(data.cashTransactions || []).map(t => ({ ...t, kind: 'cash' })), ...(data.cardTransactions || []).map(t => ({ ...t, kind: 'card' }))];
+  const income = [...(data.paydays || []).map(p => ({ id: p.quincena, amount: p.amount, desc: 'Pago de quincena', date: p.addedAt, kind: 'income' })),
+    ...(data.extraIncome || []).filter(x => x.date && x.type === 'once').map(x => ({ id: x.id, amount: +x.amount || 0, desc: x.desc || x.label || 'Ingreso extra', date: x.date, kind: 'income' }))];
+  let items = filter === 'gastos' ? spend : filter === 'ingresos' ? income : [...spend, ...income];
+  items = items.filter(t => t.date).sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')));
+  const shown = items.slice(0, limit);
+  const groups = [];
+  shown.forEach(t => { const g = groups[groups.length - 1]; if (g && g.date === t.date) g.items.push(t);else groups.push({ date: t.date, items: [t] }); });
+  const label = d => d === today ? 'Hoy' : d === yest ? 'Ayer' : new Date(d + 'T12:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+  const openTx = open && spend.find(t => t.id === open.id && t.kind === open.kind);
+  return e('section', null,
+    e('div', { className: 'b-seg', role: 'tablist' }, [['todo', 'Todo'], ['gastos', 'Gastos'], ['ingresos', 'Ingresos']].map(o => e('button', {
+      key: o[0], role: 'tab', 'aria-selected': filter === o[0], className: filter === o[0] ? 'on' : '', onClick: () => setFilter(o[0])
+    }, o[1]))),
+    items.length === 0 && e('p', { className: 'b-note' }, filter === 'ingresos' ? 'Aquí aparecerán tus quincenas e ingresos extra.' : 'Todavía no anotas gastos. Toca el botón + para empezar.'),
+    groups.map(g => e('div', { key: g.date }, e('div', { className: 'b-day' }, label(g.date)), e('div', { className: 'b-rows' }, g.items.map(t => {
+      const c = t.kind === 'income' ? METHOD_IC.income : quickCat(t.cat) || METHOD_IC[t.kind === 'card' ? 'card' : t.method === 'debit' ? 'debit' : 'cash'];
+      const how = t.kind === 'income' ? 'Ingreso' : t.kind === 'card' ? (cards.find(d => d.id === t.cardId)?.name || 'Tarjeta') : t.method === 'debit' ? 'Débito' : 'Efectivo';
+      const row = [e(CatIcon, { key: 'i', c }), e('div', { key: 'm', className: 'b-m' }, e('div', { className: 'b-n' }, t.desc || c.n), e('div', { className: 'b-d' }, [quickCat(t.cat) && quickCat(t.cat).n, how, t.time].filter(Boolean).join(' · '), t.photo ? ' · 📷' : '')),
+        e('span', { key: 'a', className: 'b-n b-num' + (t.kind === 'income' ? ' b-ok' : '') }, (t.kind === 'income' ? '+' : '') + fmt(t.amount))];
+      return t.kind === 'income' ? e('div', { key: t.kind + t.id }, row) : e('button', { key: t.kind + t.id, onClick: () => setOpen({ id: t.id, kind: t.kind }) }, row);
+    })))),
+    items.length > limit && e('button', { className: 'b-primary ghost', onClick: () => setLimit(limit + 60) }, 'Ver más movimientos'),
+    openTx && e(TxSheet, { t: openTx, data, onUpdate: _p.onUpdate, onDelCash: _p.onDelCash, onDelCard: _p.onDelCard, onClose: () => setOpen(null) }));
+}
+
+/* ── Mi información ── */
+function MyInfo(_p) {
+  const data = _p.data, set = _p.onChange;
+  const [xf, setXf] = useState(null);
+  const [msg, setMsg] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importText, setImportText] = useState('');
+  const income = (+data.q1 || 0) + (+data.q2 || 0);
+  const keys = ['mipres-pin', 'mipres-name', 'mipres-data-v6', 'mipres-game-v5', 'budgy-prefs'];
+  const backup = () => {
+    const obj = {};
+    keys.forEach(k => { const v = localStorage.getItem(k); if (v) obj[k] = v; });
+    const txt = JSON.stringify(obj);
+    const blob = new Blob([txt], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `budgy-respaldo-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link); link.click(); link.remove();
+    saveLS('budgy-last-backup', new Date().toISOString().slice(0, 10));
+    setMsg('Listo: se descargó tu respaldo. Guárdalo en tu nube o mándatelo por WhatsApp.');
+  };
+  const restore = txt => {
+    try {
+      const obj = JSON.parse(txt);
+      if (!obj['mipres-data-v6']) throw new Error();
+      Object.keys(obj).forEach(k => localStorage.setItem(k, obj[k]));
+      window.location.reload();
+    } catch (err) { setMsg('Ese archivo no es un respaldo de Budgy. Revisa que sea el correcto.'); }
+  };
+  const lastBackup = loadLS('budgy-last-backup');
+  return e(React.Fragment, null,
+    e('section', null, e('div', { className: 'b-sh' }, e('h2', null, 'Lo que ganas')),
+      e('div', { className: 'b-grid2' },
+        e(Field, { label: 'Quincena del 1 al 15', value: data.q1, ph: '$0', onChange: v => set({ q1: v }) }),
+        e(Field, { label: 'Quincena del 16 al 31', value: data.q2, ph: '$0', onChange: v => set({ q2: v }) })),
+      income > 0 && e('p', { className: 'b-note' }, 'Al mes: ', e('b', null, fmt(income)))),
+    e('section', null, e('div', { className: 'b-sh' }, e('h2', null, 'Lo que tienes hoy')),
+      e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Actualízalo cuando revises tu banco. Tu quincena se suma sola el día que te pagan.'),
+      e('div', { className: 'b-grid2' },
+        e(Field, { label: 'En tu cuenta (débito)', value: data.saldoDebito, ph: '$0', onChange: v => set({ saldoDebito: v }) }),
+        e(Field, { label: 'En efectivo', value: data.saldoEfectivo, ph: '$0', onChange: v => set({ saldoEfectivo: v }) }))),
+    e('section', null, e('div', { className: 'b-sh' }, e('h2', null, 'Ingresos extra')),
+      (data.extraIncome || []).length === 0 && !xf && e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Freelance, comisiones, bonos o rentas, aparte de tu quincena.'),
+      e('div', { className: 'b-rows' }, (data.extraIncome || []).map((x, i) => e('div', { key: x.id || i },
+        e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, x.desc || x.label || 'Extra'), e('div', { className: 'b-d' }, x.type === 'monthly' ? 'Cada mes' : 'Una vez · ' + fmtDate(x.date))),
+        e('span', { className: 'b-n b-num b-ok' }, '+' + fmt(x.amount)),
+        e(ConfirmDelete, { label: 'Quitar', onYes: () => _p.onDelExtra(x.id || i) })))),
+      xf ? e('div', { className: 'b-form' },
+        e(Field, { label: '¿De qué es?', text: true, value: xf.desc, ph: 'Ej. Freelance', onChange: v => setXf({ ...xf, desc: v }) }),
+        e(Field, { label: '¿Cuánto?', value: xf.amount, ph: '$0', onChange: v => setXf({ ...xf, amount: v }) }),
+        e('div', { className: 'b-seg' }, [['monthly', 'Cada mes'], ['once', 'Solo una vez']].map(o => e('button', { key: o[0], className: xf.type === o[0] ? 'on' : '', onClick: () => setXf({ ...xf, type: o[0] }) }, o[1]))),
+        e('div', { className: 'b-form-btns' }, e('button', { className: 'b-secondary', onClick: () => setXf(null) }, 'Cancelar'),
+          e('button', { className: 'b-primary sm', disabled: !(+xf.amount > 0), onClick: () => { _p.onAddExtra({ amount: +xf.amount, desc: xf.desc || 'Extra', type: xf.type, date: new Date().toISOString().slice(0, 10) }); setXf(null); } }, 'Guardar')))
+        : e('button', { className: 'b-primary ghost', onClick: () => setXf({ desc: '', amount: '', type: 'monthly' }) }, 'Agregar ingreso extra')),
+    e('section', null, e('div', { className: 'b-sh' }, e('h2', null, 'Fondo para emergencias')),
+      e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Sin este colchón, cada imprevisto se vuelve deuda. Lo recomendado: un mes de lo que ganas', income > 0 ? ` (${fmt(income)}).` : '.'),
+      e('div', { className: 'b-grid2' },
+        e(Field, { label: 'Tu meta', value: data.emerGoal, ph: income > 0 ? String(income) : '$0', onChange: v => set({ emerGoal: v }) }),
+        e(Field, { label: 'Lo que llevas', value: data.emerSaved, ph: '$0', onChange: v => set({ emerSaved: v }) }))),
+    e('section', null, e('div', { className: 'b-sh' }, e('h2', null, 'Respaldo de tus datos')),
+      e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Tus datos viven en este teléfono. Haz un respaldo para no perderlos si cambias de cel.', lastBackup ? ` Último respaldo: ${fmtDate(lastBackup)}.` : ''),
+      e('button', { className: 'b-primary', style: { marginTop: 12 }, onClick: backup }, 'Descargar respaldo'),
+      importing ? e('div', { className: 'b-form' },
+        e('label', { className: 'b-field' }, 'Elige tu archivo de respaldo', e('input', { type: 'file', accept: '.json,application/json,text/plain', onChange: ev => { const file = ev.target.files[0]; if (!file) return; const r = new FileReader(); r.onload = () => restore(String(r.result)); r.readAsText(file); } })),
+        e('label', { className: 'b-field' }, 'O pega el texto del respaldo', e('textarea', { className: 'b-textarea', value: importText, onChange: ev => setImportText(ev.target.value) })),
+        e('p', { className: 'b-note warn' }, 'Esto reemplaza lo que hay en este teléfono.'),
+        e('div', { className: 'b-form-btns' }, e('button', { className: 'b-secondary', onClick: () => setImporting(false) }, 'Cancelar'), e('button', { className: 'b-primary sm', disabled: !importText, onClick: () => restore(importText) }, 'Recuperar'))) :
+        e('button', { className: 'b-primary ghost', onClick: () => setImporting(true) }, 'Recuperar un respaldo'),
+      msg && e('p', { className: 'b-note', role: 'status' }, msg)));
+}
 
 function MainApp(_ref22) {
   let onLock = _ref22.onLock;
@@ -9516,12 +9817,24 @@ function MainApp(_ref22) {
   const unmarkDebtPaid = useCallback(debtId => {
     const month = new Date().toISOString().slice(0, 7);
     update({
-      debts: data.debts.map(d => d.id === debtId ? {
-        ...d,
-        monthlyPayments: (d.monthlyPayments || []).filter(p => p.month !== month)
-      } : d)
+      debts: data.debts.map(d => {
+        if (d.id !== debtId) return d;
+        // Deshacer también devuelve al saldo lo que se había descontado
+        const rec = (d.monthlyPayments || []).find(p => p.month === month);
+        const back = rec && rec.amount && d.balance != null && d.balance !== '' ? +(d.balance || 0) + +rec.amount : d.balance;
+        return {
+          ...d,
+          balance: back,
+          monthlyPayments: (d.monthlyPayments || []).filter(p => p.month !== month)
+        };
+      }),
+      cardPayments: (() => {
+        const list = data.cardPayments || [];
+        const idx = list.map(p => p.debtId === debtId && p.month === month).lastIndexOf(true);
+        return idx < 0 ? list : list.filter((_, i) => i !== idx);
+      })()
     });
-  }, [data.debts, update]);
+  }, [data.debts, data.cardPayments, update]);
   const actions = {
     addExp: ef => {
       if (!ef.name || !ef.amount) return false;
