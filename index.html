@@ -613,6 +613,57 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-form-btns{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 .b-app .b-primary.sm{width:auto;min-height:44px;padding:0 20px;font-size:.95rem}
 .b-app .b-primary.ghost{background:var(--surface);color:var(--text);margin-top:12px;min-height:52px}
+
+/* ── Asistente de deudas ── */
+.b-wiz-step{font-size:.8rem;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.b-wiz-q{font-weight:800;font-size:1.45rem;line-height:1.2;letter-spacing:-.02em;text-wrap:balance}
+.b-wiz-help{font-size:.94rem;color:var(--dim)}
+.b-opts{display:flex;flex-direction:column}
+.b-sheet .b-opt{display:flex;gap:14px;align-items:center;text-align:left;padding:14px 0;border-bottom:1px solid var(--border);min-height:64px;width:100%}
+.b-sheet .b-opt:last-child{border-bottom:0}
+.b-opt .t{display:block;font-weight:700}
+.b-opt .s{display:block;font-size:.86rem;color:var(--muted)}
+.b-opt.sel .t{color:var(--accent)}
+.b-sheet .b-field{display:flex;flex-direction:column;gap:6px;font-size:.9rem;font-weight:600;color:var(--dim)}
+.b-in{width:100%;font:inherit;font-size:1.6rem;font-weight:800;color:var(--text);background:transparent;border:0;border-bottom:2px solid var(--border);padding:10px 0;border-radius:0;outline:none;font-family:var(--font)}
+.b-in.text{font-size:1.2rem;font-weight:700}
+.b-in:focus{border-color:var(--indigo)}
+.b-wiz-foot{display:flex;gap:10px;margin-top:4px}
+.b-sheet .b-wiz-foot .b-secondary{flex:1;min-height:58px;border-radius:var(--r-b);background:var(--surface);font-weight:600;display:flex;align-items:center;justify-content:center}
+.b-sheet .b-wiz-foot .b-primary{flex:2}
+.b-sheet .b-primary:disabled{opacity:.4}
+
+/* ── Aviso de niveles ── */
+.b-notice{display:flex;gap:14px;align-items:flex-start;background:var(--ps);border-radius:var(--r-c);padding:16px}
+.b-notice-hero{width:48px;height:60px;flex:none}
+.b-notice-hero svg{image-rendering:pixelated}
+.b-notice b{font-weight:800}
+.b-notice p{margin:6px 0 0;font-size:.9rem;color:var(--dim)}
+.b-notice-btns{display:flex;gap:14px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.b-app .b-notice .b-secondary{background:var(--card)}
+
+/* ── Recordatorio ── */
+.b-remind-btns{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.b-app a.b-secondary{display:flex;align-items:center;justify-content:center;min-height:50px;border-radius:var(--r-b);background:var(--surface);color:var(--text);font-weight:600;text-decoration:none}
+
+/* ── Secciones anteriores con el sistema de Budgy ── */
+.b-legacy .card,.b-legacy .suggestion-card,.b-legacy .cf-card,.b-legacy .emer-card{background:transparent;border:0;border-radius:0;padding:0;margin-bottom:26px;box-shadow:none}
+.b-legacy .ct{font-size:15px;font-weight:700;letter-spacing:0;text-transform:none;color:var(--text);margin-bottom:12px}
+.b-legacy .sec{font-size:14px;letter-spacing:0;text-transform:none;color:var(--text);font-weight:700;border-bottom:1px solid var(--border);margin:18px 0 10px}
+.b-legacy .fl,.b-legacy .q-lbl,.b-legacy .chip-l,.b-legacy .cf-month-name,.b-legacy .night-stat-l,.b-legacy .daily-big-lbl{text-transform:none;letter-spacing:0;font-size:12px;font-weight:600;color:var(--dim)}
+.b-legacy .inp,.b-legacy .sel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;font-size:16px;min-height:46px;font-family:var(--font)}
+.b-legacy .inp:focus,.b-legacy .sel:focus{border-color:var(--indigo)}
+.b-legacy .q-box,.b-legacy .chip,.b-legacy .cf-month,.b-legacy .mvl-item,.b-legacy .night-stat,.b-legacy .briefing-stat{border:0;border-radius:12px;background:var(--card)}
+.b-legacy .q-inp{font-family:var(--font)}
+.b-legacy .btn-g{border-radius:12px;min-height:50px;font-size:15px;font-family:var(--font);background:var(--indigo);color:#fff}
+.b-legacy .btn-sm{border-radius:12px;font-family:var(--font);min-height:44px}
+.b-legacy .btn-x{border-radius:10px}
+.b-legacy .type-btn{border-radius:12px;background:var(--card);font-family:var(--font)}
+.b-legacy .method-btn{border-radius:12px;font-family:var(--font)}
+.b-legacy .al{border:0;border-radius:12px}
+.b-legacy .exp-row,.b-legacy .log-item,.b-legacy .suggestion-row{background:var(--card);border:0;border-radius:12px}
+.b-legacy .pri-card,.b-legacy .cc-card{border-radius:16px}
+.b-legacy .pbar,.b-legacy .cc-bar-bg{border-radius:99px}
 </style>
 </head>
 <body>
@@ -1359,7 +1410,7 @@ function WealthSection(_p) {
   return React.createElement('section', null,
     React.createElement('div', { className: 'b-sh' }, React.createElement('h2', null, 'Mi patrimonio')),
     React.createElement('div', { className: 'b-debt-sum' },
-      React.createElement('span', { className: 'b-amount sm' + (w.netWorth < 0 ? ' neg' : '') }, React.createElement(Money, { n: w.netWorth })),
+      React.createElement('span', { className: 'b-amount sm' }, React.createElement(Money, { n: w.netWorth })),
       React.createElement('span', { className: 'b-cap' }, 'patrimonio neto: lo que tienes menos lo que debes')),
     React.createElement('div', { className: 'b-strip', style: { marginTop: 14 } },
       React.createElement('div', null, React.createElement('div', { className: 'k' }, 'Tienes'), React.createElement('div', { className: 'v' }, moneyShort(w.assetsTotal + w.emer))),
@@ -3654,7 +3705,7 @@ function UrgentPaymentsBanner(_ref_upb) {
       marginBottom: 8,
       letterSpacing: .5
     }
-  }, "🔔 PAGOS EN LOS PR\xD3XIMOS 3 D\xCDAS"), urgent.map(u => /*#__PURE__*/React.createElement("div", {
+  }, "🔔 Pagos en los próximos 3 días"), urgent.map(u => /*#__PURE__*/React.createElement("div", {
     key: u.name + u.daysLeft,
     style: {
       display: 'flex',
@@ -3751,7 +3802,7 @@ function FinancialPlanner(_ref_fp) {
       fontSize: 10,
       color: 'var(--muted)'
     }
-  }, "LIBRE AL MES"), /*#__PURE__*/React.createElement("div", {
+  }, "Libre al mes"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 16,
       fontWeight: 800,
@@ -3770,7 +3821,7 @@ function FinancialPlanner(_ref_fp) {
       fontSize: 10,
       color: 'var(--muted)'
     }
-  }, "LIBRE AL A\xD1O"), /*#__PURE__*/React.createElement("div", {
+  }, "Libre al año"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 16,
       fontWeight: 800,
@@ -3828,7 +3879,7 @@ function FinancialPlanner(_ref_fp) {
       letterSpacing: 1,
       marginBottom: 8
     }
-  }, "🏦 FONDO DE EMERGENCIA"), /*#__PURE__*/React.createElement("div", {
+  }, "🏦 Fondo de emergencia"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       justifyContent: 'space-between',
@@ -3962,7 +4013,7 @@ function DeficitWarningOverlay(_ref_dw) {
       marginBottom: 10,
       letterSpacing: 1
     }
-  }, "3 OPCIONES REALES — NO M\xC1S TIPS DE HORMIGA"), /*#__PURE__*/React.createElement("div", {
+  }, "3 opciones reales, no más tips de hormiga"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       flexDirection: 'column',
@@ -4199,7 +4250,7 @@ function CountdownRail(_ref9) {
     style: {
       fontSize: 9,
       fontWeight: 600,
-      textTransform: 'uppercase',
+      textTransform: 'none',
       letterSpacing: '.7px',
       opacity: .65,
       lineHeight: 1.2
@@ -4274,7 +4325,7 @@ function HealthScore(_ref0h) {
   const score = calcHealthScore(data, game, dp);
   const color = score >= 80 ? 'var(--accent)' : score >= 60 ? 'var(--blue)' : score >= 40 ? 'var(--warn)' : 'var(--danger)';
   const label = score >= 80 ? 'Excelente' : score >= 60 ? 'Vas bien' : score >= 40 ? 'Ojo aquí' : 'Necesita atención';
-  const icon = score >= 80 ? '⚔️' : score >= 60 ? '🛡️' : score >= 40 ? '⚠️' : '🩸';
+  const icon = score >= 80 ? '🌟' : score >= 60 ? '👍' : score >= 40 ? '👀' : '⚠️';
   return /*#__PURE__*/React.createElement("div", {
     style: {
       background: color + '10',
@@ -4298,7 +4349,7 @@ function HealthScore(_ref0h) {
       fontSize: 10,
       fontWeight: 700,
       letterSpacing: 2,
-      textTransform: 'uppercase',
+      textTransform: 'none',
       color: 'var(--muted)',
       marginBottom: 2
     }
@@ -4840,7 +4891,7 @@ function DebtCard(_ref12) {
       marginBottom: 8,
       letterSpacing: 1
     }
-  }, "EDITAR DEUDA"), /*#__PURE__*/React.createElement("div", {
+  }, "Editar deuda"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
       gridTemplateColumns: '1fr 1fr',
@@ -5780,7 +5831,7 @@ function MonthVsMonth(_ref16) {
       style: {
         fontSize: 9,
         color: 'var(--muted)',
-        textTransform: 'uppercase',
+        textTransform: 'none',
         letterSpacing: '.7px',
         marginBottom: 3
       }
@@ -5971,7 +6022,7 @@ function TabHistorial(_ref26) {
     const icon = isIncome ? '💰' : isCard ? '💳' : isDebit ? '🏦' : '💵';
     const iconBg = isIncome ? 'rgba(5,150,105,.15)' : isCard ? 'rgba(226,87,74,.15)' : isDebit ? 'rgba(59,130,246,.15)' : 'var(--as)';
     const iconColor = isIncome ? 'var(--accent)' : isCard ? 'var(--orange)' : isDebit ? '#3b82f6' : 'var(--accent)';
-    const amtColor = isIncome ? 'var(--accent)' : 'var(--danger)';
+    const amtColor = isIncome ? 'var(--good)' : 'var(--text)';
     const sign = isIncome ? '+' : '-';
     return React.createElement('div', {
       key: t.id + t.kind,
@@ -6496,7 +6547,7 @@ function TabDeudas(_ref20) {
       marginBottom: 6,
       letterSpacing: .5
     }
-  }, "🎯 ATACA PRIMERO"), /*#__PURE__*/React.createElement("div", {
+  }, "🎯 Paga esta primero"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontWeight: 700,
       fontSize: 14,
@@ -6530,7 +6581,7 @@ function TabDeudas(_ref20) {
       marginBottom: 6,
       letterSpacing: .5
     }
-  }, "💸 EL COSTO REAL DE SOLO PAGAR EL M\xCDNIMO"), totalProjectedInterest > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "💸 Lo que cuesta pagar solo el mínimo"), totalProjectedInterest > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 13,
       color: 'var(--text)',
@@ -6547,7 +6598,7 @@ function TabDeudas(_ref20) {
   }, /*#__PURE__*/React.createElement("span", null, "\uD83D\uDCCB Planes de pago activos")), /*#__PURE__*/React.createElement(PlanProgressCards, {
     data: data,
     onMarkPayment: onMarkPayment
-  })), /*#__PURE__*/React.createElement("div", {
+  })), !_ref20.hideAddForm && /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "ct"
@@ -7174,7 +7225,7 @@ function TabInfo(_ref21) {
       fontSize: 10,
       color: 'var(--accent)',
       letterSpacing: 1,
-      textTransform: 'uppercase',
+      textTransform: 'none',
       marginBottom: 2
     }
   }, "Total mensual"), /*#__PURE__*/React.createElement("div", {
@@ -7979,6 +8030,8 @@ function HomeScreen(_p) {
     prog = getXPProg(game.xp || 0);
   const nextReq = prog.next ? prog.blocked ? (levelReqs(prog.next.n, data, game).find(r => !r.ok) || {}).label : `${prog.need - prog.cur} XP más` : null;
   const todayStr = now.toISOString().slice(0, 10);
+  const loggedToday = [...(data.cashTransactions || []), ...(data.cardTransactions || [])].some(t => t.date === todayStr);
+  const eveningAsk = now.getHours() >= 18 && !loggedToday;
   const missions = getDailyMissions(todayStr);
   const missionsDone = missions.filter(m => (game.completedMissions || {})[`${todayStr}-${m.id}`]).length;
   const cards = data.debts.filter(d => d.type === 'tarjeta');
@@ -8049,7 +8102,18 @@ function HomeScreen(_p) {
   }, h(Icon, {
     d: IC.plus,
     w: 2.6
-  }), 'Anotar un gasto'), attention.length > 0 ? h('section', null, h('div', {
+  }), eveningAsk ? '¿Gastaste algo hoy? Anótalo' : 'Anotar un gasto'), gameOn && (game.xp || 0) >= 100 && !game.levelsNoticeSeen && h(LevelsNotice, {
+    game: game,
+    onSee: () => {
+      _p.onPatchGame({
+        levelsNoticeSeen: true
+      });
+      _p.onTab('juego');
+    },
+    onDismiss: () => _p.onPatchGame({
+      levelsNoticeSeen: true
+    })
+  }), attention.length > 0 ? h('section', null, h('div', {
     className: 'b-sh'
   }, h('h2', null, 'Pon atención'), !simple && h('button', {
     className: 'b-textbtn',
@@ -8343,6 +8407,8 @@ function PresupuestoScreen(_p) {
 /* ════ METAS ════ */
 function MetasScreen(_p) {
   const data = _p.data;
+  const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState('');
   const goal = +data.emerGoal || 0,
     saved = +data.emerSaved || 0;
   const pct = goal > 0 ? Math.min(100, Math.round(saved / goal * 100)) : 0;
@@ -8396,15 +8462,32 @@ function MetasScreen(_p) {
     className: 'b-cap'
   }, 'por pagar en total. Budgy las ordena para que pagues primero la que más te conviene.')) : h('p', {
     className: 'b-note'
-  }, 'No tienes deudas registradas. Si debes algo, agrégalo abajo y Budgy te arma el plan.'), data.debts.some(d => d.type === 'plan') && h('div', {
+  }, 'No tienes deudas registradas. Si debes algo, agrégala y Budgy te arma el plan.'), added && h('p', {
+    className: 'b-calm',
+    style: {
+      marginTop: 12
+    }
+  }, h(Icon, {
+    d: IC.check
+  }), `Listo: agregamos “${added}” a tu plan.`), h('button', {
+    className: 'b-primary ghost',
+    onClick: () => setAdding(true)
+  }, h(Icon, {
+    d: IC.plus,
+    w: 2.4
+  }), 'Agregar una deuda'), h('div', {
     className: 'b-legacy'
-  }, h(PlanProgressCards, {
-    data: data,
-    debts: data.debts,
-    cardTransactions: data.cardTransactions || []
-  })), h('div', {
-    className: 'b-legacy'
-  }, h(TabDeudas, _p.debtProps))));
+  }, h(TabDeudas, {
+    ..._p.debtProps,
+    hideAddForm: true
+  })), adding && h(AddDebtSheet, {
+    onAddDebt: _p.debtProps.onAddDebt,
+    onClose: () => setAdding(false),
+    onDone: name => {
+      setAdding(false);
+      setAdded(name);
+    }
+  })));
 }
 
 /* ════ PERFIL ════ */
@@ -8486,7 +8569,7 @@ function PerfilScreen(_p) {
     title: 'Botón en tu pantalla de inicio'
   }, h('ol', {
     className: 'b-steps'
-  }, h('li', null, 'En el navegador toca ', h('b', null, 'Compartir'), ' (iPhone) o el menú ', h('b', null, '⋮'), ' (Android).'), h('li', null, 'Elige ', h('b', null, 'Agregar a pantalla de inicio'), '.')))), h('section', null, h('div', {
+  }, h('li', null, 'En el navegador toca ', h('b', null, 'Compartir'), ' (iPhone) o el menú ', h('b', null, '⋮'), ' (Android).'), h('li', null, 'Elige ', h('b', null, 'Agregar a pantalla de inicio'), '.')))), h(ReminderSection), h('section', null, h('div', {
     className: 'b-sh'
   }, h('h2', null, 'Mi información')), h('p', {
     className: 'b-note'
@@ -8748,6 +8831,219 @@ function Toast(_p) {
     }
   }, 'Deshacer'));
 }
+
+/* ════ AGREGAR DEUDA (una pregunta por pantalla) ════
+   Produce exactamente los mismos campos que el formulario anterior
+   (ver actions.addDebt y DEBT_DEFS), solo que en lenguaje simple. */
+const DEBT_KINDS = [{
+  key: 'tarjeta', t: 'Tarjeta de crédito', s: 'Amex, BBVA, Nu, Banamex…', p: IC.card, fg: '#4F46E5', bg: 'rgba(79,70,229,.13)'
+}, {
+  key: 'prestamo', t: 'Préstamo', s: 'Del banco, de nómina o automotriz', p: '<path d="M3.5 10 12 4.5l8.5 5.5M5.5 10v8M10 10v8M14 10v8M18.5 10v8M3.5 20.5h17"/>', fg: '#0B8FCC', bg: 'rgba(56,189,248,.16)'
+}, {
+  key: 'plan', t: 'Compra a meses', s: 'Pagos iguales: meses sin intereses, planes', p: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M8 14h2M12 14h2M16 14h.5"/>', fg: '#0E9F6E', bg: 'rgba(16,185,129,.14)'
+}, {
+  key: 'informal', t: 'Le debo a una persona', s: 'Un familiar, amigo o conocido', p: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20.5a7 7 0 0 1 14 0"/>', fg: '#E2574A', bg: 'rgba(255,107,94,.14)'
+}, {
+  key: 'deadline', t: 'Cobranza o deuda vencida', s: 'Te están cobrando o ya hay fecha límite', p: '<path d="M12 3.5 21 19.5H3z"/><path d="M12 10v4.5M12 17.5h.01"/>', fg: '#D92D20', bg: 'rgba(217,45,32,.12)'
+}];
+const DEBT_BLANK = {
+  type: 'tarjeta', name: '', balance: '', creditLimit: '', cutDay: '', minPayment: '', monthlyPayment: '', interestRate: '', dueDay: '', monthsLeft: '',
+  person: '', entity: '', deadlineDate: '', status: 'cobranza', paymentAmount: '', totalPayments: '', paidPayments: '', informalMode: 'fixed'
+};
+function debtQuestions(df) {
+  const Q = [{
+    id: 'kind'
+  }, {
+    id: 'name',
+    q: df.type === 'informal' ? '¿A quién le debes?' : df.type === 'deadline' ? '¿Quién te está cobrando?' : '¿Cómo le llamas a esta deuda?',
+    help: 'Es solo para que tú la reconozcas.',
+    fields: [{ k: 'name', kind: 'text', ph: df.type === 'informal' ? 'Ej. Mi hermana' : df.type === 'tarjeta' ? 'Ej. Tarjeta BBVA' : df.type === 'plan' ? 'Ej. Pantalla a 12 meses' : df.type === 'deadline' ? 'Ej. Coppel, SAT…' : 'Ej. Crédito de nómina' }],
+    required: ['name']
+  }];
+  if (df.type === 'tarjeta') Q.push({
+    id: 'bal', q: '¿Cuánto debes hoy en esta tarjeta?', help: 'En la app de tu banco aparece como “Saldo actual”.',
+    fields: [{ k: 'balance', kind: 'money' }], required: ['balance']
+  }, {
+    id: 'min', q: '¿Cuál es tu pago mínimo del mes?', help: 'En tu estado de cuenta dice “Pago mínimo”. Si no lo sabes, sáltalo.',
+    fields: [{ k: 'minPayment', kind: 'money' }]
+  }, {
+    id: 'due', q: '¿Qué día del mes tienes que pagar?', help: 'En tu estado de cuenta dice “Fecha límite de pago”. Budgy te avisa antes.',
+    fields: [{ k: 'dueDay', kind: 'day' }]
+  }, {
+    id: 'extra', q: 'Si los tienes a la mano', help: 'Son opcionales, pero hacen más exactas las cuentas.',
+    fields: [{ k: 'cutDay', kind: 'day', label: 'Día de corte (cuando el banco cierra tu mes)' }, { k: 'creditLimit', kind: 'money', label: 'Límite de crédito' }, { k: 'interestRate', kind: 'pct', label: 'Interés al año (aparece como CAT)' }]
+  });
+  if (df.type === 'prestamo') Q.push({
+    id: 'bal', q: '¿Cuánto te falta por pagar?', help: 'Si no sabes exacto, pon un aproximado.',
+    fields: [{ k: 'balance', kind: 'money' }], required: ['balance']
+  }, {
+    id: 'pay', q: '¿Cuánto pagas cada mes y qué día?', help: 'Budgy lo aparta de tu quincena para que no te falte.',
+    fields: [{ k: 'monthlyPayment', kind: 'money', label: 'Pago mensual' }, { k: 'dueDay', kind: 'day', label: 'Día de pago' }]
+  }, {
+    id: 'extra', q: 'Si los tienes a la mano', help: 'Son opcionales.',
+    fields: [{ k: 'monthsLeft', kind: 'int', label: 'Meses que te faltan' }, { k: 'interestRate', kind: 'pct', label: 'Interés al año' }]
+  });
+  if (df.type === 'plan') Q.push({
+    id: 'pay', q: '¿De cuánto es cada pago?', help: 'El pago que haces cada mes.',
+    fields: [{ k: 'paymentAmount', kind: 'money' }], required: ['paymentAmount']
+  }, {
+    id: 'count', q: '¿Cuántos pagos son y cuántos llevas?', help: 'Ejemplo: 12 pagos en total y ya llevas 3.',
+    fields: [{ k: 'totalPayments', kind: 'int', label: 'Pagos en total' }, { k: 'paidPayments', kind: 'int', label: 'Pagos que ya hiciste' }]
+  }, {
+    id: 'due', q: '¿Qué día del mes pagas?', help: 'Budgy te avisa unos días antes.',
+    fields: [{ k: 'dueDay', kind: 'day' }]
+  });
+  if (df.type === 'informal') {
+    Q.push({
+      id: 'bal', q: '¿Cuánto le debes en total?', help: 'Si no sabes exacto, pon un aproximado.',
+      fields: [{ k: 'balance', kind: 'money' }], required: ['balance']
+    }, {
+      id: 'mode', q: '¿Cómo quedaron de pagarle?', choice: { k: 'informalMode', opts: [['fixed', 'Una cantidad cada mes', 'Le das un tanto fijo, un día del mes'], ['deadline', 'Todo en una fecha', 'Le pagas completo en un día acordado']] }
+    });
+    if (df.informalMode === 'deadline') Q.push({
+      id: 'date', q: '¿Para cuándo quedaste de pagarle?', fields: [{ k: 'deadlineDate', kind: 'date' }]
+    });else Q.push({
+      id: 'pay', q: '¿Cuánto le das y qué día?', fields: [{ k: 'paymentAmount', kind: 'money', label: 'Cantidad al mes' }, { k: 'dueDay', kind: 'day', label: 'Día del mes' }]
+    });
+  }
+  if (df.type === 'deadline') Q.push({
+    id: 'bal', q: '¿Cuánto te están cobrando?', fields: [{ k: 'balance', kind: 'money' }], required: ['balance']
+  }, {
+    id: 'date', q: '¿Cuál es la fecha límite?', help: 'La fecha que te dieron para pagar o negociar.', fields: [{ k: 'deadlineDate', kind: 'date' }]
+  }, {
+    id: 'status', q: '¿En qué etapa está?', choice: { k: 'status', opts: [['cobranza', 'Me están cobrando', 'Llamadas, mensajes o cartas de cobranza'], ['legal', 'Ya hay un proceso legal', 'Demanda, abogados o juzgado']] }
+  });
+  return Q;
+}
+function AddDebtSheet(_p) {
+  const [df, setDf] = useState({ ...DEBT_BLANK });
+  const [step, setStep] = useState(0);
+  const Q = debtQuestions(df);
+  const cur = Q[Math.min(step, Q.length - 1)];
+  const last = step >= Q.length - 1;
+  const filled = k => String(df[k] ?? '').trim() !== '';
+  const ok = cur.id === 'kind' ? !!df.type : (cur.required || []).every(filled);
+  const optional = cur.fields && !(cur.required || []).length;
+  const set = (k, v) => setDf(p => ({ ...p, [k]: v }));
+  const finish = d => {
+    const out = { ...d, name: d.name.trim(), entity: d.type === 'deadline' ? d.name.trim() : d.entity, person: d.type === 'informal' ? d.name.trim() : d.person };
+    if (_p.onAddDebt(out)) _p.onDone(out.name);
+  };
+  const next = () => {
+    if (!last) return setStep(step + 1);
+    finish(df);
+  };
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+  const input = f => {
+    const common = {
+      id: 'dq-' + f.k,
+      value: df[f.k] || '',
+      autoFocus: cur.fields.indexOf(f) === 0 && f.kind !== 'date'
+    };
+    if (f.kind === 'text') return h('input', { ...common, className: 'b-in text', placeholder: f.ph, autoComplete: 'off', onChange: e => set(f.k, e.target.value) });
+    if (f.kind === 'date') return h('input', { ...common, className: 'b-in', type: 'date', onChange: e => set(f.k, e.target.value) });
+    const clean = v => f.kind === 'day' ? v.replace(/\D/g, '').slice(0, 2) : f.kind === 'int' ? v.replace(/\D/g, '').slice(0, 3) : v.replace(/[^0-9.]/g, '');
+    return h('input', {
+      ...common,
+      className: 'b-in',
+      inputMode: f.kind === 'money' || f.kind === 'pct' ? 'decimal' : 'numeric',
+      placeholder: f.kind === 'money' ? '$0' : f.kind === 'day' ? 'Ej. 15' : f.kind === 'pct' ? 'Ej. 45' : '0',
+      onChange: e => {
+        let v = clean(e.target.value);
+        if (f.kind === 'day' && +v > 31) v = '31';
+        set(f.k, v);
+      }
+    });
+  };
+  return h(React.Fragment, null, h('div', { className: 'b-scrim', onClick: _p.onClose }), h('div', {
+    className: 'b-sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Agregar una deuda'
+  }, h('div', { className: 'b-sheet-in' },
+    h('div', { className: 'b-grab' }),
+    h('div', { className: 'b-sheet-h' }, h('span', { className: 'b-wiz-step' }, 'Paso ', step + 1, ' de ', Q.length), h('button', { className: 'b-textbtn', onClick: _p.onClose }, 'Cerrar')),
+    h('span', { className: 'b-track sm' }, h('i', { style: { width: (step + 1) / Q.length * 100 + '%' } })),
+    cur.id === 'kind' ? h(React.Fragment, null,
+      h('div', { className: 'b-wiz-q' }, '¿Qué tipo de deuda es?'),
+      h('div', { className: 'b-opts' }, DEBT_KINDS.map(k => h('button', {
+        key: k.key, className: 'b-opt' + (df.type === k.key ? ' sel' : ''),
+        onClick: () => { setDf({ ...DEBT_BLANK, type: k.key, name: df.name }); setStep(1); }
+      }, h(CatIcon, { c: k }), h('span', null, h('span', { className: 't' }, k.t), h('span', { className: 's' }, k.s)))))) :
+      h(React.Fragment, null,
+        h('div', { className: 'b-wiz-q' }, cur.q),
+        cur.help && h('div', { className: 'b-wiz-help' }, cur.help),
+        cur.choice ? h('div', { className: 'b-opts' }, cur.choice.opts.map(o => h('button', {
+          key: o[0], className: 'b-opt' + (df[cur.choice.k] === o[0] ? ' sel' : ''),
+          onClick: () => {
+            const d = { ...df, [cur.choice.k]: o[0] };
+            setDf(d);
+            if (last) finish(d);else setStep(step + 1);
+          }
+        }, h('span', null, h('span', { className: 't' }, o[1]), h('span', { className: 's' }, o[2]))))) :
+          cur.fields.map(f => h('label', { key: f.k, className: 'b-field' }, f.label, input(f)))),
+    cur.id !== 'kind' && !cur.choice && h('div', { className: 'b-wiz-foot' },
+      h('button', { className: 'b-secondary', onClick: () => setStep(step - 1) }, 'Atrás'),
+      h('button', { className: 'b-primary', disabled: !ok, onClick: next }, last ? 'Guardar deuda' : optional && !cur.fields.some(f => filled(f.k)) ? 'Saltar' : 'Siguiente')),
+    cur.choice && h('div', { className: 'b-wiz-foot' }, h('button', { className: 'b-secondary', onClick: () => setStep(step - 1) }, 'Atrás')))));
+}
+
+/* ── Aviso único: el personaje ahora mide tu progreso real ── */
+function LevelsNotice(_p) {
+  const lvl = getLvl(_p.game.xp);
+  const prog = getXPProg(_p.game.xp);
+  return h('section', { className: 'b-notice' },
+    h('div', { className: 'b-notice-hero', dangerouslySetInnerHTML: { __html: heroSVG(lvl.n, customFromEquipped(_p.game.equipped)) } }),
+    h('div', null,
+      h('b', null, 'Tu personaje ahora refleja tu progreso real'),
+      h('p', null, 'Ya no basta con juntar XP: para subir de nivel también cuentan tu fondo de emergencia, tus deudas y tu patrimonio. Hoy eres ', h('b', null, lvl.emoji, ' ', lvl.title), prog.next ? '.' : ' 👑'),
+      h('div', { className: 'b-notice-btns' },
+        h('button', { className: 'b-secondary', onClick: _p.onSee }, 'Ver qué me falta'),
+        h('button', { className: 'b-textbtn', onClick: _p.onDismiss }, 'Entendido'))));
+}
+
+/* ── Recordatorio diario (sin servidor: evento repetido en tu calendario) ── */
+function reminderICS(hh, url) {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  const day = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Budgy//Recordatorio//ES', 'BEGIN:VEVENT', 'UID:budgy-recordatorio-' + Date.now() + '@budgy', 'DTSTAMP:' + stamp,
+    `DTSTART:${day}T${p(hh)}0000`, `DTEND:${day}T${p(hh)}0500`, 'RRULE:FREQ=DAILY', 'SUMMARY:💸 Anota tus gastos en Budgy',
+    'DESCRIPTION:Toma 10 segundos. Abre Budgy: ' + url, 'URL:' + url,
+    'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Anota tus gastos de hoy en Budgy', 'TRIGGER:PT0M', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+}
+function ReminderSection() {
+  const [hh, setHh] = useState(() => (loadLS(PREFS_KEY) || {}).reminderHour || 21);
+  const url = location.origin + location.pathname + '?quick=1';
+  const p = n => String(n).padStart(2, '0');
+  const d = new Date();
+  const day = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
+  const gcal = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent('💸 Anota tus gastos en Budgy') +
+    `&dates=${day}T${p(hh)}0000/${day}T${p(hh)}0500&recur=${encodeURIComponent('RRULE:FREQ=DAILY')}&details=${encodeURIComponent('Abre Budgy: ' + url)}`;
+  const addApple = () => {
+    const prefs = { ...(loadLS(PREFS_KEY) || {}), reminderHour: hh };
+    saveLS(PREFS_KEY, prefs);
+    const blob = new Blob([reminderICS(hh, url)], { type: 'text/calendar' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'recordatorio-budgy.ics';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+  const hours = [[9, '9:00 a. m.'], [14, '2:00 p. m.'], [20, '8:00 p. m.'], [21, '9:00 p. m.'], [22, '10:00 p. m.']];
+  return h('section', null,
+    h('div', { className: 'b-sh' }, h('h2', null, 'Recordatorio diario')),
+    h('p', { className: 'b-note', style: { marginTop: 0 } }, 'Quien anota todos los días sabe exactamente cuánto puede gastar. Budgy te lo recuerda desde el calendario de tu cel, a la hora que elijas.'),
+    h('div', { className: 'b-seg', role: 'group', 'aria-label': 'Hora del recordatorio' }, hours.map(o => h('button', {
+      key: o[0], className: hh === o[0] ? 'on' : '', onClick: () => setHh(o[0])
+    }, o[1]))),
+    h('div', { className: 'b-remind-btns' },
+      h('button', { className: 'b-primary', onClick: addApple }, 'Agregar a mi calendario (iPhone)'),
+      h('a', { className: 'b-secondary', href: gcal, target: '_blank', rel: 'noopener' }, 'Usar Google Calendar (Android)')));
+}
+
 
 function MainApp(_ref22) {
   let onLock = _ref22.onLock;
@@ -9406,6 +9702,14 @@ function MainApp(_ref22) {
     prefs,
     userName,
     onUpdate: update,
+    onPatchGame: p => setGame(prev => {
+      const g = {
+        ...prev,
+        ...p
+      };
+      saveLS(GAME_KEY, g);
+      return g;
+    }),
     onTab: goTab,
     onAdd: () => setQuickOpen(true)
   };
