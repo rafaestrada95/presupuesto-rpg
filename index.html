@@ -1538,13 +1538,8 @@ function WealthSection(_p) {
 
 
 /* ── MISSIONS ── */
+// Solo misiones de hábitos financieros: ninguna premia solo abrir la app
 const ALL_MISSIONS = [{
-  id: 'm_mañanero',
-  icon: '☀️',
-  title: 'Check-in mañanero',
-  desc: 'Abre la app antes del mediodía',
-  xp: 10
-}, {
   id: 'm_primer',
   icon: '📝',
   title: 'Ya empezamos',
@@ -1569,18 +1564,6 @@ const ALL_MISSIONS = [{
   desc: 'Mantén tu racha activa hoy',
   xp: 20
 }, {
-  id: 'm_noche',
-  icon: '🌙',
-  title: 'El cierre',
-  desc: 'Revisa la app después de las 8pm',
-  xp: 15
-}, {
-  id: 'm_deudas',
-  icon: '🏦',
-  title: 'Cara a cara',
-  desc: 'Revisa tu situación de deudas',
-  xp: 10
-}, {
   id: 'm_austeridad',
   icon: '🐷',
   title: 'Modo austeridad',
@@ -1592,12 +1575,6 @@ const ALL_MISSIONS = [{
   title: 'En verde',
   desc: 'Termina con saldo positivo hoy',
   xp: 40
-}, {
-  id: 'm_info',
-  icon: '📊',
-  title: 'Auto-chequeo',
-  desc: 'Revisa tu resumen en Mi Info',
-  xp: 10
 }, {
   id: 'm_3gastos',
   icon: '⚡',
@@ -1616,12 +1593,6 @@ const ALL_MISSIONS = [{
   title: 'Día sin plástico',
   desc: 'No uses tarjeta hoy (y sí anota gastos)',
   xp: 25
-}, {
-  id: 'm_sesion2',
-  icon: '👁',
-  title: 'Doble ronda',
-  desc: 'Abre la app dos veces hoy',
-  xp: 15
 }];
 function getDailyMissions(dateStr) {
   const seed = dateStr.split('-').reduce((s, n, i) => s + parseInt(n) * (i + 11), 0);
@@ -2180,7 +2151,8 @@ function calcDP(data) {
       const pay = d.type === 'plan' ? +(d.paymentAmount || 0) : d.type === 'informal' && d.informalMode === 'fixed' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
       return s + pay;
     }, 0);
-    realBalance = currentDebit + currentEfectivo - pendingFixed - pendingDebts;
+    // Lo comprado con tarjeta en este corte se tendrá que pagar: se aparta desde ya
+    realBalance = currentDebit + currentEfectivo - pendingFixed - pendingDebts - cardReserved;
   }
   return {
     income,
@@ -2324,15 +2296,16 @@ function canAfford(data, amount, months) {
 function calcHealthScore(data, game, dp) {
   let score = 0;
   if (game.streak >= 30) score += 20;else if (game.streak >= 7) score += 15;else if (game.streak >= 3) score += 10;else if (game.streak >= 1) score += 5;
-  if (dp.remaining > dp.daily * 3) score += 25;else if (dp.remaining > 0) score += 15;else if (dp.remaining > -1000) score += 5;
+  const avail = dp.available != null ? dp.available : dp.remaining;
+  if (avail > dp.daily * 3) score += 25;else if (avail > 0) score += 15;else if (avail > -1000) score += 5;
   const criticalDebts = (data.debts || []).filter(d => {
     const u = calcUrgency(d);
     return u.key === 'critical' || u.key === 'danger';
   });
   if (criticalDebts.length === 0) score += 20;else if (criticalDebts.length === 1) score += 10;
-  const todayStr = new Date().toLocalISO().slice(0, 10);
-  const doneTodayCount = Object.keys(game.doneMissions || {}).filter(k => k.startsWith(todayStr)).length;
-  if (doneTodayCount >= 3) score += 20;else if (doneTodayCount >= 1) score += 10;
+  const weekAgo = new Date(Date.now() - 6 * 864e5).toLocalISO().slice(0, 10);
+  const daysLogged = new Set([...(data.cashTransactions || []), ...(data.cardTransactions || [])].map(t => t.date).filter(d => d && d >= weekAgo)).size;
+  if (daysLogged >= 5) score += 20;else if (daysLogged >= 3) score += 12;else if (daysLogged >= 1) score += 6;
   const emerPct = data.emerGoal ? Math.min(100, (+data.emerSaved || 0) / +data.emerGoal * 100) : 0;
   if (emerPct >= 100) score += 15;else if (emerPct >= 50) score += 8;else if (emerPct >= 20) score += 4;
   return Math.min(100, score);
@@ -8120,7 +8093,7 @@ function DailyBreakdown(_p) {
   }, v));
   if (dp.hasSaldo) return h('div', {
     className: 'b-breakdown'
-  }, row('En tu cuenta', fmt(dp.currentDebit)), row('En efectivo', fmt(dp.currentEfectivo)), dp.pendingFixed > 0 && row('Pagos fijos que faltan esta quincena', '−' + fmt(dp.pendingFixed)), dp.pendingDebts > 0 && row('Pagos de deudas que faltan', '−' + fmt(dp.pendingDebts)), row('Te queda libre', fmt(dp.realBalance), true), dp.balanceDate && h('p', {
+  }, row('En tu cuenta', fmt(dp.currentDebit)), row('En efectivo', fmt(dp.currentEfectivo)), dp.pendingFixed > 0 && row('Pagos fijos que faltan esta quincena', '−' + fmt(dp.pendingFixed)), dp.pendingDebts > 0 && row('Pagos de deudas que faltan', '−' + fmt(dp.pendingDebts)), dp.cardReserved > 0 && row('Apartado por compras con tarjeta', '−' + fmt(dp.cardReserved)), row('Te queda libre', fmt(dp.realBalance), true), dp.balanceDate && h('p', {
     className: 'b-note'
   }, 'Contando desde el ', fmtDate(dp.balanceDate), ', cuando pusiste tus cuentas al día. Se suman tus quincenas y se restan los gastos en efectivo y débito.'));
   return h('div', {
@@ -8164,6 +8137,8 @@ function HomeScreen(_p) {
   const todayStr = now.toLocalISO().slice(0, 10);
   const loggedToday = [...(data.cashTransactions || []), ...(data.cardTransactions || [])].some(t => t.date === todayStr);
   const eveningAsk = now.getHours() >= 18 && !loggedToday;
+  // Un solo aviso a la vez para no saturar Inicio
+  const promo = !real && income > 0 && !prefs.freshDismissed ? 'fresh' : gameOn && (game.xp || 0) >= 100 && !game.levelsNoticeSeen ? 'levels' : !prefs.installDismissed && !isStandalone() ? 'install' : null;
   const missions = getDailyMissions(todayStr);
   const missionsDone = missions.filter(m => (game.completedMissions || {})[`${todayStr}-${m.id}`]).length;
   const cards = data.debts.filter(d => d.type === 'tarjeta');
@@ -8231,7 +8206,7 @@ function HomeScreen(_p) {
       marginTop: 14
     },
     onClick: () => _p.onTab('perfil')
-  }, 'Agregar mi quincena')), !real && income > 0 && !prefs.freshDismissed && h('section', {
+  }, 'Agregar mi quincena')), promo === 'fresh' && h('section', {
     className: 'b-install'
   }, h('div', {
     className: 'b-m'
@@ -8251,7 +8226,7 @@ function HomeScreen(_p) {
   }, h(Icon, {
     d: IC.plus,
     w: 2.6
-  }), eveningAsk ? '¿Gastaste algo hoy? Anótalo' : 'Anotar un gasto'), gameOn && (game.xp || 0) >= 100 && !game.levelsNoticeSeen && h(LevelsNotice, {
+  }), eveningAsk ? '¿Gastaste algo hoy? Anótalo' : 'Anotar un gasto'), promo === 'levels' && h(LevelsNotice, {
     game: game,
     onSee: () => {
       _p.onPatchGame({
@@ -8367,7 +8342,7 @@ function HomeScreen(_p) {
     className: 'b-insight-t'
   }, suggestion.text), h('span', {
     className: 'b-insight-go'
-  }, 'Ver tu presupuesto'))), !prefs.installDismissed && h(InstallCard, {
+  }, 'Ver tu presupuesto'))), promo === 'install' && h(InstallCard, {
     onDismiss: () => _p.setPrefs({
       installDismissed: true
     })
@@ -8677,21 +8652,9 @@ function PerfilScreen(_p) {
   }, o[1]))))), prefs.game && !prefs.simple && h('button', {
     className: 'b-game slim',
     onClick: () => _p.onTab('juego')
-  }, h('b', null, '🎮 Mi personaje, misiones y tienda'), h('span', null, 'Abrir')), h('section', null, h('div', {
-    className: 'b-sh'
-  }, h('h2', null, 'Anota sin abrir la app')), h(More, {
-    title: 'Automático con Apple Pay (iPhone)'
-  }, h('p', {
-    className: 'b-note'
-  }, 'Cada vez que pagues con tu iPhone, Budgy se abre con el monto ya escrito. Solo eliges la categoría.'), h('ol', {
-    className: 'b-steps'
-  }, h('li', null, 'Abre la app ', h('b', null, 'Atajos'), ' y toca ', h('b', null, 'Automatización'), '.'), h('li', null, 'Elige ', h('b', null, 'Transacción'), ' y selecciona tus tarjetas.'), h('li', null, 'Agrega la acción ', h('b', null, 'Abrir URL'), ' con esta dirección y agrega al final ', h('code', null, '&monto='), ' seguido de la variable ', h('b', null, 'Monto'), ':'), h('li', null, h('code', {
-    className: 'b-url'
-  }, quickUrl)), h('li', null, 'Desactiva “Preguntar antes de ejecutar”.'))), h(More, {
-    title: 'Botón en tu pantalla de inicio'
-  }, h('ol', {
-    className: 'b-steps'
-  }, h('li', null, 'En el navegador toca ', h('b', null, 'Compartir'), ' (iPhone) o el menú ', h('b', null, '⋮'), ' (Android).'), h('li', null, 'Elige ', h('b', null, 'Agregar a pantalla de inicio'), '.')))), h(NotificationsSection, {
+  }, h('b', null, '🎮 Mi personaje, misiones y tienda'), h('span', null, 'Abrir')), h(InstallCard, {
+    onDismiss: () => {}
+  }), h(NotificationsSection, {
     prefs: _p.prefs,
     setPrefs: _p.setPrefs,
     data: _p.data
@@ -9486,7 +9449,11 @@ function HealthNative(_p) {
     [dp.available >= 0, dp.available >= 0 ? 'Tu quincena va en verde' : 'Esta quincena sale más de lo que entra'],
     [urgent === 0, urgent === 0 ? 'Sin pagos urgentes' : `${urgent} ${urgent === 1 ? 'pago urgente' : 'pagos urgentes'}`],
     [emerPct >= 50, goal > 0 ? `Fondo de emergencia al ${emerPct}%` : 'Todavía no tienes fondo de emergencia'],
-    [(game.streak || 0) >= 3, `Constancia: ${game.streak || 0} ${(game.streak || 0) === 1 ? 'día' : 'días'} seguidos usando Budgy`]
+    (() => {
+      const weekAgo = new Date(Date.now() - 6 * 864e5).toLocalISO().slice(0, 10);
+      const n = new Set([...(data.cashTransactions || []), ...(data.cardTransactions || [])].map(t => t.date).filter(d => d && d >= weekAgo)).size;
+      return [n >= 5, `Anotaste gastos ${n} de los últimos 7 días`];
+    })()
   ];
   return e('section', null,
     e('div', { className: 'b-health' }, e('div', { className: 'v b-num' }, score), e('div', null,
