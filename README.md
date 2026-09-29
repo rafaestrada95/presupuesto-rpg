@@ -17,17 +17,21 @@ npm install
 npm start          # http://localhost:3000
 ```
 
-## Configuración en Railway
+## Dónde vive
 
-Railway detecta `package.json` y corre `npm start`.
+- **La app** se publica en GitHub Pages desde `main`: `https://rafaestrada95.github.io/presupuesto-rpg/`.
+- **El servidor de avisos** (`server.js`) corre en Railway. La app le habla por medio de `BUDGY_SERVER` en `index.html`. Mientras esté vacío, Budgy ofrece el recordatorio por calendario.
 
-1. **Volume** (para no perder las suscripciones ni las llaves en cada despliegue): en el servicio, *Settings → Volumes → Add Volume* con mount path `/data`.
-2. **Variables**:
+## Configuración en Railway (servidor de avisos)
+
+1. *New → Deploy from GitHub repo →* `presupuesto-rpg`. Railway detecta `package.json` y corre `npm start`.
+2. *Settings → Networking → Generate Domain*. Esa dirección va en `BUDGY_SERVER` dentro de `index.html`.
+3. *Volume* con mount path `/data`, para no perder las suscripciones ni las llaves en cada despliegue.
+4. *Variables*:
    - `DATA_DIR=/data`
-   - `VAPID_SUBJECT=mailto:tu-correo@ejemplo.com` (contacto del remitente de los avisos)
-   - Opcional: `VAPID_PUBLIC_KEY` y `VAPID_PRIVATE_KEY`. Si no las pones, el servidor las genera la primera vez, las guarda en el Volume y las muestra en los logs.
-
-Sin Volume, la app sigue funcionando: cada teléfono vuelve a registrar sus avisos al abrir Budgy. Pero entre un despliegue y la siguiente vez que alguien abra la app, no le llegan avisos.
+   - `VAPID_SUBJECT=mailto:tu-correo@ejemplo.com`
+   - Opcional: `ALLOWED_ORIGINS`, los sitios que pueden usar la API. Default: `https://rafaestrada95.github.io`.
+   - Opcional: `VAPID_PUBLIC_KEY` y `VAPID_PRIVATE_KEY`. Si faltan, se generan, se guardan en el Volume y aparecen en los logs.
 
 ## Notas
 
