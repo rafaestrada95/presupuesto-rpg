@@ -796,6 +796,20 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-tour-dots i{width:8px;height:8px;border-radius:99px;background:var(--border)}
 .b-tour-dots i.on{width:22px;background:var(--indigo)}
 .b-cardedit .b-chips{margin-top:2px}
+
+.b-paystate{display:flex;flex-direction:column;gap:6px;padding:10px 0 4px;font-size:.88rem}
+.b-paystate>b{font-size:.85rem;font-weight:700}
+.b-paystate>span{color:var(--dim);font-size:.82rem}
+.b-paystate.later{flex-direction:row;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.b-paystate.late>b{color:var(--danger)}
+.b-paystate .b-seg3{margin-top:0}
+.b-paystate .b-seg3{display:grid;grid-template-columns:1fr 1fr;background:var(--surface);border-radius:var(--r-b);padding:4px;gap:4px}
+.b-paystate .b-seg3 button{min-height:44px;font:inherit;font-weight:700;font-size:.9rem;border:0;border-radius:var(--r-s);background:transparent;color:var(--dim);text-align:center}
+.b-paystate .b-seg3 button.on{background:var(--indigo);color:#fff}
+.b-paystate.late .b-seg3 button.on{background:var(--danger)}
+.b-rows>div:has(.b-rowfull){flex-wrap:wrap}
+.b-rows>div .b-rowfull{flex-basis:100%}
+.b-kv-sub{display:block;font-size:.78rem;color:var(--dim);font-weight:500}
 </style>
 </head>
 <body>
@@ -2100,6 +2114,42 @@ function afterBaseline(data, date, ts) {
 function cardTxAfter(data) {
   return (data.cardTransactions || []).filter(t => afterBaseline(data, t.date, t.ts));
 }
+// ── Fechas de pago: ¿este pago ya pasó, toca en esta quincena o después? ──
+const MES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+function payWhen(day, now) {
+  now = now || new Date();
+  const d = +day, t = now.getDate(), y = now.getFullYear(), m = now.getMonth();
+  const last = new Date(y, m + 1, 0).getDate();
+  if (!d) return { kind: 'none' };
+  const qEnd = t <= 15 ? 15 : last;
+  const dd = Math.min(d, last);
+  const mk = now.toLocalISO().slice(0, 7);
+  if (dd >= t && dd <= qEnd) return { kind: 'now', month: mk, label: dd === t ? 'Vence hoy' : `Vence el ${dd} de ${MES_CORTO[m]}` };
+  if (dd < t) return { kind: 'past', month: mk, label: `Venció el ${dd} de ${MES_CORTO[m]}` };
+  // Después de esta quincena: más adelante este mes o el próximo
+  const nm = dd > qEnd ? m : m + 1;
+  const nd = new Date(y, nm, 1);
+  return { kind: 'later', month: nd.toLocalISO().slice(0, 7), label: `Toca el ${Math.min(d, new Date(nd.getFullYear(), nd.getMonth() + 1, 0).getDate())} de ${MES_CORTO[nd.getMonth()]}` };
+}
+// Mes al que corresponde el siguiente pago de una deuda (si vence el 5 y hoy es 29, es el del mes que entra)
+function dueMonthOf(d, now) {
+  now = now || new Date();
+  const day = +d.dueDay;
+  if (!day || day >= now.getDate()) return now.toLocalISO().slice(0, 7);
+  return new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocalISO().slice(0, 7);
+}
+const debtMonthPay = d => d.type === 'plan' ? +(d.paymentAmount || 0) : d.type === 'informal' && d.informalMode === 'fixed' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
+// Pagos que ya vencieron y marcaste como "no lo pagué": se apartan hasta que los pagues
+function overdueItems(data) {
+  return Object.keys(data.overdue || {}).map(k => {
+    const [id, M] = k.split('|');
+    const d = (data.debts || []).find(x => String(x.id) === id);
+    if (d) return (d.monthlyPayments || []).some(p => p.month === M) ? null : { key: k, id: d.id, kind: 'debt', name: d.name, pay: debtMonthPay(d), day: +d.dueDay, month: M };
+    const x = (data.exps || []).find(x => String(x.id) === id);
+    if (x) return (data.paidExps || {})[`${x.id}_${M}`] ? null : { key: k, id: x.id, kind: 'exp', name: x.name, pay: +x.amount || 0, day: +x.day, month: M, x };
+    return null;
+  }).filter(Boolean);
+}
 function calcDP(data) {
   const today = new Date();
   const day = today.getDate();
@@ -2129,7 +2179,8 @@ function calcDP(data) {
   const cashSpentToday = (data.cashTransactions || []).filter(t => t.date === todayStr).reduce((s, t) => s + (+t.amount || 0), 0);
   const apartadoQ = apartadosThisQuincena(data, today);
   const apartados = apartadosTotal(data);
-  const committed = fixedQ + varH + debtQ + cardPayQ + cardReserved + cashSpentToday + apartadoQ;
+  const overdue = overdueItems(data).reduce((s, o) => s + o.pay, 0);
+  const committed = fixedQ + varH + debtQ + cardPayQ + cashSpentToday + apartadoQ + overdue;
   const remaining = income - committed;
   const saldoD = +data.saldoDebito || 0;
   const saldoE = +data.saldoEfectivo || 0;
@@ -2155,9 +2206,8 @@ function calcDP(data) {
       const pay = d.type === 'plan' ? +(d.paymentAmount || 0) : d.type === 'informal' && d.informalMode === 'fixed' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
       return s + pay;
     }, 0);
-    // Lo comprado con tarjeta en este corte se tendrá que pagar: se aparta desde ya
     // Lo apartado para metas sigue en tu cuenta, pero ya no es libre
-    realBalance = currentDebit + currentEfectivo - pendingFixed - pendingDebts - cardReserved - apartados;
+    realBalance = currentDebit + currentEfectivo - pendingFixed - pendingDebts - apartados - overdue;
   }
   return {
     income,
@@ -2182,6 +2232,7 @@ function calcDP(data) {
     pendingDebts,
     apartados,
     apartadoQ,
+    overdue,
     balanceDate: data.balanceDate || null
   };
 }
@@ -2931,12 +2982,14 @@ function DailyBreakdown(_p) {
   }, v));
   if (dp.hasSaldo) return h('div', {
     className: 'b-breakdown'
-  }, row('En tu cuenta', fmt(dp.currentDebit)), row('En efectivo', fmt(dp.currentEfectivo)), dp.pendingFixed > 0 && row('Pagos fijos que faltan esta quincena', '−' + fmt(dp.pendingFixed)), dp.pendingDebts > 0 && row('Pagos de deudas que faltan', '−' + fmt(dp.pendingDebts)), dp.cardReserved > 0 && row('Apartado por compras con tarjeta', '−' + fmt(dp.cardReserved)), dp.apartados > 0 && row('Apartado para tus metas', '−' + fmt(dp.apartados)), row('Te queda libre', fmt(dp.realBalance), true), dp.balanceDate && h('p', {
+  }, row('En tu cuenta', fmt(dp.currentDebit)), row('En efectivo', fmt(dp.currentEfectivo)), dp.pendingFixed > 0 && row('Pagos fijos que faltan esta quincena', '−' + fmt(dp.pendingFixed)), dp.pendingDebts > 0 && row('Pagos de deudas que faltan', '−' + fmt(dp.pendingDebts)), dp.overdue > 0 && row('Pagos vencidos sin pagar', '−' + fmt(dp.overdue)), dp.apartados > 0 && row('Apartado para tus metas', '−' + fmt(dp.apartados)), row('Te queda libre', fmt(dp.realBalance), true), dp.cardReserved > 0 && h('p', {
+    className: 'b-note'
+  }, 'Llevas ', fmt(dp.cardReserved), ' en compras con tarjeta desde tu último corte. No se descuentan todavía: los pagas en la siguiente fecha límite de tu tarjeta.'), dp.balanceDate && h('p', {
     className: 'b-note'
   }, 'Contando desde el ', fmtDate(dp.balanceDate), ', cuando pusiste tus cuentas al día. Se suman tus quincenas y se restan los gastos en efectivo y débito.'));
   return h('div', {
     className: 'b-breakdown'
-  }, row('Tu quincena', fmt(dp.income)), dp.fixedQ > 0 && row('Gastos fijos por pagar', '−' + fmt(dp.fixedQ)), dp.varH > 0 && row('Gastos variables estimados', '−' + fmt(dp.varH)), dp.debtQ + dp.cardPayQ > 0 && row('Pagos de deudas', '−' + fmt(dp.debtQ + dp.cardPayQ)), dp.cardReserved > 0 && row('Apartado para tarjetas', '−' + fmt(dp.cardReserved)), dp.cashSpentToday > 0 && row('Lo que gastaste hoy', '−' + fmt(dp.cashSpentToday)), dp.apartadoQ > 0 && row('Apartado para tus metas', '−' + fmt(dp.apartadoQ)), row('Te queda', fmt(dp.remaining), true), dp.hasSaldo && row('Después de pagos pendientes', fmt(dp.realBalance)));
+  }, row('Tu quincena', fmt(dp.income)), dp.fixedQ > 0 && row('Gastos fijos por pagar', '−' + fmt(dp.fixedQ)), dp.varH > 0 && row('Gastos variables estimados', '−' + fmt(dp.varH)), dp.debtQ + dp.cardPayQ > 0 && row('Pagos de deudas', '−' + fmt(dp.debtQ + dp.cardPayQ)), dp.cashSpentToday > 0 && row('Lo que gastaste hoy', '−' + fmt(dp.cashSpentToday)), dp.apartadoQ > 0 && row('Apartado para tus metas', '−' + fmt(dp.apartadoQ)), row('Te queda', fmt(dp.remaining), true), dp.hasSaldo && row('Después de pagos pendientes', fmt(dp.realBalance)));
 }
 
 /* ════ INICIO ════ */
@@ -2965,7 +3018,10 @@ function HomeScreen(_p) {
   const fixedDue = (data.exps || []).filter(x => x.day && !(data.paidExps || {})[`${x.id}_${monthKeyA}`]).map(x => ({
     kind: 'exp', id: 'e' + x.id, x, name: x.name, pay: +x.amount || 0, days: +x.day - now.getDate()
   })).filter(x => x.days >= 0 && x.days <= 3);
-  const attention = [..._p.upcoming.map(d => ({
+  const overdueRows = overdueItems(data).map(o => ({
+    ...o, id: 'o' + o.key, overdue: true, days: -1
+  }));
+  const attention = [...overdueRows, ..._p.upcoming.filter(d => !overdueRows.some(o => o.kind === 'debt' && o.id === d.id)).map(d => ({
     kind: 'debt', id: d.id, d, name: d.name, pay: debtPay(d), days: d.urg.daysLeft ?? 99
   })), ...fixedDue].sort((a, b) => a.days - b.days).slice(0, simple ? 1 : 3);
   const limitRows = limitsNear(data).slice(0, Math.max(0, (simple ? 1 : 3) - attention.length));
@@ -3126,9 +3182,9 @@ function HomeScreen(_p) {
       className: 'b-n'
     }, it.kind === 'exp' ? `Pagar ${it.name}${pay > 0 ? ` (${fmt(pay)})` : ''}` : pay > 0 ? `Pagar ${fmt(pay)} a ${it.name}` : `Pagar a ${it.name}`), h('div', {
       className: 'b-d'
-    }, dueLabel(it.days))), h('button', {
+    }, it.overdue ? `Venció el ${it.day} de ${MES_CORTO[+it.month.slice(5, 7) - 1]} · no lo has pagado` : dueLabel(it.days))), h('button', {
       className: 'b-secondary',
-      onClick: () => it.kind === 'exp' ? _p.onUpdate({
+      onClick: () => it.overdue ? _p.onPayOverdue(it) : it.kind === 'exp' ? _p.onUpdate({
         paidExps: {
           ...(data.paidExps || {}),
           [`${it.x.id}_${monthKeyA}`]: true
@@ -3281,7 +3337,7 @@ function PresupuestoScreen(_p) {
     dp = _p.dp,
     simple = _p.prefs.simple;
   const fijos = dp.fixedQ + dp.varH;
-  const deudas = dp.debtQ + dp.cardPayQ + dp.cardReserved;
+  const deudas = dp.debtQ + dp.cardPayQ;
   const libre = Math.max(0, dp.income - fijos - deudas);
   const total = Math.max(1, fijos + deudas + libre);
   const w = v => (v / total * 100).toFixed(1) + '%';
@@ -4103,7 +4159,7 @@ function ConfirmDelete(_p) {
 function DebtSheet(_p) {
   const d = _p.d, a = _p.actions;
   const month = new Date().toLocalISO().slice(0, 7);
-  const paidThisMonth = (d.monthlyPayments || []).some(p => p.month === month);
+  const paidThisMonth = (d.monthlyPayments || []).some(p => p.month === dueMonthOf(d));
   const pay = debtPay(d);
   const bal = debtBalance(d, _p.cardTx);
   const plan = d.type === 'plan' ? getPlanInfo(d) : null;
@@ -4190,7 +4246,7 @@ function DebtsSection(_p) {
     added && e('p', { className: 'b-calm', style: { marginTop: 12 } }, e(Icon, { d: IC.check }), `Listo: agregamos “${added}” a tu plan.`),
     list.length > 0 && e('div', { className: 'b-rows b-debts' }, list.map((d, i) => {
       const pay = debtPay(d);
-      const paid = d.type !== 'plan' && (d.monthlyPayments || []).some(p => p.month === month);
+      const paid = d.type !== 'plan' && (d.monthlyPayments || []).some(p => p.month === dueMonthOf(d));
       return e('button', { key: d.id, onClick: () => setOpen(d.id) },
         e(CatIcon, { c: debtKind(d.type) }),
         e('div', { className: 'b-m' },
@@ -4691,7 +4747,7 @@ async function pushServerKey() {
 // Lo mínimo que el servidor necesita para avisarte de pagos: nombre, día, monto y si ya pagaste
 function pushPayments(data) {
   const month = new Date().toLocalISO().slice(0, 7);
-  const debts = (data.debts || []).filter(d => d.dueDay).map(d => ({ name: d.name, day: +d.dueDay, amount: debtPay(d), paid: (d.monthlyPayments || []).some(p => p.month === month) }));
+  const debts = (data.debts || []).filter(d => d.dueDay).map(d => ({ name: d.name, day: +d.dueDay, amount: debtPay(d), paid: (d.monthlyPayments || []).some(p => p.month === dueMonthOf(d)) }));
   const fixed = (data.exps || []).filter(x => x.day).map(x => ({ name: x.name, day: +x.day, amount: +x.amount || 0, paid: !!(data.paidExps || {})[`${x.id}_${month}`] }));
   return [...debts, ...fixed];
 }
@@ -4833,6 +4889,8 @@ function FreshStartSheet(_p) {
   const others0 = (data.debts || []).filter(d => d.type !== 'tarjeta');
   const cardTx = cardTxAfter(data);
   const paidThisMonth = d => (d.monthlyPayments || []).some(p => p.month === month);
+  // Si su fecha ya pasó y no hay registro, lo normal es que sí se pagó; tú lo corriges si no
+  const paidDefault = (day, recorded) => recorded || payWhen(day, now).kind === 'past';
   const [step, setStep] = useState(0);
   const [f, setF] = useState(() => ({
     debit: dp.hasSaldo ? String(Math.max(0, Math.round(dp.currentDebit))) : '',
@@ -4841,40 +4899,44 @@ function FreshStartSheet(_p) {
     // Tarjetas: lo que debes hoy ya incluye lo que compraste; desde aquí solo se suman compras nuevas
     cards: Object.fromEntries(cards0.map(c => [c.id, {
       balance: String(Math.round(debtBalance(c, cardTx)) || ''), minPayment: String(c.minPayment || ''), cutDay: String(c.cutDay || ''),
-      dueDay: String(c.dueDay || ''), creditLimit: String(c.creditLimit || ''), paid: paidThisMonth(c), gone: false
+      dueDay: String(c.dueDay || ''), creditLimit: String(c.creditLimit || ''), paid: paidDefault(c.dueDay, paidThisMonth(c)), gone: false
     }])),
     newCards: [],
     newDebts: [],
     newExps: [],
-    debts: Object.fromEntries(others0.map(d => [d.id, { balance: String(d.type === 'plan' ? '' : d.balance ?? ''), paidPayments: String(d.paidPayments ?? ''), paid: d.type !== 'plan' && paidThisMonth(d), gone: false }])),
-    exps: Object.fromEntries((data.exps || []).map(x => [x.id, { amount: String(x.amount ?? ''), paid: !!(data.paidExps || {})[`${x.id}_${month}`], gone: false }])),
+    debts: Object.fromEntries(others0.map(d => [d.id, { balance: String(d.type === 'plan' ? '' : d.balance ?? ''), paidPayments: String(d.paidPayments ?? ''), paid: paidDefault(d.dueDay, paidThisMonth(d)), gone: false }])),
+    exps: Object.fromEntries((data.exps || []).map(x => [x.id, { amount: String(x.amount ?? ''), paid: paidDefault(x.day, !!(data.paidExps || {})[`${x.id}_${month}`]), gone: false }])),
     emerSaved: data.emerSaved || '', emerGoal: data.emerGoal || ''
   }));
   const set = patch => setF(prev => ({ ...prev, ...patch }));
   const payNow = currentPayDate({ ...data, paySchedule: f.schedule, q1: f.q1, q2: f.q2 }, now);
   const build = () => {
     const ts = Date.now();
-    const keepPaid = (d, on) => {
+    const overdue = {};
+    // Solo cuenta lo que aplica: pagos de esta quincena o ya vencidos este mes
+    const keepPaid = (d, on, day) => {
+      const w = payWhen(day, now);
+      if (w.kind !== 'now' && w.kind !== 'past') return d.monthlyPayments || [];
       const others = (d.monthlyPayments || []).filter(p => p.month !== month);
       const had = (d.monthlyPayments || []).find(p => p.month === month);
+      if (!on && w.kind === 'past') overdue[`${d.id}|${month}`] = true;
       return on ? [...others, had || { month, paidAt: today, amount: 0 }] : others;
     };
     const cards = cards0.filter(c => !f.cards[c.id].gone).map(c => {
       const x = f.cards[c.id];
-      return { ...c, balance: +x.balance || 0, minPayment: x.minPayment === '' ? c.minPayment : +x.minPayment, cutDay: x.cutDay || c.cutDay, dueDay: x.dueDay || c.dueDay, creditLimit: x.creditLimit === '' ? c.creditLimit : +x.creditLimit, monthlyPayments: keepPaid(c, x.paid) };
+      return { ...c, balance: +x.balance || 0, minPayment: x.minPayment === '' ? c.minPayment : +x.minPayment, cutDay: x.cutDay || c.cutDay, dueDay: x.dueDay || c.dueDay, creditLimit: x.creditLimit === '' ? c.creditLimit : +x.creditLimit, monthlyPayments: keepPaid(c, x.paid, x.dueDay || c.dueDay) };
     });
-    const added = f.newCards.filter(c => c.name.trim()).map((c, i) => ({ ...DEBT_BLANK, id: 'n' + ts + i, type: 'tarjeta', name: c.name.trim(), balance: +c.balance || 0, minPayment: +c.minPayment || '', cutDay: c.cutDay, dueDay: c.dueDay, creditLimit: +c.creditLimit || '', monthlyPayments: [] }));
+    const added = f.newCards.filter(c => c.name.trim()).map((c, i) => { const nc = { ...DEBT_BLANK, id: 'n' + ts + i, type: 'tarjeta', name: c.name.trim(), balance: +c.balance || 0, minPayment: +c.minPayment || '', cutDay: c.cutDay, dueDay: c.dueDay, creditLimit: +c.creditLimit || '', monthlyPayments: [] }; nc.monthlyPayments = keepPaid(nc, !!c.paid, c.dueDay); return nc; });
     const others = others0.filter(d => !f.debts[d.id].gone).map(d => {
       const x = f.debts[d.id];
       const nd = { ...d };
-      if (d.type === 'plan') { if (x.paidPayments !== '') nd.paidPayments = +x.paidPayments; } else {
-        if (x.balance !== '') nd.balance = +x.balance;
-        nd.monthlyPayments = keepPaid(d, x.paid);
-      }
+      if (d.type === 'plan') { if (x.paidPayments !== '') nd.paidPayments = +x.paidPayments; } else if (x.balance !== '') nd.balance = +x.balance;
+      nd.monthlyPayments = keepPaid(d, x.paid, d.dueDay);
       return nd;
     });
     const addedDebts = f.newDebts.filter(d => d.name.trim() && (+d.balance > 0 || d.type === 'plan' && +d.pay > 0)).map((d, i) => {
       const base = { ...DEBT_BLANK, id: 'nd' + ts + i, type: d.type, name: d.name.trim(), dueDay: d.dueDay, monthlyPayments: [] };
+      base.monthlyPayments = keepPaid(base, !!d.paid, d.dueDay);
       if (d.type === 'plan') return { ...base, balance: '', paymentAmount: +d.pay || 0, totalPayments: +d.left || 1, paidPayments: 0 };
       if (d.type === 'informal') return { ...base, person: d.name.trim(), informalMode: 'fixed', balance: +d.balance || 0, paymentAmount: +d.pay || '' };
       return { ...base, balance: +d.balance || 0, monthlyPayment: +d.pay || '' };
@@ -4882,15 +4944,33 @@ function FreshStartSheet(_p) {
     const addedExps = f.newExps.filter(x => x.name.trim() && +x.amount > 0).map((x, i) => ({ id: 'nx' + ts + i, name: x.name.trim(), amount: +x.amount, day: x.day, catId: guessFixedCat(x.name), paidNew: x.paid }));
     const exps = [...(data.exps || []).filter(x => !f.exps[x.id].gone).map(x => ({ ...x, amount: f.exps[x.id].amount !== '' ? +f.exps[x.id].amount : x.amount })), ...addedExps.map(({ paidNew, ...x }) => x)];
     const paidExps = { ...(data.paidExps || {}) };
-    exps.forEach(x => { paidExps[`${x.id}_${month}`] = f.exps[x.id] ? !!f.exps[x.id].paid : !!(addedExps.find(a => a.id === x.id) || {}).paidNew; });
+    exps.forEach(x => {
+      const w = payWhen(x.day, now);
+      if (w.kind !== 'now' && w.kind !== 'past') return;
+      const on = f.exps[x.id] ? !!f.exps[x.id].paid : !!(addedExps.find(a => a.id === x.id) || {}).paidNew;
+      paidExps[`${x.id}_${month}`] = on;
+      if (!on && w.kind === 'past') overdue[`${x.id}|${month}`] = true;
+    });
     let paydays = data.paydays || [];
     // Si ya te depositaron, esa quincena ya está en lo que tienes hoy: se registra para no sumarla dos veces
     if (payNow && f.gotPaid && !paydays.some(p => p.quincena === payNow.key)) paydays = [...paydays, { quincena: payNow.key, amount: payNow.amount, addedAt: payNow.date, ts: ts - 1000 }];
     if (payNow && !f.gotPaid) paydays = paydays.filter(p => p.quincena !== payNow.key);
     return {
       saldoDebito: f.debit || '0', saldoEfectivo: f.cash || '0', balanceDate: today, balanceAt: ts, q1: f.q1, q2: f.q2, paySchedule: f.schedule,
-      debts: [...cards, ...added, ...others, ...addedDebts], exps, paidExps, paydays, emerSaved: f.emerSaved, emerGoal: f.emerGoal, freshStartAt: today
+      debts: [...cards, ...added, ...others, ...addedDebts], exps, paidExps, paydays, overdue, emerSaved: f.emerSaved, emerGoal: f.emerGoal, freshStartAt: today
     };
+  };
+  // Pregunta clara según la fecha: solo si el pago es de esta quincena o ya venció
+  const payRow = (day, paid, onSet, name, title) => {
+    const w = payWhen(day, now);
+    if (w.kind === 'none') return e('div', { className: 'b-cardedit-row' }, e('span', null, 'Día de pago', e('small', null, 'Ponle día para que Budgy lo aparte a tiempo')));
+    if (w.kind === 'later') return e('div', { className: 'b-paystate later' }, e('b', null, (title ? title + ' · ' : '') + w.label), e('span', null, 'Todavía no toca. Budgy lo aparta en esa quincena.'));
+    return e('div', { className: 'b-paystate' + (w.kind === 'past' && !paid ? ' late' : '') },
+      e('b', null, (title ? title + ' · ' : '') + w.label),
+      e('div', { className: 'b-seg3', role: 'group', 'aria-label': `¿Ya pagaste ${name}?` },
+        e('button', { className: paid ? 'on' : '', 'aria-pressed': !!paid, onClick: () => onSet(true) }, 'Ya lo pagué'),
+        e('button', { className: !paid ? 'on' : '', 'aria-pressed': !paid, onClick: () => onSet(false) }, w.kind === 'past' ? 'No lo pagué' : 'Falta pagar')),
+      e('span', null, paid ? 'No se descuenta de tu dinero.' : w.kind === 'past' ? 'Está vencido: Budgy lo aparta y te lo recuerda.' : 'Budgy lo aparta de tu dinero de esta quincena.'));
   };
   const toggle = (on, onClick, label) => e('button', { className: 'b-check' + (on ? ' on' : ''), 'aria-pressed': on, 'aria-label': label, onClick }, on ? '✓' : '');
   const inline = (value, onChange, label, ph) => e('input', { className: 'b-in-inline', inputMode: 'decimal', value, placeholder: ph || '$0', 'aria-label': label, onChange: ev => onChange(ev.target.value.replace(/[^0-9.]/g, '')) });
@@ -4907,12 +4987,13 @@ function FreshStartSheet(_p) {
     d.type !== 'plan' && e('div', { className: 'b-cardedit-row' }, e('span', null, 'Debes hoy'), inline(d.balance, v => upNewDebt(i, { balance: v }), 'Lo que debes')),
     e('div', { className: 'b-cardedit-row' }, e('span', null, d.type === 'plan' ? 'Pago de cada mes' : 'Pagas al mes', d.type === 'informal' && e('small', null, 'Si no hay acuerdo, déjalo vacío')), inline(d.pay, v => upNewDebt(i, { pay: v }), 'Pago mensual')),
     d.type === 'plan' && e('div', { className: 'b-cardedit-row' }, e('span', null, '¿Cuántos pagos te faltan?'), e('input', { className: 'b-in-inline sm', inputMode: 'numeric', value: d.left, placeholder: '0', 'aria-label': 'Pagos que faltan', onChange: ev => upNewDebt(i, { left: ev.target.value.replace(/\D/g, '') }) })),
-    e('div', { className: 'b-cardedit-row' }, e('span', null, 'Día de pago'), dayIn(d.dueDay, v => upNewDebt(i, { dueDay: v }), 'Día de pago')));
+    e('div', { className: 'b-cardedit-row' }, e('span', null, 'Día de pago'), dayIn(d.dueDay, v => upNewDebt(i, { dueDay: v }), 'Día de pago')),
+    d.dueDay && payRow(d.dueDay, !!d.paid, v => upNewDebt(i, { paid: v }), d.name || 'esta deuda'));
   const newExpEditor = (x, i) => e('div', { key: 'nx' + i, className: 'b-cardedit' },
     e('div', { className: 'b-cardedit-h' }, textIn(x.name, v => upNewExp(i, { name: v }), 'Nombre del pago', 'Ej. Renta, luz, internet, colegiatura'), removeBtn(() => set({ newExps: f.newExps.filter((_, j) => j !== i) }))),
     e('div', { className: 'b-cardedit-row' }, e('span', null, 'Cuánto pagas al mes'), inline(x.amount, v => upNewExp(i, { amount: v }), 'Monto')),
     e('div', { className: 'b-cardedit-row' }, e('span', null, 'Qué día lo pagas'), dayIn(x.day, v => upNewExp(i, { day: v }), 'Día de pago')),
-    e('div', { className: 'b-cardedit-row' }, e('span', null, '¿Ya lo pagaste este mes?'), toggle(!!x.paid, () => upNewExp(i, { paid: !x.paid }), 'Ya lo pagué este mes')));
+    x.day && payRow(x.day, !!x.paid, v => upNewExp(i, { paid: v }), x.name || 'este pago'));
   const cardEditor = (key, name, x, up, removable) => e('div', { key, className: 'b-cardedit' + (x.gone ? ' b-done' : '') },
     e('div', { className: 'b-cardedit-h' }, removable ? e('input', { className: 'b-in text sm', value: name, placeholder: 'Nombre (ej. BBVA Azul)', 'aria-label': 'Nombre de la tarjeta', onChange: ev => up({ name: ev.target.value }) }) : e('b', null, name),
       !removable && e('button', { className: 'b-textbtn' + (x.gone ? '' : ' danger'), onClick: () => up({ gone: !x.gone }) }, x.gone ? 'Dejar' : 'Ya no la uso')),
@@ -4922,7 +5003,7 @@ function FreshStartSheet(_p) {
       e('div', { className: 'b-cardedit-row' }, e('span', null, 'Día de corte', e('small', null, 'Cuando el banco cierra tu mes')), dayIn(x.cutDay, v => up({ cutDay: v }), `Día de corte de ${name}`)),
       e('div', { className: 'b-cardedit-row' }, e('span', null, 'Fecha límite de pago'), dayIn(x.dueDay, v => up({ dueDay: v }), `Día límite de pago de ${name}`)),
       e('div', { className: 'b-cardedit-row' }, e('span', null, 'Límite de crédito'), inline(x.creditLimit, v => up({ creditLimit: v }), `Límite de ${name}`)),
-      !removable && e('div', { className: 'b-cardedit-row' }, e('span', null, '¿Ya pagaste este mes?'), toggle(!!x.paid, () => up({ paid: !x.paid }), `Ya pagué ${name} este mes`))));
+      payRow(x.dueDay, !!x.paid, v => up({ paid: v }), name || 'la tarjeta', 'Pago de tu corte anterior')));
   const STEPS = [
     // 0 · Intro
     () => e(React.Fragment, null,
@@ -4953,30 +5034,31 @@ function FreshStartSheet(_p) {
     // 4 · Otras deudas
     () => e(React.Fragment, null,
       e('div', { className: 'b-wiz-q' }, 'Tus otras deudas'),
-      e('div', { className: 'b-wiz-help' }, others0.length ? 'Préstamos, compras a meses, lo que le debes a alguien. Palomea las que ya pagaste este mes.' : 'Préstamos, compras a meses o dinero que le debes a alguien. Así Budgy aparta tus pagos y te avisa antes de que venzan.'),
+      e('div', { className: 'b-wiz-help' }, others0.length ? 'Préstamos, compras a meses, lo que le debes a alguien. Revisa el saldo y dinos si ya pagaste lo que toca.' : 'Préstamos, compras a meses o dinero que le debes a alguien. Así Budgy aparta tus pagos y te avisa antes de que venzan.'),
       others0.length ? e('div', { className: 'b-rows' }, others0.map(d => {
         const x = f.debts[d.id];
         const upd = patch => set({ debts: { ...f.debts, [d.id]: { ...x, ...patch } } });
         return e('div', { key: d.id, className: x.gone ? 'b-done' : '' },
           e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, d.name), e('div', { className: 'b-d' }, x.gone ? 'Se va a quitar' : d.type === 'plan' ? `Pagos hechos de ${d.totalPayments || '?'}` : 'Lo que debes hoy'),
             !x.gone && e('button', { className: 'b-textbtn danger', onClick: () => upd({ gone: true }) }, 'Ya la liquidé')),
-          x.gone ? e('button', { className: 'b-textbtn', onClick: () => upd({ gone: false }) }, 'Dejar') : e(React.Fragment, null,
+          x.gone ? e('button', { className: 'b-textbtn', onClick: () => upd({ gone: false }) }, 'Dejar') :
             d.type === 'plan' ? e('input', { className: 'b-in-inline sm', inputMode: 'numeric', value: x.paidPayments, placeholder: '0', 'aria-label': `Pagos hechos de ${d.name}`, onChange: ev => upd({ paidPayments: ev.target.value.replace(/\D/g, '') }) }) : inline(x.balance, v => upd({ balance: v }), `Lo que debes en ${d.name}`),
-            d.type !== 'plan' && toggle(!!x.paid, () => upd({ paid: !x.paid }), `Ya pagué ${d.name} este mes`)));
+          !x.gone && e('div', { className: 'b-rowfull' }, payRow(d.dueDay, !!x.paid, v => upd({ paid: v }), d.name)));
       })) : !f.newDebts.length && e('p', { className: 'b-note' }, 'Si no tienes otras deudas, sigue adelante.'),
       f.newDebts.map(newDebtEditor),
       e('button', { className: 'b-secondary wide', onClick: () => set({ newDebts: [...f.newDebts, { type: 'prestamo', name: '', balance: '', pay: '', left: '', dueDay: '' }] }) }, others0.length || f.newDebts.length ? '+ Agregar otra deuda' : '+ Agregar una deuda')),
     // 5 · Pagos fijos
     () => e(React.Fragment, null,
       e('div', { className: 'b-wiz-q' }, 'Tus pagos fijos'),
-      e('div', { className: 'b-wiz-help' }, (data.exps || []).length ? 'Revisa que los montos sigan igual y palomea los que ya pagaste este mes.' : 'Agrega lo que pagas cada mes. Budgy lo aparta de tu quincena para que no te agarre desprevenido.'),
+      e('div', { className: 'b-wiz-help' }, (data.exps || []).length ? 'Revisa que los montos sigan igual. Solo te preguntamos por los que tocan en esta quincena o ya vencieron.' : 'Agrega lo que pagas cada mes. Budgy lo aparta de tu quincena para que no te agarre desprevenido.'),
       (data.exps || []).length ? e('div', { className: 'b-rows' }, (data.exps || []).map(x => {
         const v = f.exps[x.id];
         const upd = patch => set({ exps: { ...f.exps, [x.id]: { ...v, ...patch } } });
         return e('div', { key: x.id, className: v.gone ? 'b-done' : '' },
           e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, x.name), e('div', { className: 'b-d' }, v.gone ? 'Se va a quitar' : x.day ? `Día ${x.day}` : 'Sin día'),
             !v.gone && e('button', { className: 'b-textbtn danger', onClick: () => upd({ gone: true }) }, 'Ya no lo pago')),
-          v.gone ? e('button', { className: 'b-textbtn', onClick: () => upd({ gone: false }) }, 'Dejar') : e(React.Fragment, null, inline(v.amount, a => upd({ amount: a }), `Monto de ${x.name}`), toggle(!!v.paid, () => upd({ paid: !v.paid }), `Ya pagué ${x.name} este mes`)));
+          v.gone ? e('button', { className: 'b-textbtn', onClick: () => upd({ gone: false }) }, 'Dejar') : inline(v.amount, a => upd({ amount: a }), `Monto de ${x.name}`),
+          !v.gone && e('div', { className: 'b-rowfull' }, payRow(x.day, !!v.paid, p => upd({ paid: p }), x.name)));
       })) : !f.newExps.length && e('p', { className: 'b-note' }, 'Lo que pagas cada mes sin falta: renta, luz, internet, celular, colegiaturas, suscripciones.'),
       f.newExps.map(newExpEditor),
       e('button', { className: 'b-secondary wide', onClick: () => set({ newExps: [...f.newExps, { name: '', amount: '', day: '', paid: false }] }) }, (data.exps || []).length || f.newExps.length ? '+ Agregar otro pago fijo' : '+ Agregar un pago fijo')),
@@ -4992,17 +5074,25 @@ function FreshStartSheet(_p) {
       const nd = { ...data, ...build() };
       const p = calcDP(nd);
       const debt = getTotalDebt(nd);
+      // Lista de lo que se aparta: pagos de esta quincena que faltan y vencidos sin pagar
+      const mk0 = today.slice(0, 7);
+      const apart = [
+        ...(nd.debts || []).filter(d => payWhen(d.dueDay, now).kind === 'now' && !(d.monthlyPayments || []).some(x => x.month === mk0) && debtMonthPay(d) > 0).map(d => ({ k: 'd' + d.id, name: d.name, pay: debtMonthPay(d), label: payWhen(d.dueDay, now).label })),
+        ...(nd.exps || []).filter(x => payWhen(x.day, now).kind === 'now' && !(nd.paidExps || {})[`${x.id}_${mk0}`] && +x.amount > 0).map(x => ({ k: 'x' + x.id, name: x.name, pay: +x.amount, label: payWhen(x.day, now).label })),
+        ...overdueItems(nd).map(o => ({ k: 'o' + o.key, name: o.name, pay: o.pay, label: 'Vencido, sin pagar' }))
+      ];
       return e(React.Fragment, null,
         e('div', { className: 'b-wiz-q' }, 'Así quedan tus cuentas'),
         e('div', { className: 'b-breakdown' },
           e('div', { className: 'b-kv' }, e('span', null, 'Tienes (cuenta + efectivo)'), e('span', { className: 'b-num' }, fmt((+f.debit || 0) + (+f.cash || 0)))),
-          p.pendingFixed > 0 && e('div', { className: 'b-kv' }, e('span', null, 'Pagos fijos que faltan esta quincena'), e('span', { className: 'b-num' }, '−' + fmt(p.pendingFixed))),
-          p.pendingDebts > 0 && e('div', { className: 'b-kv' }, e('span', null, 'Pagos de deudas que faltan'), e('span', { className: 'b-num' }, '−' + fmt(p.pendingDebts))),
+          apart.map(a => e('div', { key: a.k, className: 'b-kv' }, e('span', null, a.name, e('small', { className: 'b-kv-sub' }, a.label)), e('span', { className: 'b-num' }, '−' + fmt(a.pay)))),
+          p.apartados > 0 && e('div', { className: 'b-kv' }, e('span', null, 'Apartado para tus metas'), e('span', { className: 'b-num' }, '−' + fmt(p.apartados))),
           e('div', { className: 'b-kv strong' }, e('span', null, 'Te queda libre'), e('span', { className: 'b-num' }, fmt(p.realBalance)))),
         e('div', { className: 'b-strip', style: { marginTop: 8 } },
           e('div', null, e('div', { className: 'k' }, 'Debes en total'), e('div', { className: 'v' }, fmt(debt))),
           e('div', null, e('div', { className: 'k' }, 'Ahorrado'), e('div', { className: 'v' }, fmt(+f.emerSaved || 0)))),
-        e('p', { className: 'b-note' }, p.realBalance >= 0 ? 'Si algo no cuadra, regresa y corrígelo. Puedes volver a poner Budgy al día cuando quieras.' : 'Te faltaría dinero para cubrir tus pagos de esta quincena. Budgy te ayudará a priorizar cuál pagar primero.'));
+        !apart.length && e('p', { className: 'b-note' }, 'No te falta ningún pago en esta quincena.'),
+        e('p', { className: 'b-note' }, p.realBalance >= 0 ? 'Solo se aparta lo que toca pagar antes de tu siguiente quincena. Si algo no cuadra, regresa y corrígelo.' : 'Te faltaría dinero para cubrir tus pagos de esta quincena. Budgy te ayudará a priorizar cuál pagar primero.'));
     }
   ];
   const last = STEPS.length - 1;
@@ -5822,10 +5912,10 @@ function MainApp(_ref22) {
     awardBits(5);
     vibrate([100, 50, 200]);
   }, [data.debts, update, awardXP, awardBits]);
-  const markDebtPaid = useCallback((debtId, amount) => {
-    const month = new Date().toLocalISO().slice(0, 7);
-    const paidAt = new Date().toLocalISO().slice(0, 10);
+  const markDebtPaid = useCallback((debtId, amount, forMonth) => {
     const debtObj = data.debts.find(d => d.id === debtId) || {};
+    const month = forMonth || dueMonthOf(debtObj);
+    const paidAt = new Date().toLocalISO().slice(0, 10);
     update({
       debts: data.debts.map(d => {
         if (d.id !== debtId) return d;
@@ -5858,7 +5948,8 @@ function MainApp(_ref22) {
     vibrate([100, 50, 200]);
   }, [data.debts, data.cardPayments, update, awardXP, awardBits]);
   const unmarkDebtPaid = useCallback(debtId => {
-    const month = new Date().toLocalISO().slice(0, 7);
+    const lastRec = ((data.debts.find(x => x.id === debtId) || {}).monthlyPayments || []).slice(-1)[0];
+    const month = lastRec ? lastRec.month : new Date().toLocalISO().slice(0, 7);
     update({
       debts: data.debts.map(d => {
         if (d.id !== debtId) return d;
@@ -6062,7 +6153,7 @@ function MainApp(_ref22) {
   const upcoming = sorted.filter(d => {
     if (d.urg.daysLeft == null || d.urg.daysLeft > 30) return false;
     if (d.type === 'plan') return true; // plan siempre visible (tiene sus propios dots)
-    return !(d.monthlyPayments || []).some(p => p.month === _currentMonth);
+    return !(d.monthlyPayments || []).some(p => p.month === dueMonthOf(d));
   });
   const pill = saveStatus === 'saved' ? {
     bg: 'rgba(5,150,105,.1)',
@@ -6129,6 +6220,24 @@ function MainApp(_ref22) {
     onOpenChest: openChest,
     onMarkPaid: markDebtPaid,
     onMarkPlan: markPlanPayment,
+    onPayOverdue: o => {
+      const rest = {
+        ...(data.overdue || {})
+      };
+      delete rest[o.key];
+      if (o.kind === 'debt') {
+        markDebtPaid(o.id, o.pay, o.month);
+        update({
+          overdue: rest
+        });
+      } else update({
+        overdue: rest,
+        paidExps: {
+          ...(data.paidExps || {}),
+          [`${o.id}_${o.month}`]: true
+        }
+      });
+    },
     onNoSpend: () => {
       update({
         noSpendDays: [...(data.noSpendDays || []).filter(d => d !== todayStr), todayStr].slice(-120)
