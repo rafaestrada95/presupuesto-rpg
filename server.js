@@ -9,6 +9,8 @@
      VAPID_PRIVATE_KEY  guardan en DATA_DIR (conviene fijarlas en Railway)
      VAPID_SUBJECT      contacto del remitente, ej. mailto:tu@correo.com
      DATA_DIR           carpeta donde se guardan los datos (usa un Volume de Railway)
+     ALLOWED_ORIGINS    sitios que pueden usar la API de avisos, separados por coma
+                        (default: https://rafaestrada95.github.io)
 */
 const http = require('http');
 const fs = require('fs');
@@ -119,8 +121,14 @@ async function tick(now = new Date()) {
 /* ── HTTP ── */
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.md': 'text/plain; charset=utf-8' };
 const PUBLIC = new Set(['index.html', 'sw.js', 'manifest.webmanifest']);
+// La app puede vivir en otro dominio (GitHub Pages) y llamar a esta API
+const ALLOWED = (process.env.ALLOWED_ORIGINS || 'https://rafaestrada95.github.io').split(',').map(x => x.trim()).filter(Boolean);
+function cors(origin) {
+  if (!origin || !(ALLOWED.includes('*') || ALLOWED.includes(origin))) return {};
+  return { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400', Vary: 'Origin' };
+}
 function json(res, code, obj) {
-  res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors(res.budgyOrigin) });
   res.end(JSON.stringify(obj));
 }
 function readBody(req) {
@@ -184,6 +192,11 @@ function serveStatic(req, res, url) {
 }
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
+  res.budgyOrigin = req.headers.origin || '';
+  if (url.pathname.startsWith('/api/') && req.method === 'OPTIONS') {
+    res.writeHead(204, cors(res.budgyOrigin));
+    return res.end();
+  }
   if (url.pathname.startsWith('/api/')) return api(req, res, url).catch(e => { console.error(e); json(res, 500, { error: 'Error del servidor' }); });
   serveStatic(req, res, url);
 });
