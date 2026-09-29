@@ -9721,7 +9721,7 @@ function FeedbackSheet(_p) {
 /* ════ FASE 7: avisos de Budgy (notificaciones push) ════ */
 // Dirección del servidor de avisos (Railway). Vacío = mismo sitio que la app.
 // Ej. 'https://presupuesto-rpg-production.up.railway.app'
-const BUDGY_SERVER = '';
+const BUDGY_SERVER = 'https://presupuesto-rpg-production.up.railway.app';
 const PUSH_API = BUDGY_SERVER ? BUDGY_SERVER.replace(/\/+$/, '') + '/api/push/' : 'api/push/';
 const pushSupported = () => location.protocol.indexOf('http') === 0 && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 const localTZ = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (err) { return 'America/Mexico_City'; } };
