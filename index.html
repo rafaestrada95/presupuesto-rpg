@@ -801,12 +801,11 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-paystate>b{font-size:.85rem;font-weight:700}
 .b-paystate>span{color:var(--dim);font-size:.82rem}
 .b-paystate.later{flex-direction:row;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
-.b-paystate.late>b{color:var(--danger)}
+.b-paystate.late>b{color:var(--warn)}
 .b-paystate .b-seg3{margin-top:0}
 .b-paystate .b-seg3{display:grid;grid-template-columns:1fr 1fr;background:var(--surface);border-radius:var(--r-b);padding:4px;gap:4px}
 .b-paystate .b-seg3 button{min-height:44px;font:inherit;font-weight:700;font-size:.9rem;border:0;border-radius:var(--r-s);background:transparent;color:var(--dim);text-align:center}
 .b-paystate .b-seg3 button.on{background:var(--indigo);color:#fff}
-.b-paystate.late .b-seg3 button.on{background:var(--danger)}
 .b-rows>div:has(.b-rowfull){flex-wrap:wrap}
 .b-rows>div .b-rowfull{flex-basis:100%}
 .b-kv-sub{display:block;font-size:.78rem;color:var(--dim);font-weight:500}
@@ -814,6 +813,7 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-verdict-how{font-size:.82rem;color:var(--dim);margin-top:8px!important}
 .b-cf-end{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
 .b-legend4{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px}
+.b-sheet .b-textbtn.b-quiet,.b-textbtn.b-quiet{color:var(--dim)!important;font-weight:600;text-decoration:underline;text-underline-offset:3px}
 </style>
 </head>
 <body>
@@ -2117,7 +2117,13 @@ function afterBaseline(data, date, ts) {
 // Compras con tarjeta que cuentan: las posteriores al último "Poner Budgy al día"
 // (lo que debías ese día ya incluye las anteriores)
 function cardTxAfter(data) {
-  return (data.cardTransactions || []).filter(t => afterBaseline(data, t.date, t.ts));
+  const tx = data.cardTransactions || [];
+  if (data.balanceDate) return tx.filter(t => afterBaseline(data, t.date, t.ts));
+  // Sin punto de partida solo cuentan las compras del corte actual: lo anterior ya va en el saldo de la tarjeta
+  return tx.filter(t => {
+    const c = (data.debts || []).find(d => d.id === t.cardId);
+    return !!(c && c.cutDay) && getCardInfo(c, [t]).cycleSpend > 0;
+  });
 }
 // ── Fechas de pago: ¿este pago ya pasó, toca en esta quincena o después? ──
 const MES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -4811,8 +4817,8 @@ function FreshStartSheet(_p) {
   const paidDefault = (day, recorded) => recorded || payWhen(day, now).kind === 'past';
   const [step, setStep] = useState(0);
   const [f, setF] = useState(() => ({
-    debit: dp.hasSaldo ? String(Math.max(0, Math.round(dp.currentDebit))) : '',
-    cash: dp.hasSaldo ? String(Math.max(0, Math.round(dp.currentEfectivo))) : '',
+    debit: '',
+    cash: '',
     q1: data.q1 || '', q2: data.q2 || '', schedule: data.paySchedule || '15-ultimo', gotPaid: true,
     // Tarjetas: lo que debes hoy ya incluye lo que compraste; desde aquí solo se suman compras nuevas
     cards: Object.fromEntries(cards0.map(c => [c.id, {
@@ -4914,7 +4920,7 @@ function FreshStartSheet(_p) {
     x.day && payRow(x.day, !!x.paid, v => upNewExp(i, { paid: v }), x.name || 'este pago'));
   const cardEditor = (key, name, x, up, removable) => e('div', { key, className: 'b-cardedit' + (x.gone ? ' b-done' : '') },
     e('div', { className: 'b-cardedit-h' }, removable ? e('input', { className: 'b-in text sm', value: name, placeholder: 'Nombre (ej. BBVA Azul)', 'aria-label': 'Nombre de la tarjeta', onChange: ev => up({ name: ev.target.value }) }) : e('b', null, name),
-      !removable && e('button', { className: 'b-textbtn' + (x.gone ? '' : ' danger'), onClick: () => up({ gone: !x.gone }) }, x.gone ? 'Dejar' : 'Ya no la uso')),
+      !removable && e('button', { className: 'b-textbtn b-quiet', onClick: () => up({ gone: !x.gone }) }, x.gone ? 'Dejar' : 'Ya no la uso')),
     !x.gone && e(React.Fragment, null,
       e('div', { className: 'b-cardedit-row' }, e('span', null, 'Debes hoy en total', e('small', null, 'Saldo actual en la app de tu banco, con compras recientes')), inline(x.balance, v => up({ balance: v }), `Lo que debes en ${name}`)),
       e('div', { className: 'b-cardedit-row' }, e('span', null, 'Pago mínimo del mes'), inline(x.minPayment, v => up({ minPayment: v }), `Pago mínimo de ${name}`)),
@@ -4932,8 +4938,8 @@ function FreshStartSheet(_p) {
     () => e(React.Fragment, null,
       e('div', { className: 'b-wiz-q' }, '¿Cuánto tienes hoy?'),
       e('div', { className: 'b-wiz-help' }, 'Lo disponible en tu cuenta de débito y lo que traes en efectivo. Sin centavos está bien.'),
-      e(Field, { label: 'En tu cuenta (débito)', value: f.debit, ph: '$0', onChange: v => set({ debit: v }) }),
-      e(Field, { label: 'En efectivo', value: f.cash, ph: '$0', onChange: v => set({ cash: v }) })),
+      e(Field, { label: 'En tu cuenta (débito)', value: f.debit, ph: '$0', help: dp.hasSaldo ? `Budgy calculaba ${fmt(dp.currentDebit)}. Pon lo que dice tu banco hoy.` : 'Lo que dice la app de tu banco hoy.', onChange: v => set({ debit: v }) }),
+      e(Field, { label: 'En efectivo', value: f.cash, ph: '$0', help: 'Si no traes, déjalo vacío.', onChange: v => set({ cash: v }) })),
     // 2 · Quincena
     () => e(React.Fragment, null,
       e('div', { className: 'b-wiz-q' }, 'Tu quincena'),
@@ -4958,7 +4964,7 @@ function FreshStartSheet(_p) {
         const upd = patch => set({ debts: { ...f.debts, [d.id]: { ...x, ...patch } } });
         return e('div', { key: d.id, className: x.gone ? 'b-done' : '' },
           e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, d.name), e('div', { className: 'b-d' }, x.gone ? 'Se va a quitar' : d.type === 'plan' ? `Pagos hechos de ${d.totalPayments || '?'}` : 'Lo que debes hoy'),
-            !x.gone && e('button', { className: 'b-textbtn danger', onClick: () => upd({ gone: true }) }, 'Ya la liquidé')),
+            !x.gone && e('button', { className: 'b-textbtn b-quiet', onClick: () => upd({ gone: true }) }, 'Ya la liquidé')),
           x.gone ? e('button', { className: 'b-textbtn', onClick: () => upd({ gone: false }) }, 'Dejar') :
             d.type === 'plan' ? e('input', { className: 'b-in-inline sm', inputMode: 'numeric', value: x.paidPayments, placeholder: '0', 'aria-label': `Pagos hechos de ${d.name}`, onChange: ev => upd({ paidPayments: ev.target.value.replace(/\D/g, '') }) }) : inline(x.balance, v => upd({ balance: v }), `Lo que debes en ${d.name}`),
           !x.gone && e('div', { className: 'b-rowfull' }, payRow(d.dueDay, !!x.paid, v => upd({ paid: v }), d.name)));
@@ -4974,7 +4980,7 @@ function FreshStartSheet(_p) {
         const upd = patch => set({ exps: { ...f.exps, [x.id]: { ...v, ...patch } } });
         return e('div', { key: x.id, className: v.gone ? 'b-done' : '' },
           e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, x.name), e('div', { className: 'b-d' }, v.gone ? 'Se va a quitar' : x.day ? `Día ${x.day}` : 'Sin día'),
-            !v.gone && e('button', { className: 'b-textbtn danger', onClick: () => upd({ gone: true }) }, 'Ya no lo pago')),
+            !v.gone && e('button', { className: 'b-textbtn b-quiet', onClick: () => upd({ gone: true }) }, 'Ya no lo pago')),
           v.gone ? e('button', { className: 'b-textbtn', onClick: () => upd({ gone: false }) }, 'Dejar') : inline(v.amount, a => upd({ amount: a }), `Monto de ${x.name}`),
           !v.gone && e('div', { className: 'b-rowfull' }, payRow(x.day, !!v.paid, p => upd({ paid: p }), x.name)));
       })) : !f.newExps.length && e('p', { className: 'b-note' }, 'Lo que pagas cada mes sin falta: renta, luz, internet, celular, colegiaturas, suscripciones.'),
@@ -5006,15 +5012,19 @@ function FreshStartSheet(_p) {
           apart.map(a => e('div', { key: a.k, className: 'b-kv' }, e('span', null, a.name, e('small', { className: 'b-kv-sub' }, a.label)), e('span', { className: 'b-num' }, '−' + fmt(a.pay)))),
           p.apartados > 0 && e('div', { className: 'b-kv' }, e('span', null, 'Apartado para tus metas'), e('span', { className: 'b-num' }, '−' + fmt(p.apartados))),
           e('div', { className: 'b-kv strong' }, e('span', null, 'Te queda libre'), e('span', { className: 'b-num' }, fmt(p.realBalance)))),
-        e('div', { className: 'b-strip', style: { marginTop: 8 } },
-          e('div', null, e('div', { className: 'k' }, 'Debes en total'), e('div', { className: 'v' }, fmt(debt))),
-          e('div', null, e('div', { className: 'k' }, 'Ahorrado'), e('div', { className: 'v' }, fmt(+f.emerSaved || 0)))),
+        (+f.debit || 0) + (+f.cash || 0) === 0 && e('p', { className: 'b-note warn' }, 'Pusiste $0 en tu cuenta y en efectivo. Si no es así, regresa al paso 1: con $0 todo sale en contra.'),
+        e('p', { className: 'b-note' }, 'Arriba solo va lo que toca pagar antes de tu siguiente quincena, no todo lo que debes.'),
+        debt > 0 && e(More, { title: `Lo que debes en total: ${fmt(debt)}` },
+          e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Es la suma de todas tus deudas, no lo que pagas este mes. Si alguna cifra está mal, regresa a ese paso y corrígela.'),
+          e('div', { className: 'b-rows' }, (nd.debts || []).map(d => ({ d, b: debtBalance(d, cardTxAfter(nd)) })).filter(x => x.b > 0).sort((a, b) => b.b - a.b).map(x => e('div', { key: x.d.id },
+            e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, x.d.name), e('div', { className: 'b-d' }, x.d.type === 'plan' ? `${getPlanInfo(x.d).remaining} pagos de ${fmt(x.d.paymentAmount)}` : debtMonthPay(x.d) > 0 ? `Pagas ${fmt(debtMonthPay(x.d))} al mes` : 'Sin pago fijo')),
+            e('span', { className: 'b-n b-num' }, fmt(x.b)))))),
         !apart.length && e('p', { className: 'b-note' }, 'No te falta ningún pago en esta quincena.'),
         e('p', { className: 'b-note' }, p.realBalance >= 0 ? 'Solo se aparta lo que toca pagar antes de tu siguiente quincena. Si algo no cuadra, regresa y corrígelo.' : 'Te faltaría dinero para cubrir tus pagos de esta quincena. Budgy te ayudará a priorizar cuál pagar primero.'));
     }
   ];
   const last = STEPS.length - 1;
-  const canNext = step !== 1 || f.debit !== '' || f.cash !== '';
+  const canNext = step !== 1 || f.debit !== '';
   return e(Sheet, { title: step === 0 ? welcome ? 'Bienvenida' : 'Poner Budgy al día' : `Paso ${step} de ${last}`, label: welcome ? 'Bienvenida a Budgy' : 'Poner Budgy al día', onClose: _p.onClose },
     step > 0 && e('span', { className: 'b-track sm' }, e('i', { style: { width: step / last * 100 + '%' } })),
     STEPS[step](),
