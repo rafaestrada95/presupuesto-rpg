@@ -757,6 +757,18 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-textarea.big{min-height:120px;font-size:1rem}
 .b-sheet a.b-primary{text-decoration:none}
 .b-sheet a.b-primary.off{opacity:.4;pointer-events:none}
+
+/* ── Poner al día: tarjetas ── */
+.b-cardedit{border:1px solid var(--border);border-radius:var(--r-c);padding:12px 14px;background:var(--card);display:flex;flex-direction:column;gap:4px}
+.b-cardedit-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.b-cardedit-h b{font-size:1.05rem}
+.b-cardedit-row{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:48px;font-weight:600;font-size:.92rem}
+.b-cardedit-row small{display:block;font-weight:500;font-size:.78rem;color:var(--muted)}
+.b-in-inline.sm{width:64px}
+.b-in.text.sm{font-size:1.05rem;padding:6px 0}
+.b-sheet .b-secondary.wide{width:100%;min-height:50px}
+.b-sheet .b-rows .b-m .b-textbtn{min-height:32px;font-size:.84rem}
+.b-sheet .b-rows>div{gap:10px}
 </style>
 </head>
 <body>
@@ -2098,6 +2110,11 @@ function afterBaseline(data, date, ts) {
   if (date !== data.balanceDate) return date > data.balanceDate;
   return !!ts && ts > (data.balanceAt || 0);
 }
+// Compras con tarjeta que cuentan: las posteriores al último "Poner Budgy al día"
+// (lo que debías ese día ya incluye las anteriores)
+function cardTxAfter(data) {
+  return (data.cardTransactions || []).filter(t => afterBaseline(data, t.date, t.ts));
+}
 function calcDP(data) {
   const today = new Date();
   const day = today.getDate();
@@ -2122,7 +2139,7 @@ function calcDP(data) {
     const dd = +d.dueDay;
     return isQ1 && dd <= 15 || !isQ1 && dd >= 16 ? s + (+d.minPayment || 0) : s;
   }, 0);
-  const cardReserved = data.debts.filter(d => d.type === "tarjeta").reduce((s, d) => s + getCardInfo(d, data.cardTransactions, today).cycleSpend, 0);
+  const cardReserved = data.debts.filter(d => d.type === "tarjeta").reduce((s, d) => s + getCardInfo(d, cardTxAfter(data), today).cycleSpend, 0);
   const todayStr = today.toLocalISO().slice(0, 10);
   const cashSpentToday = (data.cashTransactions || []).filter(t => t.date === todayStr).reduce((s, t) => s + (+t.amount || 0), 0);
   const committed = fixedQ + varH + debtQ + cardPayQ + cardReserved + cashSpentToday;
@@ -2523,7 +2540,7 @@ function getCountdowns(data) {
     });
   });
   data.debts.filter(d => d.type === "tarjeta" && d.cutDay).forEach(card => {
-    const info = getCardInfo(card, data.cardTransactions, today);
+    const info = getCardInfo(card, cardTxAfter(data), today);
     if (info.daysUntilCut != null) items.push({
       icon: "✂️",
       label: `Corte ${card.name}`,
@@ -8143,7 +8160,7 @@ function HomeScreen(_p) {
   const missionsDone = missions.filter(m => (game.completedMissions || {})[`${todayStr}-${m.id}`]).length;
   const cards = data.debts.filter(d => d.type === 'tarjeta');
   const cardLimit = cards.reduce((s, c) => s + (+c.creditLimit || 0), 0);
-  const cardUsed = cards.reduce((s, c) => s + (+c.balance || 0) + getCardInfo(c, data.cardTransactions || []).cycleSpend, 0);
+  const cardUsed = cards.reduce((s, c) => s + (+c.balance || 0) + getCardInfo(c, cardTxAfter(data)).cycleSpend, 0);
   return h(React.Fragment, null, h(ScreenHead, {
     eyebrow: greeting() + ' 👋',
     title: _p.userName || 'Hola',
@@ -9275,14 +9292,14 @@ function DebtsSection(_p) {
           e('div', { className: 'b-n' }, d.name),
           e('div', { className: 'b-d' }, paid ? e('span', { className: 'b-ok' }, '✓ Pagada este mes') : dueLabel(d.urg ? d.urg.daysLeft : null), pay > 0 && !paid ? ` · ${fmt(pay)}` : ''),
           i === 0 && list.length > 1 && e('div', { className: 'b-d' }, firstWhy)),
-        e('span', { className: 'b-n b-num' }, fmt(debtBalance(d, data.cardTransactions))));
+        e('span', { className: 'b-n b-num' }, fmt(debtBalance(d, cardTxAfter(data)))));
     })),
     (minCost > 0 || never) && e('div', { className: 'b-insight-box', style: { marginTop: 14 } },
       e('b', null, 'Lo que cuesta pagar solo el mínimo'),
       e('p', null, never ? 'Al menos una de tus deudas nunca se termina pagando solo el mínimo. Ábrela para ver cuánto más necesitas.' : `Si solo pagas mínimos, vas a pagar ${fmt(minCost)} de intereses que no bajan tu deuda.`)),
     e('button', { className: 'b-primary ghost', onClick: () => setAdding(true) }, e(Icon, { d: IC.plus, w: 2.4 }), 'Agregar una deuda'),
     adding && e(AddDebtSheet, { onAddDebt: a.onAddDebt, onClose: () => setAdding(false), onDone: n => { setAdding(false); setAdded(n); } }),
-    openDebt && e(DebtSheet, { d: openDebt, actions: a, cardTx: data.cardTransactions, onClose: () => setOpen(null) }));
+    openDebt && e(DebtSheet, { d: openDebt, actions: a, cardTx: cardTxAfter(data), onClose: () => setOpen(null) }));
 }
 function LoansSection(_p) {
   const loans = _p.data.loans || [];
@@ -9519,7 +9536,7 @@ function CompareNative(_p) {
 function CardsNative(_p) {
   const cards = (_p.data.debts || []).filter(d => d.type === 'tarjeta');
   return e('div', { className: 'b-rows' }, cards.map(c => {
-    const info = getCardInfo(c, _p.data.cardTransactions || []);
+    const info = getCardInfo(c, cardTxAfter(_p.data));
     const used = (+c.balance || 0) + info.cycleSpend;
     const lim = +c.creditLimit || 0;
     const pct = lim > 0 ? Math.min(100, Math.round(used / lim * 100)) : null;
@@ -9895,102 +9912,162 @@ function FreshStartSheet(_p) {
   const now = new Date();
   const today = now.toLocalISO().slice(0, 10);
   const month = today.slice(0, 7);
+  const cards0 = (data.debts || []).filter(d => d.type === 'tarjeta');
+  const others0 = (data.debts || []).filter(d => d.type !== 'tarjeta');
+  const cardTx = cardTxAfter(data);
+  const paidThisMonth = d => (d.monthlyPayments || []).some(p => p.month === month);
   const [step, setStep] = useState(0);
   const [f, setF] = useState(() => ({
     debit: dp.hasSaldo ? String(Math.max(0, Math.round(dp.currentDebit))) : '',
     cash: dp.hasSaldo ? String(Math.max(0, Math.round(dp.currentEfectivo))) : '',
     q1: data.q1 || '', q2: data.q2 || '', schedule: data.paySchedule || '15-ultimo', gotPaid: true,
-    paid: Object.fromEntries([...(data.debts || []).filter(d => d.type !== 'plan').map(d => ['d' + d.id, (d.monthlyPayments || []).some(p => p.month === month)]),
-      ...(data.exps || []).map(x => ['e' + x.id, !!(data.paidExps || {})[`${x.id}_${month}`]])]),
-    debts: Object.fromEntries((data.debts || []).map(d => [d.id, { balance: String(d.type === 'plan' ? '' : d.balance ?? ''), paidPayments: String(d.paidPayments ?? ''), gone: false }])),
-    exps: Object.fromEntries((data.exps || []).map(x => [x.id, { amount: String(x.amount ?? ''), gone: false }]))
+    // Tarjetas: lo que debes hoy ya incluye lo que compraste; desde aquí solo se suman compras nuevas
+    cards: Object.fromEntries(cards0.map(c => [c.id, {
+      balance: String(Math.round(debtBalance(c, cardTx)) || ''), minPayment: String(c.minPayment || ''), cutDay: String(c.cutDay || ''),
+      dueDay: String(c.dueDay || ''), creditLimit: String(c.creditLimit || ''), paid: paidThisMonth(c), gone: false
+    }])),
+    newCards: [],
+    debts: Object.fromEntries(others0.map(d => [d.id, { balance: String(d.type === 'plan' ? '' : d.balance ?? ''), paidPayments: String(d.paidPayments ?? ''), paid: d.type !== 'plan' && paidThisMonth(d), gone: false }])),
+    exps: Object.fromEntries((data.exps || []).map(x => [x.id, { amount: String(x.amount ?? ''), paid: !!(data.paidExps || {})[`${x.id}_${month}`], gone: false }])),
+    emerSaved: data.emerSaved || '', emerGoal: data.emerGoal || ''
   }));
   const set = patch => setF(prev => ({ ...prev, ...patch }));
   const payNow = currentPayDate({ ...data, paySchedule: f.schedule, q1: f.q1, q2: f.q2 }, now);
-  const dueItems = [...(data.debts || []).filter(d => d.type !== 'plan' && d.dueDay).map(d => ({ k: 'd' + d.id, n: d.name, day: +d.dueDay, amt: debtPay(d) })),
-    ...(data.exps || []).filter(x => x.day).map(x => ({ k: 'e' + x.id, n: x.name, day: +x.day, amt: +x.amount || 0 }))].sort((a, b) => a.day - b.day);
   const build = () => {
     const ts = Date.now();
-    const debts = (data.debts || []).filter(d => !f.debts[d.id].gone).map(d => {
-      const e2 = f.debts[d.id];
-      let nd = { ...d };
-      if (d.type === 'plan') { if (e2.paidPayments !== '') nd.paidPayments = +e2.paidPayments; }
-      else if (e2.balance !== '') nd.balance = +e2.balance;
-      if (d.type !== 'plan') {
-        const others = (d.monthlyPayments || []).filter(p => p.month !== month);
-        const had = (d.monthlyPayments || []).find(p => p.month === month);
-        nd.monthlyPayments = f.paid['d' + d.id] ? [...others, had || { month, paidAt: today, amount: 0 }] : others;
+    const keepPaid = (d, on) => {
+      const others = (d.monthlyPayments || []).filter(p => p.month !== month);
+      const had = (d.monthlyPayments || []).find(p => p.month === month);
+      return on ? [...others, had || { month, paidAt: today, amount: 0 }] : others;
+    };
+    const cards = cards0.filter(c => !f.cards[c.id].gone).map(c => {
+      const x = f.cards[c.id];
+      return { ...c, balance: +x.balance || 0, minPayment: x.minPayment === '' ? c.minPayment : +x.minPayment, cutDay: x.cutDay || c.cutDay, dueDay: x.dueDay || c.dueDay, creditLimit: x.creditLimit === '' ? c.creditLimit : +x.creditLimit, monthlyPayments: keepPaid(c, x.paid) };
+    });
+    const added = f.newCards.filter(c => c.name.trim()).map((c, i) => ({ ...DEBT_BLANK, id: 'n' + ts + i, type: 'tarjeta', name: c.name.trim(), balance: +c.balance || 0, minPayment: +c.minPayment || '', cutDay: c.cutDay, dueDay: c.dueDay, creditLimit: +c.creditLimit || '', monthlyPayments: [] }));
+    const others = others0.filter(d => !f.debts[d.id].gone).map(d => {
+      const x = f.debts[d.id];
+      const nd = { ...d };
+      if (d.type === 'plan') { if (x.paidPayments !== '') nd.paidPayments = +x.paidPayments; } else {
+        if (x.balance !== '') nd.balance = +x.balance;
+        nd.monthlyPayments = keepPaid(d, x.paid);
       }
       return nd;
     });
     const exps = (data.exps || []).filter(x => !f.exps[x.id].gone).map(x => ({ ...x, amount: f.exps[x.id].amount !== '' ? +f.exps[x.id].amount : x.amount }));
     const paidExps = { ...(data.paidExps || {}) };
-    exps.forEach(x => { paidExps[`${x.id}_${month}`] = !!f.paid['e' + x.id]; });
+    exps.forEach(x => { paidExps[`${x.id}_${month}`] = !!f.exps[x.id].paid; });
     let paydays = data.paydays || [];
     // Si ya te depositaron, esa quincena ya está en lo que tienes hoy: se registra para no sumarla dos veces
     if (payNow && f.gotPaid && !paydays.some(p => p.quincena === payNow.key)) paydays = [...paydays, { quincena: payNow.key, amount: payNow.amount, addedAt: payNow.date, ts: ts - 1000 }];
     if (payNow && !f.gotPaid) paydays = paydays.filter(p => p.quincena !== payNow.key);
-    return { saldoDebito: f.debit || '0', saldoEfectivo: f.cash || '0', balanceDate: today, balanceAt: ts, q1: f.q1, q2: f.q2, paySchedule: f.schedule, debts, exps, paidExps, paydays, freshStartAt: today };
+    return {
+      saldoDebito: f.debit || '0', saldoEfectivo: f.cash || '0', balanceDate: today, balanceAt: ts, q1: f.q1, q2: f.q2, paySchedule: f.schedule,
+      debts: [...cards, ...added, ...others], exps, paidExps, paydays, emerSaved: f.emerSaved, emerGoal: f.emerGoal, freshStartAt: today
+    };
   };
-  const preview = step === 5 ? calcDP({ ...data, ...build() }) : null;
-  const steps = 6;
-  const nextBtn = (label, ok = true) => e('div', { className: 'b-wiz-foot' },
-    step > 0 && e('button', { className: 'b-secondary', onClick: () => setStep(step - 1) }, 'Atrás'),
-    e('button', { className: 'b-primary', disabled: !ok, onClick: () => setStep(step + 1) }, label || 'Siguiente'));
   const toggle = (on, onClick, label) => e('button', { className: 'b-check' + (on ? ' on' : ''), 'aria-pressed': on, 'aria-label': label, onClick }, on ? '✓' : '');
-  let body;
-  if (step === 0) body = e(React.Fragment, null,
-    e('div', { className: 'b-wiz-q' }, 'Pongamos Budgy al día'),
-    e('div', { className: 'b-wiz-help' }, 'En 2 minutos le dices a Budgy cómo están tus cuentas hoy. Tu historial se queda, pero desde este momento todo se calcula con tu dinero real.'),
-    e('ol', { className: 'b-steps' }, e('li', null, 'Lo que tienes hoy'), e('li', null, 'Tu quincena'), e('li', null, 'Los pagos que ya hiciste este mes'), e('li', null, 'Cuánto debes hoy'), e('li', null, 'Tus gastos fijos')),
-    nextBtn('Empezar'));
-  if (step === 1) body = e(React.Fragment, null,
-    e('div', { className: 'b-wiz-q' }, '¿Cuánto tienes hoy?'),
-    e('div', { className: 'b-wiz-help' }, 'Abre la app de tu banco y cuenta tu cartera. Sin centavos está bien.'),
-    e(Field, { label: 'En tu cuenta (débito)', value: f.debit, ph: '$0', onChange: v => set({ debit: v }) }),
-    e(Field, { label: 'En efectivo', value: f.cash, ph: '$0', onChange: v => set({ cash: v }) }),
-    nextBtn(null, f.debit !== '' || f.cash !== ''));
-  if (step === 2) body = e(React.Fragment, null,
-    e('div', { className: 'b-wiz-q' }, 'Tu quincena'),
-    e('div', { className: 'b-grid2' }, e(Field, { label: 'Del 1 al 15', value: f.q1, ph: '$0', onChange: v => set({ q1: v }) }), e(Field, { label: 'Del 16 al fin de mes', value: f.q2, ph: '$0', onChange: v => set({ q2: v }) })),
-    e('div', { className: 'b-field' }, '¿Qué días te depositan?', e('div', { className: 'b-chips' }, PAY_SCHEDULES.map(o => e('button', { key: o[0], className: 'b-chip' + (f.schedule === o[0] ? ' on' : ''), onClick: () => set({ schedule: o[0] }) }, o[1])))),
-    payNow && e('div', { className: 'b-set' }, e('div', null, e('div', { className: 't' }, `¿Ya te depositaron la del ${+payNow.date.slice(8)}?`), e('div', { className: 's' }, f.gotPaid ? 'Sí: ya está incluida en lo que tienes hoy.' : 'Todavía no: Budgy la suma cuando llegue.')), toggle(f.gotPaid, () => set({ gotPaid: !f.gotPaid }), 'Ya me depositaron')),
-    e('p', { className: 'b-note' }, 'De ahora en adelante tu quincena se suma sola el día que te pagan.'),
-    nextBtn());
-  if (step === 3) body = e(React.Fragment, null,
-    e('div', { className: 'b-wiz-q' }, '¿Qué pagos de este mes ya hiciste?'),
-    dueItems.length ? e('div', { className: 'b-rows' }, dueItems.map(it => e('div', { key: it.k },
-      e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, it.n), e('div', { className: 'b-d' }, `Día ${it.day}`, it.amt ? ` · ${fmt(it.amt)}` : '')),
-      toggle(!!f.paid[it.k], () => set({ paid: { ...f.paid, [it.k]: !f.paid[it.k] } }), `Ya pagué ${it.n}`)))) : e('p', { className: 'b-note' }, 'No tienes pagos con fecha registrados. Puedes agregarlos después en Presupuesto y Metas.'),
-    nextBtn());
-  if (step === 4) body = e(React.Fragment, null,
-    e('div', { className: 'b-wiz-q' }, '¿Cuánto debes hoy?'),
-    (data.debts || []).length ? e('div', { className: 'b-rows' }, (data.debts || []).map(d => {
-      const x = f.debts[d.id];
-      const upd = patch => set({ debts: { ...f.debts, [d.id]: { ...x, ...patch } } });
-      return e('div', { key: d.id, className: x.gone ? 'b-done' : '' },
-        e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, d.name), e('div', { className: 'b-d' }, x.gone ? 'Se va a quitar' : d.type === 'plan' ? `Pagos hechos de ${d.totalPayments || '?'}` : 'Lo que debes hoy')),
-        !x.gone && e('input', { className: 'b-in-inline', inputMode: 'decimal', value: d.type === 'plan' ? x.paidPayments : x.balance, placeholder: d.type === 'plan' ? '0' : '$0', 'aria-label': `Deuda de ${d.name}`, onChange: ev => upd(d.type === 'plan' ? { paidPayments: ev.target.value.replace(/\D/g, '') } : { balance: ev.target.value.replace(/[^0-9.]/g, '') }) }),
-        e('button', { className: 'b-textbtn' + (x.gone ? '' : ' danger'), onClick: () => upd({ gone: !x.gone }) }, x.gone ? 'Dejar' : 'Ya la liquidé'));
-    })) : e('p', { className: 'b-note' }, 'No tienes deudas registradas. ¡Excelente!'),
-    nextBtn());
-  if (step === 5) body = e(React.Fragment, null,
-    e('div', { className: 'b-wiz-q' }, '¿Tus gastos fijos siguen igual?'),
-    (data.exps || []).length ? e('div', { className: 'b-rows' }, (data.exps || []).map(x => {
-      const v = f.exps[x.id];
-      const upd = patch => set({ exps: { ...f.exps, [x.id]: { ...v, ...patch } } });
-      return e('div', { key: x.id, className: v.gone ? 'b-done' : '' },
-        e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, x.name), e('div', { className: 'b-d' }, v.gone ? 'Se va a quitar' : x.day ? `Día ${x.day}` : 'Sin día')),
-        !v.gone && e('input', { className: 'b-in-inline', inputMode: 'decimal', value: v.amount, placeholder: '$0', 'aria-label': `Monto de ${x.name}`, onChange: ev => upd({ amount: ev.target.value.replace(/[^0-9.]/g, '') }) }),
-        e('button', { className: 'b-textbtn' + (v.gone ? '' : ' danger'), onClick: () => upd({ gone: !v.gone }) }, v.gone ? 'Dejar' : 'Ya no lo pago'));
-    })) : e('p', { className: 'b-note' }, 'Todavía no tienes gastos fijos. Agrégalos después en Presupuesto → Tus gastos fijos.'),
-    preview && preview.hasSaldo && e('div', { className: 'b-verdict ok' }, e('b', null, `Hoy tienes ${fmt(Math.max(0, preview.realBalance))} libres`), e('p', null, 'Ya descontando los pagos que te faltan esta quincena.')),
+  const inline = (value, onChange, label, ph) => e('input', { className: 'b-in-inline', inputMode: 'decimal', value, placeholder: ph || '$0', 'aria-label': label, onChange: ev => onChange(ev.target.value.replace(/[^0-9.]/g, '')) });
+  const dayIn = (value, onChange, label) => e('input', { className: 'b-in-inline sm', inputMode: 'numeric', value, placeholder: 'Día', 'aria-label': label, onChange: ev => { let v = ev.target.value.replace(/\D/g, '').slice(0, 2); if (+v > 31) v = '31'; onChange(v); } });
+  const upCard = (id, patch) => set({ cards: { ...f.cards, [id]: { ...f.cards[id], ...patch } } });
+  const upNew = (i, patch) => set({ newCards: f.newCards.map((c, j) => j === i ? { ...c, ...patch } : c) });
+  const cardEditor = (key, name, x, up, removable) => e('div', { key, className: 'b-cardedit' + (x.gone ? ' b-done' : '') },
+    e('div', { className: 'b-cardedit-h' }, removable ? e('input', { className: 'b-in text sm', value: name, placeholder: 'Nombre (ej. BBVA Azul)', 'aria-label': 'Nombre de la tarjeta', onChange: ev => up({ name: ev.target.value }) }) : e('b', null, name),
+      !removable && e('button', { className: 'b-textbtn' + (x.gone ? '' : ' danger'), onClick: () => up({ gone: !x.gone }) }, x.gone ? 'Dejar' : 'Ya no la uso')),
+    !x.gone && e(React.Fragment, null,
+      e('div', { className: 'b-cardedit-row' }, e('span', null, 'Debes hoy en total', e('small', null, 'Saldo actual en la app de tu banco, con compras recientes')), inline(x.balance, v => up({ balance: v }), `Lo que debes en ${name}`)),
+      e('div', { className: 'b-cardedit-row' }, e('span', null, 'Pago mínimo del mes'), inline(x.minPayment, v => up({ minPayment: v }), `Pago mínimo de ${name}`)),
+      e('div', { className: 'b-cardedit-row' }, e('span', null, 'Día de corte', e('small', null, 'Cuando el banco cierra tu mes')), dayIn(x.cutDay, v => up({ cutDay: v }), `Día de corte de ${name}`)),
+      e('div', { className: 'b-cardedit-row' }, e('span', null, 'Fecha límite de pago'), dayIn(x.dueDay, v => up({ dueDay: v }), `Día límite de pago de ${name}`)),
+      e('div', { className: 'b-cardedit-row' }, e('span', null, 'Límite de crédito'), inline(x.creditLimit, v => up({ creditLimit: v }), `Límite de ${name}`)),
+      !removable && e('div', { className: 'b-cardedit-row' }, e('span', null, '¿Ya pagaste este mes?'), toggle(!!x.paid, () => up({ paid: !x.paid }), `Ya pagué ${name} este mes`))));
+  const STEPS = [
+    // 0 · Intro
+    () => e(React.Fragment, null,
+      e('div', { className: 'b-wiz-q' }, 'Pongamos Budgy al día'),
+      e('div', { className: 'b-wiz-help' }, 'Ten a la mano la app de tu banco y tus tarjetas. Tu historial se queda, pero desde este momento todo se calcula con tu dinero real.'),
+      e('ol', { className: 'b-steps' }, ['Lo que tienes hoy', 'Tu quincena', 'Tus tarjetas de crédito', 'Tus otras deudas', 'Tus pagos fijos', 'Tu ahorro'].map(t => e('li', { key: t }, t)))),
+    // 1 · Lo que tienes
+    () => e(React.Fragment, null,
+      e('div', { className: 'b-wiz-q' }, '¿Cuánto tienes hoy?'),
+      e('div', { className: 'b-wiz-help' }, 'Lo disponible en tu cuenta de débito y lo que traes en efectivo. Sin centavos está bien.'),
+      e(Field, { label: 'En tu cuenta (débito)', value: f.debit, ph: '$0', onChange: v => set({ debit: v }) }),
+      e(Field, { label: 'En efectivo', value: f.cash, ph: '$0', onChange: v => set({ cash: v }) })),
+    // 2 · Quincena
+    () => e(React.Fragment, null,
+      e('div', { className: 'b-wiz-q' }, 'Tu quincena'),
+      e('div', { className: 'b-grid2' }, e(Field, { label: 'Del 1 al 15', value: f.q1, ph: '$0', onChange: v => set({ q1: v }) }), e(Field, { label: 'Del 16 al fin de mes', value: f.q2, ph: '$0', onChange: v => set({ q2: v }) })),
+      e('div', { className: 'b-field' }, '¿Qué días te depositan?', e('div', { className: 'b-chips' }, PAY_SCHEDULES.map(o => e('button', { key: o[0], className: 'b-chip' + (f.schedule === o[0] ? ' on' : ''), onClick: () => set({ schedule: o[0] }) }, o[1])))),
+      payNow && e('div', { className: 'b-set' }, e('div', null, e('div', { className: 't' }, `¿Ya te depositaron la del ${+payNow.date.slice(8)}?`), e('div', { className: 's' }, f.gotPaid ? 'Sí: ya está incluida en lo que tienes hoy.' : 'Todavía no: Budgy la suma cuando llegue.')), toggle(f.gotPaid, () => set({ gotPaid: !f.gotPaid }), 'Ya me depositaron')),
+      e('p', { className: 'b-note' }, 'De ahora en adelante tu quincena se suma sola el día que te pagan.')),
+    // 3 · Tarjetas
+    () => e(React.Fragment, null,
+      e('div', { className: 'b-wiz-q' }, 'Tus tarjetas de crédito'),
+      e('div', { className: 'b-wiz-help' }, 'Abre la app de cada banco. Con el corte y la fecha límite, Budgy aparta lo que vas a necesitar y te avisa a tiempo.'),
+      cards0.map(c => cardEditor(c.id, c.name, f.cards[c.id], patch => upCard(c.id, patch), false)),
+      f.newCards.map((c, i) => cardEditor('new' + i, c.name, c, patch => upNew(i, patch), true)),
+      e('button', { className: 'b-secondary wide', onClick: () => set({ newCards: [...f.newCards, { name: '', balance: '', minPayment: '', cutDay: '', dueDay: '', creditLimit: '' }] }) }, cards0.length || f.newCards.length ? '+ Agregar otra tarjeta' : '+ Agregar una tarjeta'),
+      !cards0.length && !f.newCards.length && e('p', { className: 'b-note' }, 'Si no usas tarjetas de crédito, sigue adelante.')),
+    // 4 · Otras deudas
+    () => e(React.Fragment, null,
+      e('div', { className: 'b-wiz-q' }, 'Tus otras deudas'),
+      e('div', { className: 'b-wiz-help' }, 'Préstamos, compras a meses, lo que le debes a alguien. Palomea las que ya pagaste este mes.'),
+      others0.length ? e('div', { className: 'b-rows' }, others0.map(d => {
+        const x = f.debts[d.id];
+        const upd = patch => set({ debts: { ...f.debts, [d.id]: { ...x, ...patch } } });
+        return e('div', { key: d.id, className: x.gone ? 'b-done' : '' },
+          e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, d.name), e('div', { className: 'b-d' }, x.gone ? 'Se va a quitar' : d.type === 'plan' ? `Pagos hechos de ${d.totalPayments || '?'}` : 'Lo que debes hoy'),
+            !x.gone && e('button', { className: 'b-textbtn danger', onClick: () => upd({ gone: true }) }, 'Ya la liquidé')),
+          x.gone ? e('button', { className: 'b-textbtn', onClick: () => upd({ gone: false }) }, 'Dejar') : e(React.Fragment, null,
+            d.type === 'plan' ? e('input', { className: 'b-in-inline sm', inputMode: 'numeric', value: x.paidPayments, placeholder: '0', 'aria-label': `Pagos hechos de ${d.name}`, onChange: ev => upd({ paidPayments: ev.target.value.replace(/\D/g, '') }) }) : inline(x.balance, v => upd({ balance: v }), `Lo que debes en ${d.name}`),
+            d.type !== 'plan' && toggle(!!x.paid, () => upd({ paid: !x.paid }), `Ya pagué ${d.name} este mes`)));
+      })) : e('p', { className: 'b-note' }, 'No tienes otras deudas registradas. Si te falta alguna, agrégala después en Metas.')),
+    // 5 · Pagos fijos
+    () => e(React.Fragment, null,
+      e('div', { className: 'b-wiz-q' }, 'Tus pagos fijos'),
+      e('div', { className: 'b-wiz-help' }, 'Revisa que los montos sigan igual y palomea los que ya pagaste este mes.'),
+      (data.exps || []).length ? e('div', { className: 'b-rows' }, (data.exps || []).map(x => {
+        const v = f.exps[x.id];
+        const upd = patch => set({ exps: { ...f.exps, [x.id]: { ...v, ...patch } } });
+        return e('div', { key: x.id, className: v.gone ? 'b-done' : '' },
+          e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, x.name), e('div', { className: 'b-d' }, v.gone ? 'Se va a quitar' : x.day ? `Día ${x.day}` : 'Sin día'),
+            !v.gone && e('button', { className: 'b-textbtn danger', onClick: () => upd({ gone: true }) }, 'Ya no lo pago')),
+          v.gone ? e('button', { className: 'b-textbtn', onClick: () => upd({ gone: false }) }, 'Dejar') : e(React.Fragment, null, inline(v.amount, a => upd({ amount: a }), `Monto de ${x.name}`), toggle(!!v.paid, () => upd({ paid: !v.paid }), `Ya pagué ${x.name} este mes`)));
+      })) : e('p', { className: 'b-note' }, 'Todavía no tienes pagos fijos. Agrégalos después en Presupuesto → Tus gastos fijos.')),
+    // 6 · Ahorro
+    () => e(React.Fragment, null,
+      e('div', { className: 'b-wiz-q' }, 'Tu ahorro'),
+      e('div', { className: 'b-wiz-help' }, 'Lo que tienes guardado para emergencias, aparte de tu cuenta del día a día. Si lo tienes en la misma cuenta de débito, pon $0 para no contarlo dos veces.'),
+      e(Field, { label: 'Lo que llevas ahorrado', value: f.emerSaved, ph: '$0', onChange: v => set({ emerSaved: v }) }),
+      e(Field, { label: 'Tu meta', value: f.emerGoal, ph: f.q1 && f.q2 ? String((+f.q1 || 0) + (+f.q2 || 0)) : '$0', onChange: v => set({ emerGoal: v }) }),
+      e('p', { className: 'b-note' }, 'Lo recomendado: un mes de lo que ganas.')),
+    // 7 · Resumen
+    () => {
+      const nd = { ...data, ...build() };
+      const p = calcDP(nd);
+      const debt = getTotalDebt(nd);
+      return e(React.Fragment, null,
+        e('div', { className: 'b-wiz-q' }, 'Así quedan tus cuentas'),
+        e('div', { className: 'b-breakdown' },
+          e('div', { className: 'b-kv' }, e('span', null, 'Tienes (cuenta + efectivo)'), e('span', { className: 'b-num' }, fmt((+f.debit || 0) + (+f.cash || 0)))),
+          p.pendingFixed > 0 && e('div', { className: 'b-kv' }, e('span', null, 'Pagos fijos que faltan esta quincena'), e('span', { className: 'b-num' }, '−' + fmt(p.pendingFixed))),
+          p.pendingDebts > 0 && e('div', { className: 'b-kv' }, e('span', null, 'Pagos de deudas que faltan'), e('span', { className: 'b-num' }, '−' + fmt(p.pendingDebts))),
+          e('div', { className: 'b-kv strong' }, e('span', null, 'Te queda libre'), e('span', { className: 'b-num' }, fmt(p.realBalance)))),
+        e('div', { className: 'b-strip', style: { marginTop: 8 } },
+          e('div', null, e('div', { className: 'k' }, 'Debes en total'), e('div', { className: 'v' }, fmt(debt))),
+          e('div', null, e('div', { className: 'k' }, 'Ahorrado'), e('div', { className: 'v' }, fmt(+f.emerSaved || 0)))),
+        e('p', { className: 'b-note' }, p.realBalance >= 0 ? 'Si algo no cuadra, regresa y corrígelo. Puedes volver a poner Budgy al día cuando quieras.' : 'Te faltaría dinero para cubrir tus pagos de esta quincena. Budgy te ayudará a priorizar cuál pagar primero.'));
+    }
+  ];
+  const last = STEPS.length - 1;
+  const canNext = step !== 1 || f.debit !== '' || f.cash !== '';
+  return e(Sheet, { title: step === 0 ? 'Poner Budgy al día' : `Paso ${step} de ${last}`, label: 'Poner Budgy al día', onClose: _p.onClose },
+    step > 0 && e('span', { className: 'b-track sm' }, e('i', { style: { width: step / last * 100 + '%' } })),
+    STEPS[step](),
     e('div', { className: 'b-wiz-foot' },
-      e('button', { className: 'b-secondary', onClick: () => setStep(step - 1) }, 'Atrás'),
-      e('button', { className: 'b-primary', onClick: () => { _p.onApply(build()); } }, 'Listo, empezar desde hoy')));
-  return e(Sheet, { title: step === 0 ? 'Poner Budgy al día' : `Paso ${step} de ${steps - 1}`, label: 'Poner Budgy al día', onClose: _p.onClose },
-    step > 0 && e('span', { className: 'b-track sm' }, e('i', { style: { width: step / (steps - 1) * 100 + '%' } })),
-    body);
+      step > 0 && e('button', { className: 'b-secondary', onClick: () => setStep(step - 1) }, 'Atrás'),
+      step < last ? e('button', { className: 'b-primary', disabled: !canNext, onClick: () => setStep(step + 1) }, step === 0 ? 'Empezar' : 'Siguiente') :
+        e('button', { className: 'b-primary', onClick: () => _p.onApply(build()) }, 'Listo, empezar desde hoy')));
 }
 
 function MainApp(_ref22) {
