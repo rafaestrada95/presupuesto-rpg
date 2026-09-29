@@ -810,6 +810,10 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-rows>div:has(.b-rowfull){flex-wrap:wrap}
 .b-rows>div .b-rowfull{flex-basis:100%}
 .b-kv-sub{display:block;font-size:.78rem;color:var(--dim);font-weight:500}
+
+.b-verdict-how{font-size:.82rem;color:var(--dim);margin-top:8px!important}
+.b-cf-end{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.b-legend4{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px}
 </style>
 </head>
 <body>
@@ -1969,7 +1973,7 @@ function getCardInfo(card, cardTxs) {
   const cutDay = +card.cutDay;
   const limit = +(card.creditLimit || 0);
   let cycleStart = day >= cutDay ? new Date(today.getFullYear(), today.getMonth(), cutDay) : new Date(today.getFullYear(), today.getMonth() - 1, cutDay);
-  const cycleTxs = (cardTxs || []).filter(t => t.cardId === card.id && new Date(t.date) >= cycleStart);
+  const cycleTxs = (cardTxs || []).filter(t => t.cardId === card.id && t.date && new Date(t.date + 'T12:00:00') >= cycleStart);
   const cycleSpend = cycleTxs.reduce((s, t) => s + (+t.amount || 0), 0);
   const nextCut = cutDay > day ? new Date(today.getFullYear(), today.getMonth(), cutDay) : new Date(today.getFullYear(), today.getMonth() + 1, cutDay);
   const daysUntilCut = Math.ceil((nextCut - today) / 86400000);
@@ -1984,12 +1988,13 @@ function getCardInfo(card, cardTxs) {
     cycleTxs,
     daysUntilCut,
     daysUntilPay,
-    availableCredit: limit > 0 ? limit - +(card.balance || 0) - cycleSpend : null,
+    availableCredit: limit > 0 ? limit - debtBalance(card, cardTxs) : null,
     limit
   };
 }
 function getTotalDebt(data) {
-  return (data.debts || []).reduce((s, d) => s + (d.type === 'plan' ? getPlanInfo(d).remainingAmount : +(d.balance || 0)), 0);
+  const tx = cardTxAfter(data);
+  return (data.debts || []).reduce((s, d) => s + debtBalance(d, tx), 0);
 }
 function getPlanInfo(debt) {
   const total = +(debt.totalPayments || 0);
@@ -2177,10 +2182,15 @@ function calcDP(data) {
   const cardReserved = data.debts.filter(d => d.type === "tarjeta").reduce((s, d) => s + getCardInfo(d, cardTxAfter(data), today).cycleSpend, 0);
   const todayStr = today.toLocalISO().slice(0, 10);
   const cashSpentToday = (data.cashTransactions || []).filter(t => t.date === todayStr).reduce((s, t) => s + (+t.amount || 0), 0);
+  // Gasto en efectivo y débito desde que empezó esta quincena
+  const qStartStr = curMonth + (isQ1 ? '-01' : '-16');
+  const spentQ = (data.cashTransactions || []).filter(t => t.date && t.date >= qStartStr && t.date <= todayStr).reduce((s, t) => s + (+t.amount || 0), 0);
+  // Del día a día se aparta lo mayor entre tu presupuesto de la quincena y lo que ya llevas gastado
+  const varQ = Math.max(varH, spentQ);
   const apartadoQ = apartadosThisQuincena(data, today);
   const apartados = apartadosTotal(data);
   const overdue = overdueItems(data).reduce((s, o) => s + o.pay, 0);
-  const committed = fixedQ + varH + debtQ + cardPayQ + cashSpentToday + apartadoQ + overdue;
+  const committed = fixedQ + varQ + debtQ + cardPayQ + apartadoQ + overdue;
   const remaining = income - committed;
   const saldoD = +data.saldoDebito || 0;
   const saldoE = +data.saldoEfectivo || 0;
@@ -2194,7 +2204,10 @@ function calcDP(data) {
     const totalPaydays = (data.paydays || []).filter(p => afterBaseline(data, p.addedAt, p.ts)).reduce((s, p) => s + (+p.amount || 0), 0);
     const spentDebit = (data.cashTransactions || []).filter(t => t.method === 'debit' && afterBaseline(data, t.date, t.ts)).reduce((s, t) => s + (+t.amount || 0), 0);
     const spentCash = (data.cashTransactions || []).filter(t => (!t.method || t.method === 'cash') && afterBaseline(data, t.date, t.ts)).reduce((s, t) => s + (+t.amount || 0), 0);
-    currentDebit = saldoD + totalPaydays - spentDebit;
+    // Pagos marcados con "Ya pagué" después de poner tus cuentas al día: salen de tu cuenta
+    const paidOut = (data.debts || []).reduce((s, d) => s + (d.monthlyPayments || []).filter(p => +p.amount > 0 && afterBaseline(data, p.paidAt, p.ts)).reduce((x, p) => x + +p.amount, 0), 0) +
+      (data.expPayLog || []).filter(p => afterBaseline(data, p.date, p.ts)).reduce((x, p) => x + (+p.amount || 0), 0);
+    currentDebit = saldoD + totalPaydays - spentDebit - paidOut;
     currentEfectivo = saldoE - spentCash;
     pendingFixed = data.exps.filter(e => e.day && +e.day >= day && (isQ1 ? +e.day <= 15 : +e.day >= 16)).filter(e => !(data.paidExps || {})[`${e.id}_${curMonth}`]).reduce((s, e) => s + (+e.amount || 0), 0);
     pendingDebts = data.debts.filter(d => {
@@ -2219,6 +2232,8 @@ function calcDP(data) {
     cardPayQ,
     cardReserved,
     cashSpentToday,
+    spentQ,
+    varQ,
     committed,
     remaining,
     daily: remaining / daysLeft,
@@ -2240,89 +2255,13 @@ function calcDP(data) {
 /* ── CASH FLOW FORECAST ── */
 // Saldo real actual: lo que entró (saldo inicial + quincenas recibidas en la app)
 // menos lo que se gastó (transacciones registradas). Compartido por cash flow y planeación.
-function getActualBalance(data) {
-  const saldoBase = (parseFloat(data.saldoDebito) || 0) + (parseFloat(data.saldoEfectivo) || 0);
-  const paydaysTotal = (data.paydays || []).filter(p => afterBaseline(data, p.addedAt, p.ts)).reduce((s, p) => s + (+p.amount || 0), 0);
-  const cashTotal = (data.cashTransactions || []).filter(t => afterBaseline(data, t.date, t.ts)).reduce((s, t) => s + (+t.amount || 0), 0);
-  return Math.max(0, saldoBase + paydaysTotal - cashTotal);
-}
 // Quincenas de este mes que aún no han llegado (no auto-detectadas en paydays)
-function getPendingPaydays(data) {
-  const today = new Date();
-  const todayDay = today.getDate();
-  const curMonthKey = today.toLocalISO().slice(0, 7);
-  const q1Full = parseFloat(data.q1) || 0;
-  const q2Full = parseFloat(data.q2) || 0;
-  const q1Received = (data.paydays || []).some(p => p.quincena === curMonthKey + '-Q1');
-  const q2Received = (data.paydays || []).some(p => p.quincena === curMonthKey + '-Q2');
-  const pendingQ2 = !q2Received && todayDay < 16 ? q2Full : 0;
-  const pendingQ1 = !q1Received && todayDay < 1 ? q1Full : 0;
-  return pendingQ1 + pendingQ2;
-}
-function getCashFlow(data) {
-  const today = new Date();
-  const q1Full = parseFloat(data.q1) || 0;
-  const q2Full = parseFloat(data.q2) || 0;
-  const actualBalance = getActualBalance(data);
-  const pendingPaydays = getPendingPaydays(data);
-  const months = [];
-  for (let i = 0; i < 3; i++) {
-    const m = new Date(today.getFullYear(), today.getMonth() + i, 1);
-    const monthName = m.toLocaleDateString('es-MX', {
-      month: 'long'
-    });
-
-    // Este mes: ingreso real (saldo + lo que falta de entrar)
-    // Meses futuros: ingreso esperado completo Q1+Q2
-    const income = i === 0 ? actualBalance + pendingPaydays : q1Full + q2Full;
-    const fixed = data.exps.reduce((s, e) => s + (+e.amount || 0), 0);
-    const vars = data.varExps.reduce((s, e) => s + (+e.amount || 0), 0);
-    const debts = data.debts.reduce((s, d) => {
-      if (d.type === 'tarjeta') return s + (+d.minPayment || 0);
-      if (d.type === 'prestamo') return s + (+d.monthlyPayment || 0);
-      if (d.type === 'plan') {
-        const info = getPlanInfo(d);
-        return info.remaining > i ? s + info.amount : s;
-      }
-      if (d.type === 'informal' || d.type === 'deadline') {
-        const urg = calcUrgency(d);
-        return urg.daysLeft != null && urg.daysLeft <= 45 && i === 0 ? s + (+d.balance || 0) : s;
-      }
-      return s;
-    }, 0);
-    const totalOut = fixed + vars + debts;
-    const net = income - totalOut;
-    const status = net > 3000 ? 'good' : net > 500 ? 'ok' : net > -1000 ? 'warn' : 'danger';
-    months.push({
-      name: monthName,
-      income,
-      out: totalOut,
-      net,
-      status,
-      isCurrent: i === 0
-    });
-  }
-  return months;
-}
 // Cuánto sobra cada mes "normal" (ingreso completo Q1+Q2+extras menos compromisos recurrentes)
+// Cuánto sobra en un mes normal: ingreso − pagos fijos − deudas − tu gasto real del día a día
 function getMonthlySurplus(data) {
-  const q1 = parseFloat(data.q1) || 0;
-  const q2 = parseFloat(data.q2) || 0;
-  const extraMonthly = (data.extraIncome || []).reduce((s, e) => e.type === 'monthly' ? s + (+e.amount || 0) : s, 0);
-  const income = q1 + q2 + extraMonthly;
-  const fixed = data.exps.reduce((s, e) => s + (+e.amount || 0), 0);
-  const vars = data.varExps.reduce((s, e) => s + (+e.amount || 0), 0);
-  const recurringDebts = data.debts.reduce((s, d) => {
-    if (d.type === 'tarjeta') return s + (+d.minPayment || 0);
-    if (d.type === 'prestamo') return s + (+d.monthlyPayment || 0);
-    if (d.type === 'plan') {
-      const info = getPlanInfo(d);
-      return info.remaining > 0 ? s + info.amount : s;
-    }
-    return s;
-  }, 0);
-  return income - fixed - vars - recurringDebts;
+  return monthlyModel(data).surplus;
 }
+
 // Proyección anual: 12 meses de sobrante menos deudas "con persona"/deadline que vencen en el año
 function getYearlyProjection(data) {
   const monthly = getMonthlySurplus(data);
@@ -2336,18 +2275,12 @@ function getYearlyProjection(data) {
   return monthly * 12 - oneTimeDebts;
 }
 // ¿Me alcanza un gasto de $amount dentro de $months meses sin tronar mis metas/deudas?
+// ¿Me alcanza? Proyecta tu dinero libre al cierre del mes elegido, quincena por quincena
 function canAfford(data, amount, months) {
-  const monthly = getMonthlySurplus(data);
-  const actualBalance = getActualBalance(data);
-  const pendingPaydays = getPendingPaydays(data);
-  const projected = actualBalance + pendingPaydays + monthly * Math.max(0, months - 1);
-  const diff = projected - amount;
-  return {
-    ok: diff >= 0,
-    projected,
-    diff,
-    monthly
-  };
+  const o = monthlyOutlook(data, months);
+  const last = o.months[o.months.length - 1];
+  const projected = last ? last.end : o.dp.available;
+  return { ok: projected - amount >= 0, projected, diff: projected - amount, monthly: o.model.surplus, outlook: o, endName: last ? last.name : '' };
 }
 
 /* ── HEALTH SCORE ── */
@@ -2355,7 +2288,9 @@ function calcHealthScore(data, game, dp) {
   let score = 0;
   if (game.streak >= 30) score += 20;else if (game.streak >= 7) score += 15;else if (game.streak >= 3) score += 10;else if (game.streak >= 1) score += 5;
   const avail = dp.available != null ? dp.available : dp.remaining;
-  if (avail > dp.daily * 3) score += 25;else if (avail > 0) score += 15;else if (avail > -1000) score += 5;
+  // Un mes normal en rojo pesa más que tener dinero hoy
+  const monthOk = monthlyModel(data).surplus >= 0;
+  if (!monthOk) score += avail > 0 ? 5 : 0;else if (avail > dp.daily * 3) score += 25;else if (avail > 0) score += 15;else if (avail > -1000) score += 5;
   const criticalDebts = (data.debts || []).filter(d => {
     const u = calcUrgency(d);
     return u.key === 'critical' || u.key === 'danger';
@@ -2370,22 +2305,14 @@ function calcHealthScore(data, game, dp) {
 }
 
 /* ── PREDICTION ── */
-function getPrediction(dp) {
-  if (!dp.income || !dp.daysLeft || !dp.cashSpentToday) return null;
-  const projected = dp.cashSpentToday * dp.daysLeft;
-  const diff = dp.remaining - projected;
-  if (diff > 2000) return {
-    type: 'good',
-    msg: `Si sigues así, te sobrarán ${fmt(diff)} al cerrar la quincena 🎉`
-  };
-  if (diff >= 0) return {
-    type: 'ok',
-    msg: `Vas bien. Proyección: cerrar justo con ${fmt(diff)} de sobrante.`
-  };
-  return {
-    type: 'warn',
-    msg: `Ojo: si sigues así, te van a faltar ${fmt(Math.abs(diff))} al cerrar ⚠️`
-  };
+/* ── PREDICCIÓN: a tu ritmo real de gasto, ¿llegas a la siguiente quincena? ── */
+function getPrediction(dp, data) {
+  if (!data || !(dp.hasSaldo || dp.income)) return null;
+  const pace = spendingPace(data, { noCard: true });
+  if (!pace || pace.days < 3 || pace.daily <= 0) return null;
+  const diff = dp.available - pace.daily * dp.daysLeft;
+  if (diff >= 0) return { type: 'good', msg: `A tu ritmo (unos ${fmt(pace.daily)} al día en efectivo y débito) llegarías a tu siguiente quincena con ${fmt(diff)} libres.` };
+  return { type: 'warn', msg: `A tu ritmo (unos ${fmt(pace.daily)} al día en efectivo y débito) te faltarían ${fmt(-diff)} para llegar a tu siguiente quincena. Para que alcance, baja a ${fmt(Math.max(0, dp.available) / dp.daysLeft)} al día.` };
 }
 
 /* ── SMART SUGGESTIONS ── */
@@ -2456,16 +2383,17 @@ function getSmartSuggestions(data, dp) {
   if (plans.length > 0) {
     const plan = plans[0];
     const info = getPlanInfo(plan);
-    if (surplus > info.amount * 1.3) suggestions.push({
+    // Adelantar una compra a meses solo conviene si cobra intereses
+    if (+plan.interestRate > 0 && surplus > info.amount * 1.3) suggestions.push({
       icon: '📋',
-      text: `Tienes ${fmt(surplus)} libres. Si abonás ${fmt(info.amount * 2)} al plan ${plan.name}, acabas antes de tiempo.`
+      text: `Tienes ${fmt(surplus)} libres. Si abonas ${fmt(info.amount * 2)} a ${plan.name}, pagas menos intereses y acabas antes.`
     });
   }
   const prestamos = data.debts.filter(d => d.type === 'prestamo' && +(d.balance || 0) > 0);
   if (prestamos.length > 0 && surplus > +(prestamos[0].monthlyPayment || 0) * 1.5) {
     suggestions.push({
       icon: '🏦',
-      text: `Con ${fmt(surplus)} de sobrante puedes pagar extra al préstamo "${prestamos[0].name}" y reducir intereses.`
+      text: `Con ${fmt(surplus)} libres podrías abonar a capital del préstamo "${prestamos[0].name}" y reducir intereses. Primero asegura tu fondo de emergencia.`
     });
   }
   if (surplus > 1000) {
@@ -2475,12 +2403,12 @@ function getSmartSuggestions(data, dp) {
     if (missing > 0) {
       suggestions.push({
         icon: '🛡️',
-        text: `¡Te sobran ${fmt(surplus)}! Mete ${fmt(Math.round(Math.min(surplus * 0.5, missing)))} a tu fondo de emergencia — te falta ${fmt(missing)} para la meta.`
+        text: `Tienes ${fmt(surplus)} libres hasta tu siguiente quincena. Si separas ${fmt(Math.round(Math.min(surplus * 0.3, missing)))} para tu fondo de emergencia, te acercas a tu meta (te faltan ${fmt(missing)}).`
       });
     } else {
       suggestions.push({
         icon: '💰',
-        text: `Fondo de emergencia completo y ${fmt(surplus)} de sobrante. Ponlos a trabajar: abona extra a deudas o empieza a invertir.`
+        text: `Fondo de emergencia completo y ${fmt(surplus)} libres hasta tu siguiente quincena. Lo que no necesites, úsalo para abonar a la deuda con más interés.`
       });
     }
   }
@@ -2489,7 +2417,7 @@ function getSmartSuggestions(data, dp) {
     const card = cards[0];
     suggestions.push({
       icon: '💳',
-      text: `Pagar más del mínimo en ${card.name} te ahorra intereses. Con ${fmt(surplus)} de sobrante, considera abonar el doble del mínimo (${fmt(+(card.minPayment || 0) * 2)}).`
+      text: `Pagar solo el mínimo en ${card.name} es lo más caro. Lo ideal es pagar el “pago para no generar intereses” de tu estado de cuenta; si no alcanza, abona al menos el doble del mínimo (${fmt(+(card.minPayment || 0) * 2)}).`
     });
   }
 
@@ -2989,7 +2917,7 @@ function DailyBreakdown(_p) {
   }, 'Contando desde el ', fmtDate(dp.balanceDate), ', cuando pusiste tus cuentas al día. Se suman tus quincenas y se restan los gastos en efectivo y débito.'));
   return h('div', {
     className: 'b-breakdown'
-  }, row('Tu quincena', fmt(dp.income)), dp.fixedQ > 0 && row('Gastos fijos por pagar', '−' + fmt(dp.fixedQ)), dp.varH > 0 && row('Gastos variables estimados', '−' + fmt(dp.varH)), dp.debtQ + dp.cardPayQ > 0 && row('Pagos de deudas', '−' + fmt(dp.debtQ + dp.cardPayQ)), dp.cashSpentToday > 0 && row('Lo que gastaste hoy', '−' + fmt(dp.cashSpentToday)), dp.apartadoQ > 0 && row('Apartado para tus metas', '−' + fmt(dp.apartadoQ)), row('Te queda', fmt(dp.remaining), true), dp.hasSaldo && row('Después de pagos pendientes', fmt(dp.realBalance)));
+  }, row('Tu quincena', fmt(dp.income)), dp.fixedQ > 0 && row('Gastos fijos por pagar', '−' + fmt(dp.fixedQ)), dp.varQ > 0 && row(dp.spentQ > dp.varH ? 'Lo que llevas gastado esta quincena' : 'Tu presupuesto del día a día', '−' + fmt(dp.varQ)), dp.debtQ + dp.cardPayQ > 0 && row('Pagos de deudas', '−' + fmt(dp.debtQ + dp.cardPayQ)), dp.apartadoQ > 0 && row('Apartado para tus metas', '−' + fmt(dp.apartadoQ)), row('Te queda', fmt(dp.remaining), true), dp.hasSaldo && row('Después de pagos pendientes', fmt(dp.realBalance)));
 }
 
 /* ════ INICIO ════ */
@@ -3043,7 +2971,7 @@ function HomeScreen(_p) {
   const missionsDone = missions.filter(m => (game.completedMissions || {})[`${todayStr}-${m.id}`]).length;
   const cards = data.debts.filter(d => d.type === 'tarjeta');
   const cardLimit = cards.reduce((s, c) => s + (+c.creditLimit || 0), 0);
-  const cardUsed = cards.reduce((s, c) => s + (+c.balance || 0) + getCardInfo(c, cardTxAfter(data)).cycleSpend, 0);
+  const cardUsed = cards.reduce((s, c) => s + debtBalance(c, cardTxAfter(data)), 0);
   return h(React.Fragment, null, h(ScreenHead, {
     eyebrow: greeting() + ' 👋',
     title: _p.userName || 'Hola',
@@ -3184,12 +3112,7 @@ function HomeScreen(_p) {
       className: 'b-d'
     }, it.overdue ? `Venció el ${it.day} de ${MES_CORTO[+it.month.slice(5, 7) - 1]} · no lo has pagado` : dueLabel(it.days))), h('button', {
       className: 'b-secondary',
-      onClick: () => it.overdue ? _p.onPayOverdue(it) : it.kind === 'exp' ? _p.onUpdate({
-        paidExps: {
-          ...(data.paidExps || {}),
-          [`${it.x.id}_${monthKeyA}`]: true
-        }
-      }) : it.d.type === 'plan' ? _p.onMarkPlan(it.d.id) : _p.onMarkPaid(it.d.id, pay)
+      onClick: () => it.overdue ? _p.onPayOverdue(it) : it.kind === 'exp' ? _p.onPayExp(it.x, monthKeyA) : it.d.type === 'plan' ? _p.onMarkPlan(it.d.id) : _p.onMarkPaid(it.d.id, pay)
     }, 'Ya pagué'));
   }), limitRows.map(x => h('div', {
     key: 'lim' + x.catId
@@ -3336,10 +3259,9 @@ function PresupuestoScreen(_p) {
   const data = _p.data,
     dp = _p.dp,
     simple = _p.prefs.simple;
-  const fijos = dp.fixedQ + dp.varH;
-  const deudas = dp.debtQ + dp.cardPayQ;
-  const libre = Math.max(0, dp.income - fijos - deudas);
-  const total = Math.max(1, fijos + deudas + libre);
+  const qp = quincenaPlan(data);
+  const segs = [['Pagos fijos', qp.fixed, 'var(--indigo)'], ['Deudas', qp.debts, 'var(--violet)'], ['Día a día', qp.variable, 'var(--sky)'], [qp.rest >= 0 ? 'Te sobra' : 'Te falta', Math.abs(qp.rest), qp.rest >= 0 ? 'var(--emerald)' : 'var(--danger)']];
+  const total = Math.max(1, qp.fixed + qp.debts + qp.variable + Math.max(0, qp.rest));
   const w = v => (v / total * 100).toFixed(1) + '%';
   const mk = new Date().toLocalISO().slice(0, 7);
   const monthTx = [...(data.cashTransactions || []), ...(data.cardTransactions || [])].filter(t => t.date && t.date.startsWith(mk));
@@ -3351,50 +3273,33 @@ function PresupuestoScreen(_p) {
   const catRows = Object.keys(byCat).filter(k => k !== 'none').sort((a, b) => byCat[b] - byCat[a]);
   const catMax = Math.max(1, ...catRows.map(k => Math.max(byCat[k], catLimit(data, k))));
   const hasCats = catRows.length > 0;
-  const pred = getPrediction(dp);
+  const pred = getPrediction(dp, data);
   return h(React.Fragment, null, h(ScreenHead, {
     title: 'Presupuesto'
-  }), dp.income > 0 && h('section', null, h('div', {
+  }), qp.income > 0 && h('section', null, h('div', {
     className: 'b-sh'
-  }, h('h2', null, 'Tu quincena de ', fmt(dp.income))), h('div', {
+  }, h('h2', null, 'Tu quincena de ', fmt(qp.income))), h('div', {
     className: 'b-plan',
     'aria-hidden': 'true'
-  }, fijos > 0 && h('i', {
+  }, segs.filter((x, i) => x[1] > 0 && (i < 3 || qp.rest > 0)).map(x => h('i', {
+    key: x[0],
     style: {
-      width: w(fijos),
-      background: 'var(--indigo)'
+      width: w(x[1]),
+      background: x[2]
     }
-  }), deudas > 0 && h('i', {
+  }))), h('div', {
+    className: 'b-legend b-legend4'
+  }, segs.map(x => h('div', {
+    key: x[0]
+  }, h('span', {
     style: {
-      width: w(deudas),
-      background: 'var(--sky)'
+      background: x[2]
     }
-  }), libre > 0 && h('i', {
-    style: {
-      width: w(libre),
-      background: 'var(--emerald)'
-    }
-  })), h('div', {
-    className: 'b-legend'
-  }, h('div', null, h('span', {
-    style: {
-      background: 'var(--indigo)'
-    }
-  }), 'Gastos fijos', h('b', {
+  }), x[0], h('b', {
     className: 'b-num'
-  }, fmt(fijos))), h('div', null, h('span', {
-    style: {
-      background: 'var(--sky)'
-    }
-  }), 'Deudas', h('b', {
-    className: 'b-num'
-  }, fmt(deudas))), h('div', null, h('span', {
-    style: {
-      background: 'var(--emerald)'
-    }
-  }), 'Para gastar', h('b', {
-    className: 'b-num'
-  }, fmt(libre)))), pred && h('p', {
+  }, fmt(x[1]))))), h('p', {
+    className: 'b-note'
+  }, 'Así se reparte tu quincena completa, contando lo que ya pagaste y tu ritmo normal de gasto. Lo que tienes libre hoy está en Inicio.'), pred && h('p', {
     className: 'b-note' + (pred.type === 'warn' ? ' warn' : '')
   }, pred.msg)), hasCats && h('section', null, h('div', {
     className: 'b-sh'
@@ -4119,7 +4024,7 @@ function ReminderSection() {
 /* ════ FASE 3: deudas, historial y mi información en el diseño de Budgy ════ */
 const e = React.createElement;
 const debtKind = t => DEBT_KINDS.find(k => k.key === t) || DEBT_KINDS[0];
-const debtBalance = (d, cardTx) => d.type === 'plan' ? getPlanInfo(d).remainingAmount : d.type === 'tarjeta' ? +(d.balance || 0) + getCardInfo(d, cardTx || []).cycleSpend : +(d.balance || 0);
+const debtBalance = (d, cardTx) => d.type === 'plan' ? getPlanInfo(d).remainingAmount : d.type === 'tarjeta' ? +(d.balance || 0) + (cardTx || []).filter(t => t.cardId === d.id).reduce((s, t) => s + (+t.amount || 0), 0) : +(d.balance || 0);
 const monthsTxt = m => m >= 12 ? `${Math.floor(m / 12)} ${Math.floor(m / 12) === 1 ? 'año' : 'años'}${m % 12 ? ` y ${m % 12} ${m % 12 === 1 ? 'mes' : 'meses'}` : ''}` : `${m} ${m === 1 ? 'mes' : 'meses'}`;
 
 function Sheet(_p) {
@@ -4424,7 +4329,7 @@ function HealthNative(_p) {
   const emerPct = goal > 0 ? Math.min(100, Math.round((+data.emerSaved || 0) / goal * 100)) : 0;
   const urgent = (data.debts || []).filter(d => { const u = calcUrgency(d); return u.key === 'critical' || u.key === 'danger'; }).length;
   const f = [
-    [dp.available >= 0, dp.available >= 0 ? 'Tu quincena va en verde' : 'Esta quincena sale más de lo que entra'],
+    (() => { const mm = monthlyModel(data); return [dp.available >= 0 && mm.surplus >= 0, dp.available < 0 ? 'Esta quincena no te alcanza para tus pagos' : mm.surplus < 0 ? `En un mes normal gastas ${fmt(-mm.surplus)} más de lo que entra` : 'Tus números del mes cierran en verde']; })(),
     [urgent === 0, urgent === 0 ? 'Sin pagos urgentes' : `${urgent} ${urgent === 1 ? 'pago urgente' : 'pagos urgentes'}`],
     [emerPct >= 50, goal > 0 ? `Fondo de emergencia al ${emerPct}%` : 'Todavía no tienes fondo de emergencia'],
     (() => {
@@ -4451,35 +4356,48 @@ function AffordTool(_p) {
   const [amt, setAmt] = useState('');
   const [months, setMonths] = useState(1);
   const [extra, setExtra] = useState('');
-  const monthly = getMonthlySurplus(data);
-  const yearly = getYearlyProjection(data);
+  const m = monthlyModel(data);
   const r = +amt > 0 ? canAfford(data, +amt, months) : null;
-  const need = r && !r.ok && monthly > 0 ? Math.ceil(-r.diff / monthly) : null;
+  const need = r && !r.ok && m.surplus > 0 ? Math.ceil(-r.diff / m.surplus) : null;
   const goal = +data.emerGoal || 0, saved = +data.emerSaved || 0;
   const rem = Math.max(0, goal - saved);
-  const per = monthly + (+extra || 0);
+  const per = Math.max(0, m.surplus) + (+extra || 0);
+  const kv = (l, v, strong) => e('div', { className: 'b-kv' + (strong ? ' strong' : '') }, e('span', null, l), e('span', { className: 'b-num' }, v));
   return e(React.Fragment, null,
-    e('div', { className: 'b-strip' },
-      e('div', null, e('div', { className: 'k' }, 'Te sobra al mes'), e('div', { className: 'v' }, h(Money, { n: monthly }))),
-      e('div', null, e('div', { className: 'k' }, 'En un año'), e('div', { className: 'v' }, h(Money, { n: yearly })))),
+    e('div', { className: 'b-sh' }, e('h2', null, 'Un mes normal')),
+    e('div', { className: 'b-breakdown' },
+      kv('Te entra', fmt(m.income)),
+      m.fixed > 0 && kv('Pagos fijos', '−' + fmt(m.fixed)),
+      m.debts > 0 && kv('Pagos de deudas', '−' + fmt(m.debts)),
+      kv('Gasto del día a día', m.variable > 0 ? '−' + fmt(m.variable) : '¿?'),
+      kv(m.surplus >= 0 ? 'Te sobra al mes' : 'Te falta al mes', fmt(Math.abs(m.surplus)), true)),
+    e('p', { className: 'b-note' + (m.source === 'none' ? ' warn' : '') }, sourceNote(m)),
     e(Field, { label: '¿Cuánto cuesta lo que quieres?', value: amt, ph: '$0', onChange: setAmt }),
     e('div', { className: 'b-field' }, '¿Para cuándo lo quieres?', e('div', { className: 'b-seg' }, [[1, 'Este mes'], [3, '3 meses'], [6, '6 meses'], [12, '1 año']].map(o => e('button', { key: o[0], className: months === o[0] ? 'on' : '', onClick: () => setMonths(o[0]) }, o[1])))),
     r && e('div', { className: 'b-verdict ' + (r.ok ? 'ok' : 'no') },
       e('b', null, r.ok ? 'Sí te alcanza' : 'Todavía no te alcanza'),
-      e('p', null, r.ok ? `Después de comprarlo te quedarían ${fmt(r.diff)} sin afectar tus pagos.` : `Te faltarían ${fmt(-r.diff)}.` + (need && need > 0 ? ` Con lo que te sobra al mes, lo tendrías en unos ${monthsTxt(months + need)}.` : ' Primero hay que liberar dinero cada mes.'))),
+      e('p', null, r.ok ? `Al cierre de ${r.endName} tendrías unos ${fmt(r.projected)} libres. Después de comprarlo te quedarían ${fmt(r.diff)}, con todos tus pagos cubiertos.` :
+        `Al cierre de ${r.endName} tendrías unos ${fmt(Math.max(0, r.projected))} libres: te faltarían ${fmt(-r.diff)}.` + (need && need > 0 ? ` Con lo que te sobra al mes, lo juntas en unos ${monthsTxt(months + need)}.` : ' Con tu ritmo actual no te sobra dinero cada mes: primero hay que recortar gastos o aumentar ingresos.')),
+      e('p', { className: 'b-verdict-how' }, `Cómo lo calculamos: hoy tienes ${fmt(r.outlook.dp.available)} libres (ya con los pagos de esta quincena apartados). En lo que queda de la quincena sueles gastar unos ${fmt(r.outlook.varDaily * r.outlook.dp.daysLeft)}, y de ahí sumamos cada quincena lo que entra y restamos tus pagos y tu gasto normal.`)),
     goal > 0 && e(More, { title: '¿Cuándo completo mi fondo para emergencias?' },
       rem <= 0 ? e('p', { className: 'b-note good' }, '¡Ya lo completaste!') : e(React.Fragment, null,
         e('p', { className: 'b-note', style: { marginTop: 0 } }, `Te faltan ${fmt(rem)}.`),
         e(Field, { label: 'Si aparto extra cada mes', value: extra, ph: '$0', onChange: setExtra }),
-        e('p', { className: 'b-note' + (per > 0 ? ' good' : '') }, per > 0 ? `Lo completas en ${monthsTxt(Math.ceil(rem / per))}.` : 'Con lo que te sobra hoy no alcanza para ahorrar. Aparta aunque sea un poco extra.'))));
+        e('p', { className: 'b-note' + (per > 0 ? ' good' : '') }, per > 0 ? `Lo completas en ${monthsTxt(Math.ceil(rem / per))}.` : 'Con lo que gastas hoy no te sobra para ahorrar. Aparta aunque sea un poco extra.'))));
 }
+
 function CashFlowNative(_p) {
-  const months = getCashFlow(_p.data);
-  return e('div', { className: 'b-rows' }, months.map((m, i) => e('div', { key: i },
-    e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, (m.name.charAt(0).toUpperCase() + m.name.slice(1)) + (i === 0 ? ' (este mes)' : '')),
-      e('div', { className: 'b-d' }, `Entra ${fmt(m.income)} · sale ${fmt(m.out)}`)),
-    e('span', { className: 'b-n b-num', style: { color: m.net < 0 ? 'var(--danger)' : 'var(--good)' } }, (m.net >= 0 ? '+' : '−') + fmt(Math.abs(m.net))))));
+  const o = monthlyOutlook(_p.data, 3);
+  const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+  return e(React.Fragment, null,
+    e('p', { className: 'b-note', style: { marginTop: 0 } }, `Parte de lo que tienes libre hoy (${fmt(o.dp.available)}) y, quincena por quincena, suma lo que entra y resta tus pagos y tu gasto normal.`),
+    e('div', { className: 'b-rows' }, o.months.map((mm, i) => e('div', { key: i },
+      e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, cap(mm.name) + (mm.current ? ' (lo que queda)' : '')),
+        e('div', { className: 'b-d' }, [mm.income > 0 ? `Entra ${fmt(mm.income)}` : null, mm.fixed > 0 ? `fijos ${fmt(mm.fixed)}` : null, mm.debts > 0 ? `deudas ${fmt(mm.debts)}` : null, `día a día ${fmt(mm.variable)}`].filter(Boolean).join(' · '))),
+      e('div', { className: 'b-cf-end' }, e('span', { className: 'b-d' }, 'Al cierre'), e('span', { className: 'b-n b-num', style: { color: mm.end < 0 ? 'var(--danger)' : 'var(--good)' } }, (mm.end < 0 ? '−' : '') + fmt(Math.abs(mm.end))))))),
+    e('p', { className: 'b-note' }, sourceNote(o.model)));
 }
+
 function CompareNative(_p) {
   const data = _p.data, game = _p.game;
   const now = new Date();
@@ -4498,7 +4416,7 @@ function CardsNative(_p) {
   const cards = (_p.data.debts || []).filter(d => d.type === 'tarjeta');
   return e('div', { className: 'b-rows' }, cards.map(c => {
     const info = getCardInfo(c, cardTxAfter(_p.data));
-    const used = (+c.balance || 0) + info.cycleSpend;
+    const used = debtBalance(c, cardTxAfter(_p.data));
     const lim = +c.creditLimit || 0;
     const pct = lim > 0 ? Math.min(100, Math.round(used / lim * 100)) : null;
     return e('div', { key: c.id, className: 'b-cardrow' },
@@ -4513,7 +4431,7 @@ function FixedExpenses(_p) {
   const [f, setF] = useState(null);
   const list = (data.exps || []).slice().sort((x, y) => (+x.day || 99) - (+y.day || 99));
   const total = list.reduce((s, x) => s + (+x.amount || 0), 0);
-  const togglePaid = x => _p.onUpdate({ paidExps: { ...(data.paidExps || {}), [`${x.id}_${month}`]: !(data.paidExps || {})[`${x.id}_${month}`] } });
+  const togglePaid = x => a.setExpPaid(x, month, !(data.paidExps || {})[`${x.id}_${month}`]);
   return e(React.Fragment, null,
     e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Lo que pagas cada mes: renta, luz, internet, suscripciones. Budgy lo aparta de la quincena en que cae.'),
     e('div', { className: 'b-rows' }, list.map(x => {
@@ -5483,6 +5401,120 @@ function TourSheet(_p) {
       i > 0 ? e('button', { className: 'b-secondary', onClick: () => setI(i - 1) }, 'Atrás') : e('button', { className: 'b-secondary', onClick: _p.onClose }, 'Saltar'),
       e('button', { className: 'b-primary', onClick: () => last ? _p.onClose() : setI(i + 1) }, last ? 'Empezar a usar Budgy' : 'Siguiente')));
 }
+/* ════ MOTOR FINANCIERO ════
+   Una sola forma de proyectar: quincena por quincena, con tu dinero libre de hoy,
+   tus ingresos, tus pagos fijos, tus deudas y tu ritmo REAL de gasto del día a día. */
+const DAYS_MONTH = 30.4;
+// Ritmo real de gasto del día a día en los últimos 60 días (sin pagos fijos que anotaste como gasto)
+function spendingPace(data, opts) {
+  opts = opts || {};
+  const today = todayISO();
+  const since = shiftDay(today, -60);
+  const fixedNames = (data.exps || []).map(x => String(x.name || '').toLowerCase().trim()).filter(n => n.length >= 3);
+  const isFixed = t => { const d = String(t.desc || '').toLowerCase(); return fixedNames.some(n => d.includes(n)); };
+  const tx = spendTx(data).filter(t => t.date && t.date > since && t.date <= today && !isFixed(t) && (!opts.noCard || t.kind !== 'card'));
+  const all = spendTx(data).filter(t => t.date && t.date > since && t.date <= today);
+  if (!all.length) return null;
+  // Cuenta desde el primer día que anotaste (en la ventana), no desde hace 60 días
+  const first = all.reduce((m, t) => t.date < m ? t.date : m, today);
+  const days = Math.max(1, Math.round((new Date(today + 'T12:00:00') - new Date(first + 'T12:00:00')) / 864e5) + 1);
+  const total = tx.reduce((s, t) => s + (+t.amount || 0), 0);
+  return { daily: total / days, days, total, reliable: days >= 14 };
+}
+// Cómo se ve un mes normal: lo que entra, lo que ya está comprometido y lo que sueles gastar
+function monthlyModel(data) {
+  const extra = (data.extraIncome || []).reduce((s, x) => x.type === 'monthly' ? s + (+x.amount || 0) : s, 0);
+  const income = (+data.q1 || 0) + (+data.q2 || 0) + extra;
+  const fixed = (data.exps || []).reduce((s, x) => s + (+x.amount || 0), 0);
+  const debts = (data.debts || []).reduce((s, d) => {
+    if (d.type === 'plan') return getPlanInfo(d).remaining > 0 ? s + (+d.paymentAmount || 0) : s;
+    if (d.type === 'deadline' || d.type === 'informal' && d.informalMode !== 'fixed') return s;
+    return s + debtMonthPay(d);
+  }, 0);
+  const limits = (data.varExps || []).reduce((s, x) => s + (+x.amount || 0), 0);
+  const pace = spendingPace(data);
+  let variable = 0, source = 'none';
+  if (pace && pace.reliable) { variable = pace.daily * DAYS_MONTH; source = 'real'; }
+  else if (limits > 0) { variable = limits; source = 'limits'; }
+  else if (pace) { variable = pace.daily * DAYS_MONTH; source = 'short'; }
+  return { income, extra, fixed, debts, limits, variable, source, pace, surplus: income - fixed - debts - variable };
+}
+const sourceNote = m => m.source === 'real' ? `Tu gasto del día a día (${fmt(m.variable)} al mes) sale de lo que de verdad anotaste en los últimos ${m.pace.days} días, incluyendo compras con tarjeta.` :
+  m.source === 'limits' ? `Tu gasto del día a día (${fmt(m.variable)} al mes) sale de tus límites por categoría. Cuando lleves 2 semanas anotando, Budgy usará lo que de verdad gastas.` :
+  m.source === 'short' ? `Llevas pocos días anotando: el gasto del día a día (${fmt(m.variable)} al mes) es un estimado que se irá afinando.` :
+  'Todavía no sabemos cuánto gastas en el día a día (comida, súper, transporte). Anota tus gastos o pon límites por categoría: sin eso, esta cifra se ve más alta de lo que es.';
+
+// Simula tu dinero libre al cierre de cada quincena
+function simulateQuincenas(data, count) {
+  const now = new Date();
+  const dp = calcDP(data);
+  const m = monthlyModel(data);
+  const varDaily = m.variable / DAYS_MONTH;
+  const q1 = +data.q1 || 0, q2 = +data.q2 || 0;
+  const curMonth = now.toLocalISO().slice(0, 7);
+  // Pagos a meses que quedan (el de esta quincena, si falta, ya está apartado en tu dinero de hoy)
+  const planLeft = {};
+  (data.debts || []).filter(d => d.type === 'plan').forEach(d => {
+    let left = getPlanInfo(d).remaining;
+    if (payWhen(d.dueDay, now).kind === 'now' && !(d.monthlyPayments || []).some(p => p.month === curMonth)) left--;
+    planLeft[d.id] = Math.max(0, left);
+  });
+  const start = dp.available - varDaily * dp.daysLeft;
+  const out = [{ y: now.getFullYear(), mo: now.getMonth(), half: now.getDate() <= 15 ? 1 : 2, current: true, income: 0, fixed: 0, debts: 0, variable: varDaily * dp.daysLeft, end: start }];
+  let y = now.getFullYear(), mo = now.getMonth(), half = out[0].half, bal = start;
+  for (let k = 0; k < count; k++) {
+    if (half === 1) half = 2; else { half = 1; mo++; if (mo > 11) { mo = 0; y++; } }
+    const last = new Date(y, mo + 1, 0).getDate();
+    const len = half === 1 ? 15 : last - 15;
+    const inHalf = day => { const d = Math.min(+day || 0, last); return d > 0 && (half === 1 ? d <= 15 : d >= 16); };
+    const qStart = `${y}-${String(mo + 1).padStart(2, '0')}-${half === 1 ? '01' : '16'}`;
+    const qEnd = `${y}-${String(mo + 1).padStart(2, '0')}-${half === 1 ? '15' : String(last).padStart(2, '0')}`;
+    const income = (half === 1 ? q1 : q2) + m.extra / 2;
+    const fixed = (data.exps || []).filter(x => inHalf(x.day) || !x.day && half === 2).reduce((s, x) => s + (+x.amount || 0), 0);
+    const debts = (data.debts || []).reduce((s, d) => {
+      if (d.type === 'deadline' || d.type === 'informal' && d.informalMode !== 'fixed') {
+        return d.deadlineDate && d.deadlineDate >= qStart && d.deadlineDate <= qEnd ? s + (+d.balance || 0) : s;
+      }
+      if (!(inHalf(d.dueDay) || !d.dueDay && half === 2)) return s;
+      if (d.type === 'plan') { if (planLeft[d.id] > 0) { planLeft[d.id]--; return s + (+d.paymentAmount || 0); } return s; }
+      return s + debtMonthPay(d);
+    }, 0);
+    const variable = varDaily * len;
+    bal += income - fixed - debts - variable;
+    out.push({ y, mo, half, income, fixed, debts, variable, end: bal });
+  }
+  return { model: m, dp, varDaily, quincenas: out };
+}
+// Cómo se reparte la quincena actual en un escenario normal (incluye lo ya pagado)
+function quincenaPlan(data, now) {
+  now = now || new Date();
+  const isQ1 = now.getDate() <= 15;
+  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const len = isQ1 ? 15 : last - 15;
+  const mk = now.toLocalISO().slice(0, 7);
+  const inHalf = day => { const d = Math.min(+day || 0, last); return d > 0 && (isQ1 ? d <= 15 : d >= 16); };
+  const m = monthlyModel(data);
+  const income = (isQ1 ? +data.q1 || 0 : +data.q2 || 0) + m.extra / 2;
+  const fixed = (data.exps || []).filter(x => inHalf(x.day) || !x.day && !isQ1).reduce((s, x) => s + (+x.amount || 0), 0);
+  const debts = (data.debts || []).filter(d => d.type !== 'deadline' && !(d.type === 'informal' && d.informalMode !== 'fixed') && (inHalf(d.dueDay) || !d.dueDay && !isQ1))
+    .filter(d => d.type !== 'plan' || getPlanInfo(d).remaining > 0 || (d.monthlyPayments || []).some(p => p.month === mk))
+    .reduce((s, d) => s + debtMonthPay(d), 0);
+  const variable = m.variable / DAYS_MONTH * len;
+  return { income, fixed, debts, variable, rest: income - fixed - debts - variable, model: m };
+}
+// Agrupa la simulación por mes: cuánto entra, cuánto sale y con cuánto libre cierras
+function monthlyOutlook(data, months) {
+  const sim = simulateQuincenas(data, months * 2 + 1);
+  const res = [];
+  sim.quincenas.forEach(q => {
+    const key = q.y * 12 + q.mo;
+    let r = res.find(x => x.key === key);
+    if (!r) { if (res.length >= months) return; r = { key, y: q.y, mo: q.mo, name: new Date(q.y, q.mo, 1).toLocaleDateString('es-MX', { month: 'long' }), income: 0, fixed: 0, debts: 0, variable: 0, end: 0, current: false }; res.push(r); }
+    r.income += q.income; r.fixed += q.fixed; r.debts += q.debts; r.variable += q.variable; r.end = q.end; if (q.current) r.current = true;
+  });
+  return { ...sim, months: res };
+}
+
 function MainApp(_ref22) {
   let onLock = _ref22.onLock;
   const todayStr = new Date().toLocalISO().slice(0, 10);
@@ -5901,10 +5933,20 @@ function MainApp(_ref22) {
   }, [awardXP]);
   const markPlanPayment = useCallback(debtId => {
     update({
-      debts: data.debts.map(d => d.id === debtId ? {
-        ...d,
-        paidPayments: Math.min(+(d.paidPayments || 0) + 1, +(d.totalPayments || 0))
-      } : d)
+      debts: data.debts.map(d => {
+        if (d.id !== debtId) return d;
+        const month = dueMonthOf(d);
+        return {
+          ...d,
+          paidPayments: Math.min(+(d.paidPayments || 0) + 1, +(d.totalPayments || 0)),
+          monthlyPayments: [...(d.monthlyPayments || []).filter(p => p.month !== month), {
+            month,
+            paidAt: new Date().toLocalISO().slice(0, 10),
+            amount: +(d.paymentAmount || 0),
+            ts: Date.now()
+          }]
+        };
+      })
     });
     awardXP(20, {
       planPayment: true
@@ -5922,7 +5964,8 @@ function MainApp(_ref22) {
         const payRecord = {
           month,
           paidAt,
-          amount: amount || 0
+          amount: amount || 0,
+          ts: Date.now()
         };
         const newMonthlyPayments = [...(d.monthlyPayments || []).filter(p => p.month !== month), payRecord];
         const newBalance = amount && d.balance ? Math.max(0, +(d.balance || 0) - amount) : d.balance;
@@ -6017,6 +6060,19 @@ function MainApp(_ref22) {
     },
     delExp: id => update({
       exps: data.exps.filter(e => e.id !== id)
+    }),
+    setExpPaid: (x, month, on) => update({
+      paidExps: {
+        ...(data.paidExps || {}),
+        [`${x.id}_${month}`]: on
+      },
+      expPayLog: on ? [...(data.expPayLog || []).filter(p => !(p.id === x.id && p.month === month)), {
+        id: x.id,
+        month,
+        amount: +x.amount || 0,
+        date: new Date().toLocalISO().slice(0, 10),
+        ts: Date.now()
+      }].slice(-300) : (data.expPayLog || []).filter(p => !(p.id === x.id && p.month === month))
     }),
     addVar: vf => {
       if (!vf.amount) return false;
@@ -6220,6 +6276,7 @@ function MainApp(_ref22) {
     onOpenChest: openChest,
     onMarkPaid: markDebtPaid,
     onMarkPlan: markPlanPayment,
+    onPayExp: (x, month) => actions.setExpPaid(x, month, true),
     onPayOverdue: o => {
       const rest = {
         ...(data.overdue || {})
@@ -6230,13 +6287,12 @@ function MainApp(_ref22) {
         update({
           overdue: rest
         });
-      } else update({
-        overdue: rest,
-        paidExps: {
-          ...(data.paidExps || {}),
-          [`${o.id}_${o.month}`]: true
-        }
-      });
+      } else {
+        actions.setExpPaid(o.x, o.month, true);
+        update({
+          overdue: rest
+        });
+      }
     },
     onNoSpend: () => {
       update({
