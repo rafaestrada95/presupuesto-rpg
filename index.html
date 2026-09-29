@@ -720,8 +720,8 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-cmp .h{font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
 .b-cardrow{flex-direction:column;align-items:stretch!important;gap:8px!important}
 .b-cardrow-top{display:flex;justify-content:space-between;gap:10px}
-.b-app .b-check{width:32px;height:32px;border-radius:50%;border:2px solid var(--border);display:grid;place-items:center;color:#fff;font-weight:800;flex:none;text-align:center}
-.b-app .b-check.on{background:var(--emerald);border-color:var(--emerald)}
+.b-app .b-check,.b-sheet .b-check{width:32px;height:32px;border-radius:50%;border:2px solid var(--border);display:grid;place-items:center;color:#fff;font-weight:800;flex:none;text-align:center}
+.b-app .b-check.on,.b-sheet .b-check.on{background:var(--emerald);border-color:var(--emerald)}
 .b-chips{display:flex;flex-wrap:wrap;gap:8px}
 .b-app .b-chip,.b-sheet .b-chip{min-height:40px;padding:0 14px;border-radius:var(--r-b);background:var(--surface);font-weight:600;font-size:.86rem}
 .b-app .b-chip.on,.b-sheet .b-chip.on{background:var(--indigo);color:#fff}
@@ -1320,7 +1320,7 @@ function levelReqs(n, data, game) {
     case 2: return [{ label: `Anota tus gastos en 10 días distintos (${Math.min(days, 10)}/10)`, ok: days >= 10, where: 'add' }];
     case 3: return [
       { label: 'Registra tus gastos fijos (renta, luz, etc.)', ok: (data.exps || []).length > 0, where: 'presupuesto' },
-      { label: 'Mantén tu quincena en verde', ok: dp.income > 0 && dp.remaining >= 0, where: 'inicio' }
+      { label: 'Mantén tu quincena en verde', ok: dp.income > 0 && dp.available >= 0, where: 'inicio' }
     ];
     case 4: return [{ label: `Fondo de emergencia al 25% (vas en ${pctTxt(emerPct)})`, ok: emerPct >= 0.25, where: 'metas' }];
     case 5: return [
@@ -2119,6 +2119,14 @@ function sortDebts(debts) {
     return tw[a.type] - tw[b.type];
   });
 }
+// Movimientos que cuentan para el saldo real: los posteriores al último "Poner Budgy al día"
+// (o a la última vez que actualizaste tu saldo). Sin punto de partida, cuentan todos.
+function afterBaseline(data, date, ts) {
+  if (!data.balanceDate) return true;
+  if (!date) return false;
+  if (date !== data.balanceDate) return date > data.balanceDate;
+  return !!ts && ts > (data.balanceAt || 0);
+}
 function calcDP(data) {
   const today = new Date();
   const day = today.getDate();
@@ -2150,21 +2158,23 @@ function calcDP(data) {
   const remaining = income - committed;
   const saldoD = +data.saldoDebito || 0;
   const saldoE = +data.saldoEfectivo || 0;
-  const hasSaldo = saldoD > 0 || saldoE > 0;
+  const hasSaldo = saldoD > 0 || saldoE > 0 || data.balanceAt != null;
   let realBalance = null;
   let currentDebit = saldoD;
   let currentEfectivo = saldoE;
+  let pendingFixed = 0,
+    pendingDebts = 0;
   if (hasSaldo) {
-    const totalPaydays = (data.paydays || []).reduce((s, p) => s + (+p.amount || 0), 0);
-    const spentDebit = (data.cashTransactions || []).filter(t => t.method === 'debit').reduce((s, t) => s + (+t.amount || 0), 0);
-    const spentCash = (data.cashTransactions || []).filter(t => !t.method || t.method === 'cash').reduce((s, t) => s + (+t.amount || 0), 0);
+    const totalPaydays = (data.paydays || []).filter(p => afterBaseline(data, p.addedAt, p.ts)).reduce((s, p) => s + (+p.amount || 0), 0);
+    const spentDebit = (data.cashTransactions || []).filter(t => t.method === 'debit' && afterBaseline(data, t.date, t.ts)).reduce((s, t) => s + (+t.amount || 0), 0);
+    const spentCash = (data.cashTransactions || []).filter(t => (!t.method || t.method === 'cash') && afterBaseline(data, t.date, t.ts)).reduce((s, t) => s + (+t.amount || 0), 0);
     currentDebit = saldoD + totalPaydays - spentDebit;
     currentEfectivo = saldoE - spentCash;
-    const pendingFixed = data.exps.filter(e => e.day && +e.day > day && (isQ1 ? +e.day <= 15 : +e.day >= 16)).filter(e => !(data.paidExps || {})[`${e.id}_${curMonth}`]).reduce((s, e) => s + (+e.amount || 0), 0);
-    const pendingDebts = data.debts.filter(d => {
+    pendingFixed = data.exps.filter(e => e.day && +e.day >= day && (isQ1 ? +e.day <= 15 : +e.day >= 16)).filter(e => !(data.paidExps || {})[`${e.id}_${curMonth}`]).reduce((s, e) => s + (+e.amount || 0), 0);
+    pendingDebts = data.debts.filter(d => {
       if (!d.dueDay) return false;
       const dd = +d.dueDay;
-      if (isQ1 ? !(dd <= 15 && dd > day) : !(dd >= 16 && dd > day)) return false;
+      if (isQ1 ? !(dd <= 15 && dd >= day) : !(dd >= 16 && dd >= day)) return false;
       return !(d.monthlyPayments || []).some(p => p.month === curMonth);
     }).reduce((s, d) => {
       const pay = d.type === 'plan' ? +(d.paymentAmount || 0) : d.type === 'informal' && d.informalMode === 'fixed' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
@@ -2188,7 +2198,12 @@ function calcDP(data) {
     hasSaldo,
     currentDebit,
     currentEfectivo,
-    realBalance
+    realBalance,
+    // Lo que de verdad tienes libre: con saldo real si lo hay, si no el estimado por quincena
+    available: hasSaldo ? realBalance : remaining,
+    pendingFixed,
+    pendingDebts,
+    balanceDate: data.balanceDate || null
   };
 }
 
@@ -2197,8 +2212,8 @@ function calcDP(data) {
 // menos lo que se gastó (transacciones registradas). Compartido por cash flow y planeación.
 function getActualBalance(data) {
   const saldoBase = (parseFloat(data.saldoDebito) || 0) + (parseFloat(data.saldoEfectivo) || 0);
-  const paydaysTotal = (data.paydays || []).reduce((s, p) => s + (+p.amount || 0), 0);
-  const cashTotal = (data.cashTransactions || []).reduce((s, t) => s + (+t.amount || 0), 0);
+  const paydaysTotal = (data.paydays || []).filter(p => afterBaseline(data, p.addedAt, p.ts)).reduce((s, p) => s + (+p.amount || 0), 0);
+  const cashTotal = (data.cashTransactions || []).filter(t => afterBaseline(data, t.date, t.ts)).reduce((s, t) => s + (+t.amount || 0), 0);
   return Math.max(0, saldoBase + paydaysTotal - cashTotal);
 }
 // Quincenas de este mes que aún no han llegado (no auto-detectadas en paydays)
@@ -2346,7 +2361,7 @@ function getPrediction(dp) {
 function getSmartSuggestions(data, dp) {
   if (!dp.income) return [];
   const suggestions = [];
-  const surplus = dp.remaining;
+  const surplus = dp.available;
   const deficit = surplus < 0;
 
   // ── Sugerencias en déficit ──
@@ -8103,6 +8118,11 @@ function DailyBreakdown(_p) {
   }, h('span', null, l), h('span', {
     className: 'b-num'
   }, v));
+  if (dp.hasSaldo) return h('div', {
+    className: 'b-breakdown'
+  }, row('En tu cuenta', fmt(dp.currentDebit)), row('En efectivo', fmt(dp.currentEfectivo)), dp.pendingFixed > 0 && row('Pagos fijos que faltan esta quincena', '−' + fmt(dp.pendingFixed)), dp.pendingDebts > 0 && row('Pagos de deudas que faltan', '−' + fmt(dp.pendingDebts)), row('Te queda libre', fmt(dp.realBalance), true), dp.balanceDate && h('p', {
+    className: 'b-note'
+  }, 'Contando desde el ', fmtDate(dp.balanceDate), ', cuando pusiste tus cuentas al día. Se suman tus quincenas y se restan los gastos en efectivo y débito.'));
   return h('div', {
     className: 'b-breakdown'
   }, row('Tu quincena', fmt(dp.income)), dp.fixedQ > 0 && row('Gastos fijos por pagar', '−' + fmt(dp.fixedQ)), dp.varH > 0 && row('Gastos variables estimados', '−' + fmt(dp.varH)), dp.debtQ + dp.cardPayQ > 0 && row('Pagos de deudas', '−' + fmt(dp.debtQ + dp.cardPayQ)), dp.cardReserved > 0 && row('Apartado para tarjetas', '−' + fmt(dp.cardReserved)), dp.cashSpentToday > 0 && row('Lo que gastaste hoy', '−' + fmt(dp.cashSpentToday)), row('Te queda', fmt(dp.remaining), true), dp.hasSaldo && row('Después de pagos pendientes', fmt(dp.realBalance)));
@@ -8117,9 +8137,15 @@ function HomeScreen(_p) {
   const simple = prefs.simple,
     gameOn = prefs.game && !simple;
   const income = dp.income;
-  const usedPct = income > 0 ? Math.min(100, Math.max(0, Math.round(dp.committed / income * 100))) : 0;
-  const barColor = dp.remaining < 0 ? 'var(--danger)' : usedPct >= 85 ? 'var(--mango)' : 'var(--indigo)';
   const now = new Date();
+  // Con saldo real: lo que tienes menos los pagos que faltan. Sin saldo: el estimado por quincena
+  const real = dp.hasSaldo;
+  const avail = real ? dp.realBalance : dp.remaining;
+  const dailyAmt = real ? Math.max(0, dp.realBalance) / dp.daysLeft : dp.daily;
+  const periodLen = dp.isQ1 ? 15 : new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - 15;
+  const dayOfPeriod = Math.max(1, periodLen - dp.daysLeft + 1);
+  const usedPct = real ? Math.round(dayOfPeriod / periodLen * 100) : income > 0 ? Math.min(100, Math.max(0, Math.round(dp.committed / income * 100))) : 0;
+  const barColor = avail < 0 ? 'var(--danger)' : !real && usedPct >= 85 ? 'var(--mango)' : 'var(--indigo)';
   const endDay = dp.isQ1 ? 15 : new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const monthName = now.toLocaleDateString('es-MX', {
     month: 'long'
@@ -8155,22 +8181,22 @@ function HomeScreen(_p) {
   }, h('div', null, h('b', null, '🎉 Ya cayó tu quincena'), h('div', null, fmt(_p.paydayBanner.amount), ' sumados a tu saldo')), h('button', {
     className: 'b-textbtn',
     onClick: _p.onDismissPayday
-  }, 'Listo')), income > 0 ? h('section', {
+  }, 'Listo')), income > 0 || real ? h('section', {
     className: 'b-hero',
     'aria-label': 'Tu dinero'
   }, h('div', {
-    className: 'b-amount' + (dp.remaining < 0 ? ' neg' : '')
+    className: 'b-amount' + (avail < 0 ? ' neg' : '')
   }, h(Money, {
-    n: dp.remaining
+    n: avail
   })), h('div', {
     className: 'b-cap'
-  }, dp.remaining >= 0 ? `disponibles hasta el ${endDay} de ${monthName}` : 'te faltan para cubrir esta quincena'), dp.remaining > 0 && h('div', {
+  }, avail >= 0 ? real ? `libres hasta el ${endDay} de ${monthName}, con tus pagos ya apartados` : `disponibles hasta el ${endDay} de ${monthName}` : real ? 'te faltan para cubrir tus pagos de esta quincena' : 'te faltan para cubrir esta quincena'), avail > 0 && h('div', {
     className: 'b-daily'
   }, h(Icon, {
     d: IC.cal
   }), h('span', null, 'Hoy puedes gastar ', h('b', {
     className: 'b-num'
-  }, fmt(dp.daily)))), h('div', {
+  }, fmt(dailyAmt)))), h('div', {
     className: 'b-used'
   }, h('div', {
     className: 'b-track',
@@ -8186,11 +8212,14 @@ function HomeScreen(_p) {
     }
   })), h('div', {
     className: 'b-used-l'
-  }, h('span', null, `Has usado ${usedPct}% de tu quincena`), h('span', null, dp.daysLeft === 1 ? 'Último día' : `Quedan ${dp.daysLeft} días`))), !simple && h(More, {
+  }, h('span', null, real ? `Día ${dayOfPeriod} de ${periodLen} de tu quincena` : `Has usado ${usedPct}% de tu quincena`), h('span', null, dp.daysLeft === 1 ? 'Último día' : `Quedan ${dp.daysLeft} días`))), !simple && h(More, {
     title: '¿De dónde sale este número?'
   }, h(DailyBreakdown, {
     dp: dp
-  }))) : h('section', {
+  }), h('button', {
+    className: 'b-textbtn',
+    onClick: _p.onFresh
+  }, '¿No cuadra? Pon tus cuentas al día'))) : h('section', {
     className: 'b-hero'
   }, h('div', {
     className: 'b-empty-t'
@@ -8202,7 +8231,21 @@ function HomeScreen(_p) {
       marginTop: 14
     },
     onClick: () => _p.onTab('perfil')
-  }, 'Agregar mi quincena')), h('button', {
+  }, 'Agregar mi quincena')), !real && income > 0 && !prefs.freshDismissed && h('section', {
+    className: 'b-install'
+  }, h('div', {
+    className: 'b-m'
+  }, h('b', null, 'Pon Budgy al día en 2 minutos'), h('p', null, 'Dile cuánto tienes hoy, qué ya pagaste y cuánto debes. Desde ahí tus números cuadran con tu banco.'), h('div', {
+    className: 'b-notice-btns'
+  }, h('button', {
+    className: 'b-secondary',
+    onClick: _p.onFresh
+  }, 'Empezar'), h('button', {
+    className: 'b-textbtn',
+    onClick: () => _p.setPrefs({
+      freshDismissed: true
+    })
+  }, 'Ahora no')))), h('button', {
     className: 'b-primary',
     onClick: _p.onAdd
   }, h(Icon, {
@@ -8655,6 +8698,16 @@ function PerfilScreen(_p) {
   }), h(MyInfo, _p.infoProps), h('section', {
     className: 'b-rows'
   }, h('button', {
+    onClick: _p.onFresh
+  }, h('div', {
+    className: 'b-m'
+  }, h('div', {
+    className: 'b-n'
+  }, 'Poner Budgy al día'), h('div', {
+    className: 'b-d'
+  }, 'Actualiza lo que tienes, lo que pagaste y lo que debes')), h('span', {
+    className: 'b-textbtn'
+  }, 'Empezar')), h('button', {
     onClick: _p.onFeedback
   }, h('div', {
     className: 'b-m'
@@ -9382,12 +9435,13 @@ function MyInfo(_p) {
       e('div', { className: 'b-grid2' },
         e(Field, { label: 'Quincena del 1 al 15', value: data.q1, ph: '$0', onChange: v => set({ q1: v }) }),
         e(Field, { label: 'Quincena del 16 al 31', value: data.q2, ph: '$0', onChange: v => set({ q2: v }) })),
-      income > 0 && e('p', { className: 'b-note' }, 'Al mes: ', e('b', null, fmt(income)))),
+      e('div', { className: 'b-field', style: { marginTop: 12 } }, '¿Qué días te depositan?', e('div', { className: 'b-chips' }, PAY_SCHEDULES.map(o => e('button', { key: o[0], className: 'b-chip' + ((data.paySchedule || '15-ultimo') === o[0] ? ' on' : ''), onClick: () => set({ paySchedule: o[0] }) }, o[1])))),
+      income > 0 && e('p', { className: 'b-note' }, 'Al mes: ', e('b', null, fmt(income)), '. Tu quincena se suma sola el día que te pagan.')),
     e('section', null, e('div', { className: 'b-sh' }, e('h2', null, 'Lo que tienes hoy')),
-      e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Actualízalo cuando revises tu banco. Tu quincena se suma sola el día que te pagan.'),
+      e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Cuando lo cambias, Budgy empieza a contar desde ese momento: lo anotado antes ya está incluido en esta cifra.'),
       e('div', { className: 'b-grid2' },
-        e(Field, { label: 'En tu cuenta (débito)', value: data.saldoDebito, ph: '$0', onChange: v => set({ saldoDebito: v }) }),
-        e(Field, { label: 'En efectivo', value: data.saldoEfectivo, ph: '$0', onChange: v => set({ saldoEfectivo: v }) }))),
+        e(Field, { label: 'En tu cuenta (débito)', value: data.saldoDebito, ph: '$0', onChange: v => set({ saldoDebito: v, saldoEfectivo: data.saldoEfectivo || '0', balanceDate: new Date().toLocalISO().slice(0, 10), balanceAt: Date.now() }) }),
+        e(Field, { label: 'En efectivo', value: data.saldoEfectivo, ph: '$0', onChange: v => set({ saldoEfectivo: v, saldoDebito: data.saldoDebito || '0', balanceDate: new Date().toLocalISO().slice(0, 10), balanceAt: Date.now() }) }))),
     e('section', null, e('div', { className: 'b-sh' }, e('h2', null, 'Ingresos extra')),
       (data.extraIncome || []).length === 0 && !xf && e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Freelance, comisiones, bonos o rentas, aparte de tu quincena.'),
       e('div', { className: 'b-rows' }, (data.extraIncome || []).map((x, i) => e('div', { key: x.id || i },
@@ -9429,7 +9483,7 @@ function HealthNative(_p) {
   const emerPct = goal > 0 ? Math.min(100, Math.round((+data.emerSaved || 0) / goal * 100)) : 0;
   const urgent = (data.debts || []).filter(d => { const u = calcUrgency(d); return u.key === 'critical' || u.key === 'danger'; }).length;
   const f = [
-    [dp.remaining >= 0, dp.remaining >= 0 ? 'Tu quincena va en verde' : 'Esta quincena sale más de lo que entra'],
+    [dp.available >= 0, dp.available >= 0 ? 'Tu quincena va en verde' : 'Esta quincena sale más de lo que entra'],
     [urgent === 0, urgent === 0 ? 'Sin pagos urgentes' : `${urgent} ${urgent === 1 ? 'pago urgente' : 'pagos urgentes'}`],
     [emerPct >= 50, goal > 0 ? `Fondo de emergencia al ${emerPct}%` : 'Todavía no tienes fondo de emergencia'],
     [(game.streak || 0) >= 3, `Constancia: ${game.streak || 0} ${(game.streak || 0) === 1 ? 'día' : 'días'} seguidos usando Budgy`]
@@ -9840,6 +9894,138 @@ function NotificationsSection(_p) {
     e(More, { title: 'Otra opción: recordatorio en tu calendario' }, e(ReminderSection)));
 }
 
+/* ════ FASE 8: quincena automática y "Poner Budgy al día" ════ */
+const PAY_SCHEDULES = [['15-ultimo', 'El 15 y el último día'], ['1-16', 'El 1 y el 16']];
+const pad2 = n => String(n).padStart(2, '0');
+// Fechas de pago de un mes según cómo te pagan
+function payDatesOf(data, y, m) {
+  const last = new Date(y, m + 1, 0).getDate();
+  const sch = data.paySchedule || '15-ultimo';
+  const ym = `${y}-${pad2(m + 1)}`;
+  const d1 = sch === '1-16' ? 1 : 15, d2 = sch === '1-16' ? 16 : last;
+  return [{ key: `${ym}-Q1`, isQ1: true, date: `${ym}-${pad2(d1)}`, amount: +data.q1 || 0 }, { key: `${ym}-Q2`, isQ1: false, date: `${ym}-${pad2(d2)}`, amount: +data.q2 || 0 }];
+}
+// Quincenas que ya debieron caer y todavía no están registradas
+function dueQuincenas(data, now) {
+  const today = now.toLocalISO().slice(0, 10);
+  const have = new Set((data.paydays || []).map(p => p.quincena));
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const all = [...payDatesOf(data, prev.getFullYear(), prev.getMonth()), ...payDatesOf(data, now.getFullYear(), now.getMonth())]
+    .filter(q => q.amount > 0 && q.date <= today && !have.has(q.key));
+  if (data.balanceDate) return all.filter(q => q.date >= data.balanceDate);
+  // Sin punto de partida: solo la quincena más reciente, para no duplicar dinero que ya estaba en tu saldo
+  return all.slice(-1);
+}
+function currentPayDate(data, now) {
+  const today = now.toLocalISO().slice(0, 10);
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const qs = [...payDatesOf(data, prev.getFullYear(), prev.getMonth()), ...payDatesOf(data, now.getFullYear(), now.getMonth())].filter(q => q.date <= today);
+  return qs[qs.length - 1] || null;
+}
+
+function FreshStartSheet(_p) {
+  const data = _p.data, dp = _p.dp;
+  const now = new Date();
+  const today = now.toLocalISO().slice(0, 10);
+  const month = today.slice(0, 7);
+  const [step, setStep] = useState(0);
+  const [f, setF] = useState(() => ({
+    debit: dp.hasSaldo ? String(Math.max(0, Math.round(dp.currentDebit))) : '',
+    cash: dp.hasSaldo ? String(Math.max(0, Math.round(dp.currentEfectivo))) : '',
+    q1: data.q1 || '', q2: data.q2 || '', schedule: data.paySchedule || '15-ultimo', gotPaid: true,
+    paid: Object.fromEntries([...(data.debts || []).filter(d => d.type !== 'plan').map(d => ['d' + d.id, (d.monthlyPayments || []).some(p => p.month === month)]),
+      ...(data.exps || []).map(x => ['e' + x.id, !!(data.paidExps || {})[`${x.id}_${month}`]])]),
+    debts: Object.fromEntries((data.debts || []).map(d => [d.id, { balance: String(d.type === 'plan' ? '' : d.balance ?? ''), paidPayments: String(d.paidPayments ?? ''), gone: false }])),
+    exps: Object.fromEntries((data.exps || []).map(x => [x.id, { amount: String(x.amount ?? ''), gone: false }]))
+  }));
+  const set = patch => setF(prev => ({ ...prev, ...patch }));
+  const payNow = currentPayDate({ ...data, paySchedule: f.schedule, q1: f.q1, q2: f.q2 }, now);
+  const dueItems = [...(data.debts || []).filter(d => d.type !== 'plan' && d.dueDay).map(d => ({ k: 'd' + d.id, n: d.name, day: +d.dueDay, amt: debtPay(d) })),
+    ...(data.exps || []).filter(x => x.day).map(x => ({ k: 'e' + x.id, n: x.name, day: +x.day, amt: +x.amount || 0 }))].sort((a, b) => a.day - b.day);
+  const build = () => {
+    const ts = Date.now();
+    const debts = (data.debts || []).filter(d => !f.debts[d.id].gone).map(d => {
+      const e2 = f.debts[d.id];
+      let nd = { ...d };
+      if (d.type === 'plan') { if (e2.paidPayments !== '') nd.paidPayments = +e2.paidPayments; }
+      else if (e2.balance !== '') nd.balance = +e2.balance;
+      if (d.type !== 'plan') {
+        const others = (d.monthlyPayments || []).filter(p => p.month !== month);
+        const had = (d.monthlyPayments || []).find(p => p.month === month);
+        nd.monthlyPayments = f.paid['d' + d.id] ? [...others, had || { month, paidAt: today, amount: 0 }] : others;
+      }
+      return nd;
+    });
+    const exps = (data.exps || []).filter(x => !f.exps[x.id].gone).map(x => ({ ...x, amount: f.exps[x.id].amount !== '' ? +f.exps[x.id].amount : x.amount }));
+    const paidExps = { ...(data.paidExps || {}) };
+    exps.forEach(x => { paidExps[`${x.id}_${month}`] = !!f.paid['e' + x.id]; });
+    let paydays = data.paydays || [];
+    // Si ya te depositaron, esa quincena ya está en lo que tienes hoy: se registra para no sumarla dos veces
+    if (payNow && f.gotPaid && !paydays.some(p => p.quincena === payNow.key)) paydays = [...paydays, { quincena: payNow.key, amount: payNow.amount, addedAt: payNow.date, ts: ts - 1000 }];
+    if (payNow && !f.gotPaid) paydays = paydays.filter(p => p.quincena !== payNow.key);
+    return { saldoDebito: f.debit || '0', saldoEfectivo: f.cash || '0', balanceDate: today, balanceAt: ts, q1: f.q1, q2: f.q2, paySchedule: f.schedule, debts, exps, paidExps, paydays, freshStartAt: today };
+  };
+  const preview = step === 5 ? calcDP({ ...data, ...build() }) : null;
+  const steps = 6;
+  const nextBtn = (label, ok = true) => e('div', { className: 'b-wiz-foot' },
+    step > 0 && e('button', { className: 'b-secondary', onClick: () => setStep(step - 1) }, 'Atrás'),
+    e('button', { className: 'b-primary', disabled: !ok, onClick: () => setStep(step + 1) }, label || 'Siguiente'));
+  const toggle = (on, onClick, label) => e('button', { className: 'b-check' + (on ? ' on' : ''), 'aria-pressed': on, 'aria-label': label, onClick }, on ? '✓' : '');
+  let body;
+  if (step === 0) body = e(React.Fragment, null,
+    e('div', { className: 'b-wiz-q' }, 'Pongamos Budgy al día'),
+    e('div', { className: 'b-wiz-help' }, 'En 2 minutos le dices a Budgy cómo están tus cuentas hoy. Tu historial se queda, pero desde este momento todo se calcula con tu dinero real.'),
+    e('ol', { className: 'b-steps' }, e('li', null, 'Lo que tienes hoy'), e('li', null, 'Tu quincena'), e('li', null, 'Los pagos que ya hiciste este mes'), e('li', null, 'Cuánto debes hoy'), e('li', null, 'Tus gastos fijos')),
+    nextBtn('Empezar'));
+  if (step === 1) body = e(React.Fragment, null,
+    e('div', { className: 'b-wiz-q' }, '¿Cuánto tienes hoy?'),
+    e('div', { className: 'b-wiz-help' }, 'Abre la app de tu banco y cuenta tu cartera. Sin centavos está bien.'),
+    e(Field, { label: 'En tu cuenta (débito)', value: f.debit, ph: '$0', onChange: v => set({ debit: v }) }),
+    e(Field, { label: 'En efectivo', value: f.cash, ph: '$0', onChange: v => set({ cash: v }) }),
+    nextBtn(null, f.debit !== '' || f.cash !== ''));
+  if (step === 2) body = e(React.Fragment, null,
+    e('div', { className: 'b-wiz-q' }, 'Tu quincena'),
+    e('div', { className: 'b-grid2' }, e(Field, { label: 'Del 1 al 15', value: f.q1, ph: '$0', onChange: v => set({ q1: v }) }), e(Field, { label: 'Del 16 al fin de mes', value: f.q2, ph: '$0', onChange: v => set({ q2: v }) })),
+    e('div', { className: 'b-field' }, '¿Qué días te depositan?', e('div', { className: 'b-chips' }, PAY_SCHEDULES.map(o => e('button', { key: o[0], className: 'b-chip' + (f.schedule === o[0] ? ' on' : ''), onClick: () => set({ schedule: o[0] }) }, o[1])))),
+    payNow && e('div', { className: 'b-set' }, e('div', null, e('div', { className: 't' }, `¿Ya te depositaron la del ${+payNow.date.slice(8)}?`), e('div', { className: 's' }, f.gotPaid ? 'Sí: ya está incluida en lo que tienes hoy.' : 'Todavía no: Budgy la suma cuando llegue.')), toggle(f.gotPaid, () => set({ gotPaid: !f.gotPaid }), 'Ya me depositaron')),
+    e('p', { className: 'b-note' }, 'De ahora en adelante tu quincena se suma sola el día que te pagan.'),
+    nextBtn());
+  if (step === 3) body = e(React.Fragment, null,
+    e('div', { className: 'b-wiz-q' }, '¿Qué pagos de este mes ya hiciste?'),
+    dueItems.length ? e('div', { className: 'b-rows' }, dueItems.map(it => e('div', { key: it.k },
+      e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, it.n), e('div', { className: 'b-d' }, `Día ${it.day}`, it.amt ? ` · ${fmt(it.amt)}` : '')),
+      toggle(!!f.paid[it.k], () => set({ paid: { ...f.paid, [it.k]: !f.paid[it.k] } }), `Ya pagué ${it.n}`)))) : e('p', { className: 'b-note' }, 'No tienes pagos con fecha registrados. Puedes agregarlos después en Presupuesto y Metas.'),
+    nextBtn());
+  if (step === 4) body = e(React.Fragment, null,
+    e('div', { className: 'b-wiz-q' }, '¿Cuánto debes hoy?'),
+    (data.debts || []).length ? e('div', { className: 'b-rows' }, (data.debts || []).map(d => {
+      const x = f.debts[d.id];
+      const upd = patch => set({ debts: { ...f.debts, [d.id]: { ...x, ...patch } } });
+      return e('div', { key: d.id, className: x.gone ? 'b-done' : '' },
+        e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, d.name), e('div', { className: 'b-d' }, x.gone ? 'Se va a quitar' : d.type === 'plan' ? `Pagos hechos de ${d.totalPayments || '?'}` : 'Lo que debes hoy')),
+        !x.gone && e('input', { className: 'b-in-inline', inputMode: 'decimal', value: d.type === 'plan' ? x.paidPayments : x.balance, placeholder: d.type === 'plan' ? '0' : '$0', 'aria-label': `Deuda de ${d.name}`, onChange: ev => upd(d.type === 'plan' ? { paidPayments: ev.target.value.replace(/\D/g, '') } : { balance: ev.target.value.replace(/[^0-9.]/g, '') }) }),
+        e('button', { className: 'b-textbtn' + (x.gone ? '' : ' danger'), onClick: () => upd({ gone: !x.gone }) }, x.gone ? 'Dejar' : 'Ya la liquidé'));
+    })) : e('p', { className: 'b-note' }, 'No tienes deudas registradas. ¡Excelente!'),
+    nextBtn());
+  if (step === 5) body = e(React.Fragment, null,
+    e('div', { className: 'b-wiz-q' }, '¿Tus gastos fijos siguen igual?'),
+    (data.exps || []).length ? e('div', { className: 'b-rows' }, (data.exps || []).map(x => {
+      const v = f.exps[x.id];
+      const upd = patch => set({ exps: { ...f.exps, [x.id]: { ...v, ...patch } } });
+      return e('div', { key: x.id, className: v.gone ? 'b-done' : '' },
+        e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, x.name), e('div', { className: 'b-d' }, v.gone ? 'Se va a quitar' : x.day ? `Día ${x.day}` : 'Sin día')),
+        !v.gone && e('input', { className: 'b-in-inline', inputMode: 'decimal', value: v.amount, placeholder: '$0', 'aria-label': `Monto de ${x.name}`, onChange: ev => upd({ amount: ev.target.value.replace(/[^0-9.]/g, '') }) }),
+        e('button', { className: 'b-textbtn' + (v.gone ? '' : ' danger'), onClick: () => upd({ gone: !v.gone }) }, v.gone ? 'Dejar' : 'Ya no lo pago'));
+    })) : e('p', { className: 'b-note' }, 'Todavía no tienes gastos fijos. Agrégalos después en Presupuesto → Tus gastos fijos.'),
+    preview && preview.hasSaldo && e('div', { className: 'b-verdict ok' }, e('b', null, `Hoy tienes ${fmt(Math.max(0, preview.realBalance))} libres`), e('p', null, 'Ya descontando los pagos que te faltan esta quincena.')),
+    e('div', { className: 'b-wiz-foot' },
+      e('button', { className: 'b-secondary', onClick: () => setStep(step - 1) }, 'Atrás'),
+      e('button', { className: 'b-primary', onClick: () => { _p.onApply(build()); } }, 'Listo, empezar desde hoy')));
+  return e(Sheet, { title: step === 0 ? 'Poner Budgy al día' : `Paso ${step} de ${steps - 1}`, label: 'Poner Budgy al día', onClose: _p.onClose },
+    step > 0 && e('span', { className: 'b-track sm' }, e('i', { style: { width: step / (steps - 1) * 100 + '%' } })),
+    body);
+}
+
 function MainApp(_ref22) {
   let onLock = _ref22.onLock;
   const todayStr = new Date().toLocalISO().slice(0, 10);
@@ -9881,6 +10067,7 @@ function MainApp(_ref22) {
   const _qs = new URLSearchParams(window.location.search);
   const [quickOpen, setQuickOpen] = useState(isQuickAdd);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [freshOpen, setFreshOpen] = useState(false);
   const lastTabRef = useRef('inicio');
   const [quickAmount, setQuickAmount] = useState(() => (_qs.get('monto') || '').replace(/[^0-9.]/g, ''));
   const [toast, setToast] = useState(null);
@@ -10173,31 +10360,24 @@ function MainApp(_ref22) {
     }
   }, []);
 
-  // Auto-payday detection (runs once per session)
+  // La quincena se suma sola: el día que te pagan o la siguiente vez que abras Budgy
   useEffect(() => {
     if (paydayChecked.current) return;
     paydayChecked.current = true;
-    const today = new Date();
-    const day = today.getDate();
-    const isQ1 = day <= 15;
-    const isPayday = isQ1 ? day === 1 : day === 16;
-    if (!isPayday) return;
-    const quincena = `${today.toLocalISO().slice(0, 7)}-${isQ1 ? 'Q1' : 'Q2'}`;
-    const alreadyAdded = (data.paydays || []).some(p => p.quincena === quincena);
-    if (alreadyAdded) return;
-    const incomeAmount = isQ1 ? +data.q1 || 0 : +data.q2 || 0;
-    if (!incomeAmount) return;
-    const newPayday = {
-      quincena,
-      amount: incomeAmount,
-      addedAt: todayStr
-    };
+    const due = dueQuincenas(data, new Date());
+    if (!due.length) return;
+    const ts = Date.now();
     update({
-      paydays: [...(data.paydays || []), newPayday]
+      paydays: [...(data.paydays || []), ...due.map(q => ({
+        quincena: q.key,
+        amount: q.amount,
+        addedAt: q.date,
+        ts
+      }))]
     });
     setPaydayBanner({
-      isQ1,
-      amount: incomeAmount
+      isQ1: due[due.length - 1].isQ1,
+      amount: due.reduce((s, q) => s + q.amount, 0)
     });
     awardXP(20, {});
   }, []);
@@ -10401,6 +10581,7 @@ function MainApp(_ref22) {
     addCash: tx => {
       const item = {
         ...tx,
+        ts: Date.now(),
         id: uid()
       };
       const newCash = [...(data.cashTransactions || []), item];
@@ -10422,6 +10603,7 @@ function MainApp(_ref22) {
       update({
         cardTransactions: [...(data.cardTransactions || []), {
           ...tx,
+          ts: Date.now(),
           id: uid()
         }]
       });
@@ -10527,6 +10709,7 @@ function MainApp(_ref22) {
     userName,
     setPrefs: updatePrefs,
     onFeedback: () => setFeedbackOpen(true),
+    onFresh: () => setFreshOpen(true),
     onUpdate: update,
     onPatchGame: p => setGame(prev => {
       const g = {
@@ -10542,7 +10725,11 @@ function MainApp(_ref22) {
   return _h(React.Fragment, null, showOnboarding && _h(OnboardingFlow, {
     userName: userName,
     data: data,
-    onUpdate: update,
+    onUpdate: patch => update('saldoDebito' in patch || 'saldoEfectivo' in patch ? {
+      ...patch,
+      balanceDate: todayStr,
+      balanceAt: Date.now()
+    } : patch),
     onComplete: () => setShowOnboarding(false)
   }), showDeficitWarning && _h(DeficitWarningOverlay, {
     data: data,
@@ -10645,6 +10832,18 @@ function MainApp(_ref22) {
       setToast({
         text: t.text,
         onUndo: () => undoQuick(t)
+      });
+    }
+  }), freshOpen && _h(FreshStartSheet, {
+    data: data,
+    dp: dp,
+    onClose: () => setFreshOpen(false),
+    onApply: patch => {
+      update(patch);
+      setFreshOpen(false);
+      goTab('inicio');
+      setToast({
+        text: 'Listo: Budgy está al día'
       });
     }
   }), feedbackOpen && _h(FeedbackSheet, {
