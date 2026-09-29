@@ -769,6 +769,24 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-sheet .b-secondary.wide{width:100%;min-height:50px}
 .b-sheet .b-rows .b-m .b-textbtn{min-height:32px;font-size:.84rem}
 .b-sheet .b-rows>div{gap:10px}
+
+/* fase 9 */
+.b-nospend{display:block;margin:8px auto 0;min-height:44px}
+.b-favs{margin:6px 0 4px}
+.b-favs-h{font-size:.8rem;font-weight:700;color:var(--dim);margin-bottom:8px}
+.b-favs-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.b-sheet .b-fav,.b-fav{display:flex;align-items:center;gap:10px;text-align:left;background:var(--surface);border-radius:var(--r-c);padding:10px 12px;min-height:56px;font:inherit;color:var(--text)}
+.b-fav>span:last-child{display:flex;flex-direction:column;min-width:0}
+.b-fav-n{font-weight:700;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.b-fav-a{font-size:.78rem;color:var(--dim);font-variant-numeric:tabular-nums}
+.b-search{width:100%;box-sizing:border-box;font:inherit;font-size:1rem;color:var(--text);background:var(--surface);border:0;border-radius:var(--r-b);padding:12px 14px;margin:12px 0 4px;outline:none}
+.b-search:focus{box-shadow:0 0 0 2px var(--indigo)}
+.b-toast.warn{border-left:6px solid var(--mango)}
+.b-bar-lim{color:var(--dim);font-weight:500}
+.b-d.b-over{color:var(--danger)}
+.b-close-h{text-align:center;padding:4px 0 8px}
+.b-close-h .b-amount{margin:4px 0}
+.b-insight-box p{margin:6px 0 0;font-size:.92rem}
 </style>
 </head>
 <body>
@@ -1573,7 +1591,7 @@ const ALL_MISSIONS = [{
   id: 'm_racha',
   icon: '🔥',
   title: 'Sin romperla',
-  desc: 'Mantén tu racha activa hoy',
+  desc: 'Anota hoy (o marca que no gastaste)',
   xp: 20
 }, {
   id: 'm_austeridad',
@@ -1625,7 +1643,7 @@ function checkMission(id, data, game, todayStr) {
     case 'm_tarjeta':
       return todayCard.length >= 1;
     case 'm_racha':
-      return (game.streak || 0) >= 1;
+      return todayAll.length >= 1 || (data.noSpendDays || []).includes(todayStr);
     case 'm_noche':
       return game.nightCheck === todayStr;
     case 'm_deudas':
@@ -2142,7 +2160,9 @@ function calcDP(data) {
   const cardReserved = data.debts.filter(d => d.type === "tarjeta").reduce((s, d) => s + getCardInfo(d, cardTxAfter(data), today).cycleSpend, 0);
   const todayStr = today.toLocalISO().slice(0, 10);
   const cashSpentToday = (data.cashTransactions || []).filter(t => t.date === todayStr).reduce((s, t) => s + (+t.amount || 0), 0);
-  const committed = fixedQ + varH + debtQ + cardPayQ + cardReserved + cashSpentToday;
+  const apartadoQ = apartadosThisQuincena(data, today);
+  const apartados = apartadosTotal(data);
+  const committed = fixedQ + varH + debtQ + cardPayQ + cardReserved + cashSpentToday + apartadoQ;
   const remaining = income - committed;
   const saldoD = +data.saldoDebito || 0;
   const saldoE = +data.saldoEfectivo || 0;
@@ -2169,7 +2189,8 @@ function calcDP(data) {
       return s + pay;
     }, 0);
     // Lo comprado con tarjeta en este corte se tendrá que pagar: se aparta desde ya
-    realBalance = currentDebit + currentEfectivo - pendingFixed - pendingDebts - cardReserved;
+    // Lo apartado para metas sigue en tu cuenta, pero ya no es libre
+    realBalance = currentDebit + currentEfectivo - pendingFixed - pendingDebts - cardReserved - apartados;
   }
   return {
     income,
@@ -2192,6 +2213,8 @@ function calcDP(data) {
     available: hasSaldo ? realBalance : remaining,
     pendingFixed,
     pendingDebts,
+    apartados,
+    apartadoQ,
     balanceDate: data.balanceDate || null
   };
 }
@@ -8110,12 +8133,12 @@ function DailyBreakdown(_p) {
   }, v));
   if (dp.hasSaldo) return h('div', {
     className: 'b-breakdown'
-  }, row('En tu cuenta', fmt(dp.currentDebit)), row('En efectivo', fmt(dp.currentEfectivo)), dp.pendingFixed > 0 && row('Pagos fijos que faltan esta quincena', '−' + fmt(dp.pendingFixed)), dp.pendingDebts > 0 && row('Pagos de deudas que faltan', '−' + fmt(dp.pendingDebts)), dp.cardReserved > 0 && row('Apartado por compras con tarjeta', '−' + fmt(dp.cardReserved)), row('Te queda libre', fmt(dp.realBalance), true), dp.balanceDate && h('p', {
+  }, row('En tu cuenta', fmt(dp.currentDebit)), row('En efectivo', fmt(dp.currentEfectivo)), dp.pendingFixed > 0 && row('Pagos fijos que faltan esta quincena', '−' + fmt(dp.pendingFixed)), dp.pendingDebts > 0 && row('Pagos de deudas que faltan', '−' + fmt(dp.pendingDebts)), dp.cardReserved > 0 && row('Apartado por compras con tarjeta', '−' + fmt(dp.cardReserved)), dp.apartados > 0 && row('Apartado para tus metas', '−' + fmt(dp.apartados)), row('Te queda libre', fmt(dp.realBalance), true), dp.balanceDate && h('p', {
     className: 'b-note'
   }, 'Contando desde el ', fmtDate(dp.balanceDate), ', cuando pusiste tus cuentas al día. Se suman tus quincenas y se restan los gastos en efectivo y débito.'));
   return h('div', {
     className: 'b-breakdown'
-  }, row('Tu quincena', fmt(dp.income)), dp.fixedQ > 0 && row('Gastos fijos por pagar', '−' + fmt(dp.fixedQ)), dp.varH > 0 && row('Gastos variables estimados', '−' + fmt(dp.varH)), dp.debtQ + dp.cardPayQ > 0 && row('Pagos de deudas', '−' + fmt(dp.debtQ + dp.cardPayQ)), dp.cardReserved > 0 && row('Apartado para tarjetas', '−' + fmt(dp.cardReserved)), dp.cashSpentToday > 0 && row('Lo que gastaste hoy', '−' + fmt(dp.cashSpentToday)), row('Te queda', fmt(dp.remaining), true), dp.hasSaldo && row('Después de pagos pendientes', fmt(dp.realBalance)));
+  }, row('Tu quincena', fmt(dp.income)), dp.fixedQ > 0 && row('Gastos fijos por pagar', '−' + fmt(dp.fixedQ)), dp.varH > 0 && row('Gastos variables estimados', '−' + fmt(dp.varH)), dp.debtQ + dp.cardPayQ > 0 && row('Pagos de deudas', '−' + fmt(dp.debtQ + dp.cardPayQ)), dp.cardReserved > 0 && row('Apartado para tarjetas', '−' + fmt(dp.cardReserved)), dp.cashSpentToday > 0 && row('Lo que gastaste hoy', '−' + fmt(dp.cashSpentToday)), dp.apartadoQ > 0 && row('Apartado para tus metas', '−' + fmt(dp.apartadoQ)), row('Te queda', fmt(dp.remaining), true), dp.hasSaldo && row('Después de pagos pendientes', fmt(dp.realBalance)));
 }
 
 /* ════ INICIO ════ */
@@ -8147,15 +8170,21 @@ function HomeScreen(_p) {
   const attention = [..._p.upcoming.map(d => ({
     kind: 'debt', id: d.id, d, name: d.name, pay: debtPay(d), days: d.urg.daysLeft ?? 99
   })), ...fixedDue].sort((a, b) => a.days - b.days).slice(0, simple ? 1 : 3);
+  const limitRows = limitsNear(data).slice(0, Math.max(0, (simple ? 1 : 3) - attention.length));
   const suggestion = !simple && (getSmartSuggestions(data, dp)[0] || null);
   const lvl = getLvl(game.xp || 0),
     prog = getXPProg(game.xp || 0);
   const nextReq = prog.next ? prog.blocked ? (levelReqs(prog.next.n, data, game).find(r => !r.ok) || {}).label : `${prog.need - prog.cur} XP más` : null;
   const todayStr = now.toLocalISO().slice(0, 10);
-  const loggedToday = [...(data.cashTransactions || []), ...(data.cardTransactions || [])].some(t => t.date === todayStr);
+  const loggedToday = [...(data.cashTransactions || []), ...(data.cardTransactions || [])].some(t => t.date === todayStr) || (data.noSpendDays || []).includes(todayStr);
   const eveningAsk = now.getHours() >= 18 && !loggedToday;
+  // Cierre de la quincena pasada: se ofrece los primeros 5 días de la nueva
+  const closeQ = prevQuincena(todayStr);
+  const dayInQ = now.getDate() <= 15 ? now.getDate() : now.getDate() - 15;
+  const showClose = dayInQ <= 5 && prefs.lastCloseSeen !== closeQ.key && spendTx(data).some(t => t.date >= closeQ.start && t.date <= closeQ.end);
+  const nearLimits = limitsNear(data);
   // Un solo aviso a la vez para no saturar Inicio
-  const promo = !real && income > 0 && !prefs.freshDismissed ? 'fresh' : gameOn && (game.xp || 0) >= 100 && !game.levelsNoticeSeen ? 'levels' : !prefs.installDismissed && !isStandalone() ? 'install' : null;
+  const promo = !real && income > 0 && !prefs.freshDismissed ? 'fresh' : backupDue(data, prefs) ? 'backup' : gameOn && (game.xp || 0) >= 100 && !game.levelsNoticeSeen ? 'levels' : !prefs.installDismissed && !isStandalone() ? 'install' : null;
   const missions = getDailyMissions(todayStr);
   const missionsDone = missions.filter(m => (game.completedMissions || {})[`${todayStr}-${m.id}`]).length;
   const cards = data.debts.filter(d => d.type === 'tarjeta');
@@ -8173,7 +8202,12 @@ function HomeScreen(_p) {
   }, h('div', null, h('b', null, '🎉 Ya cayó tu quincena'), h('div', null, fmt(_p.paydayBanner.amount), ' sumados a tu saldo')), h('button', {
     className: 'b-textbtn',
     onClick: _p.onDismissPayday
-  }, 'Listo')), income > 0 || real ? h('section', {
+  }, 'Listo')), showClose && h('section', {
+    className: 'b-event'
+  }, h('div', null, h('b', null, 'Cerró tu quincena ', closeQ.label.replace(/^del /, 'del ')), h('div', null, 'Mira cómo te fue y arranca esta con plan.')), h('button', {
+    className: 'b-secondary',
+    onClick: () => _p.onCloseQ(closeQ)
+  }, 'Ver')), income > 0 || real ? h('section', {
     className: 'b-hero',
     'aria-label': 'Tu dinero'
   }, h('div', {
@@ -8243,7 +8277,24 @@ function HomeScreen(_p) {
   }, h(Icon, {
     d: IC.plus,
     w: 2.6
-  }), eveningAsk ? '¿Gastaste algo hoy? Anótalo' : 'Anotar un gasto'), promo === 'levels' && h(LevelsNotice, {
+  }), eveningAsk ? '¿Gastaste algo hoy? Anótalo' : 'Anotar un gasto'), eveningAsk && h('button', {
+    className: 'b-textbtn b-nospend',
+    onClick: _p.onNoSpend
+  }, 'Hoy no gasté nada'), promo === 'backup' && h('section', {
+    className: 'b-install'
+  }, h('div', {
+    className: 'b-m'
+  }, h('b', null, 'Haz tu respaldo del mes'), h('p', null, 'Tus datos viven solo en este teléfono. Si lo pierdes o lo cambias, con el respaldo recuperas todo. Guárdalo en tu nube o mándatelo por WhatsApp.'), h('div', {
+    className: 'b-notice-btns'
+  }, h('button', {
+    className: 'b-secondary',
+    onClick: _p.onBackup
+  }, 'Respaldar ahora'), h('button', {
+    className: 'b-textbtn',
+    onClick: () => _p.setPrefs({
+      backupSnooze: shiftDay(todayStr, 7)
+    })
+  }, 'En una semana')))), promo === 'levels' && h(LevelsNotice, {
     game: game,
     onSee: () => {
       _p.onPatchGame({
@@ -8254,7 +8305,7 @@ function HomeScreen(_p) {
     onDismiss: () => _p.onPatchGame({
       levelsNoticeSeen: true
     })
-  }), attention.length > 0 ? h('section', null, h('div', {
+  }), attention.length + limitRows.length > 0 ? h('section', null, h('div', {
     className: 'b-sh'
   }, h('h2', null, 'Pon atención'), !simple && h('button', {
     className: 'b-textbtn',
@@ -8286,7 +8337,20 @@ function HomeScreen(_p) {
         }
       }) : it.d.type === 'plan' ? _p.onMarkPlan(it.d.id) : _p.onMarkPaid(it.d.id, pay)
     }, 'Ya pagué'));
-  }))) : (data.debts.length > 0 || (data.exps || []).length > 0) && h('section', {
+  }), limitRows.map(x => h('div', {
+    key: 'lim' + x.catId
+  }, h(CatIcon, {
+    c: quickCat(x.catId)
+  }), h('div', {
+    className: 'b-m'
+  }, h('div', {
+    className: 'b-n'
+  }, x.pct >= 1 ? `Te pasaste en ${quickCat(x.catId).n}` : `Casi llegas a tu límite de ${quickCat(x.catId).n}`), h('div', {
+    className: 'b-d'
+  }, `${fmt(x.spent)} de ${fmt(x.lim)} este mes`)), h('button', {
+    className: 'b-secondary',
+    onClick: () => _p.onTab('presupuesto')
+  }, 'Ver'))))) : (data.debts.length > 0 || (data.exps || []).length > 0) && h('section', {
     className: 'b-calm'
   }, h(Icon, {
     d: IC.check
@@ -8395,7 +8459,17 @@ function MovsScreen(_p) {
     data: data,
     onAddCash: _p.onAddCash,
     onAddCard: _p.onAddCard
-  }))), h(HistoryList, {
+  })), h(More, {
+    title: 'Exportar para Claude o Excel'
+  }, h(ExportSection, {
+    data: data
+  })), h('button', {
+    className: 'b-textbtn',
+    style: {
+      marginTop: 6
+    },
+    onClick: () => _p.onCloseQ(prevQuincena(new Date().toLocalISO().slice(0, 10)))
+  }, 'Ver el cierre de la quincena pasada')), h(HistoryList, {
     data: data,
     onUpdate: _p.onUpdate,
     onDelCash: _p.actions.delCash,
@@ -8421,7 +8495,7 @@ function PresupuestoScreen(_p) {
     byCat[k] = (byCat[k] || 0) + (+t.amount || 0);
   });
   const catRows = Object.keys(byCat).filter(k => k !== 'none').sort((a, b) => byCat[b] - byCat[a]);
-  const catMax = Math.max(1, ...catRows.map(k => byCat[k]));
+  const catMax = Math.max(1, ...catRows.map(k => Math.max(byCat[k], catLimit(data, k))));
   const hasCats = catRows.length > 0;
   const pred = getPrediction(dp);
   return h(React.Fragment, null, h(ScreenHead, {
@@ -8475,13 +8549,20 @@ function PresupuestoScreen(_p) {
     style: {
       marginTop: 0
     }
-  }, 'Sin contar ', fmt(byCat.none), ' que anotaste antes de las categorías.'), catRows.map(k => {
+  }, 'Sin contar ', fmt(byCat.none), ' que anotaste antes de las categorías.'), !(data.varExps || []).length && h('p', {
+    className: 'b-note',
+    style: {
+      marginTop: 0
+    }
+  }, 'Ponle límite a cada categoría en “Tus límites por categoría” y Budgy te avisa cuando te acerques.'), catRows.map(k => {
     const c = quickCat(k) || {
       n: 'Sin categoría',
       fg: '#6B7280',
       bg: 'rgba(107,114,128,.14)',
       p: QUICK_CATS[7].p
     };
+    const lim = catLimit(data, k);
+    const ratio = lim ? byCat[k] / lim : 0;
     return h('div', {
       key: k,
       className: 'b-bar-row'
@@ -8491,12 +8572,14 @@ function PresupuestoScreen(_p) {
       c: c
     }), c.n), h('span', {
       className: 'b-bar-v b-num'
-    }, fmt(byCat[k])), h('span', {
+    }, fmt(byCat[k]), lim > 0 && h('span', {
+      className: 'b-bar-lim'
+    }, ' de ', fmt(lim))), h('span', {
       className: 'b-track sm'
     }, h('i', {
       style: {
-        width: (byCat[k] / catMax * 100).toFixed(1) + '%',
-        background: 'var(--sky)'
+        width: (lim ? Math.min(100, ratio * 100) : byCat[k] / catMax * 100).toFixed(1) + '%',
+        background: ratio > 1 ? 'var(--danger)' : ratio >= 0.8 ? 'var(--mango)' : 'var(--sky)'
       }
     })));
   })), h(HealthNative, {
@@ -8530,7 +8613,7 @@ function PresupuestoScreen(_p) {
     actions: _p.actions,
     onUpdate: _p.onUpdate
   })), h(More, {
-    title: 'Tus gastos variables'
+    title: 'Tus límites por categoría'
   }, h(VariableEstimates, {
     data: data,
     actions: _p.actions
@@ -8578,7 +8661,10 @@ function MetasScreen(_p) {
   }, 'La meta recomendada es un mes de tu ingreso.'), h('button', {
     className: 'b-goal-btn',
     onClick: () => _p.onTab('perfil')
-  }, 'Crear mi meta')), h(WealthSection, {
+  }, 'Crear mi meta')), h(ApartadosSection, {
+    data: data,
+    onUpdate: _p.onUpdate
+  }), h(WealthSection, {
     data: data,
     onChange: _p.onUpdate
   }), h('section', null, h('div', {
@@ -8758,15 +8844,19 @@ function QuickAddSheet(_p) {
   const [amt, setAmt] = useState(_p.initialAmount ? String(Math.round(+_p.initialAmount)) : '');
   const [method, setMethod] = useState(_p.prefs.lastPay === 'card' && !cards.length ? 'debit' : _p.prefs.lastPay || 'debit');
   const [cardId, setCardId] = useState(cards[0]?.id || '');
+  const _method = method, _cardId = cardId;
   const [voice, setVoice] = useState(null); // {state:'listening'|'heard'|'error', text, desc, cat}
   const counts = {};
   [...(data.cashTransactions || []), ...(data.cardTransactions || [])].forEach(t => {
     if (t.cat) counts[t.cat] = (counts[t.cat] || 0) + 1;
   });
   const cats = QUICK_CATS.slice().sort((a, b) => (a.id === 'v6') - (b.id === 'v6') || (counts[b.id] || 0) - (counts[a.id] || 0));
-  const save = (catId, desc) => {
-    const n = parseFloat(amt);
+  const favs = useMemo(() => learnFavorites(data, 4), []);
+  const save = (catId, desc, fav) => {
+    const n = fav ? fav.amount : parseFloat(amt);
     if (!n) return;
+    const method = fav ? fav.method : _method;
+    const cardId = fav ? fav.cardId : _cardId;
     const c = quickCat(catId);
     const qid = 'q' + Date.now();
     const time = new Date().toLocaleTimeString('es-MX', {
@@ -8789,9 +8879,11 @@ function QuickAddSheet(_p) {
       method
     });
     _p.onSaved({
-      text: `Guardado: ${fmt(n)} en ${c.n}`,
+      text: `Guardado: ${fmt(n)} en ${fav && fav.desc ? fav.desc : c.n}`,
       qid,
-      method
+      method,
+      cat: c.id,
+      amount: n
     });
     _p.setPrefs({
       lastPay: method
@@ -8881,7 +8973,23 @@ function QuickAddSheet(_p) {
     className: 'b-amt-h'
   }, hint)), voice && voice.state !== 'listening' && h('div', {
     className: 'b-heard' + (voice.state === 'error' ? ' err' : '')
-  }, heard ? `“${voice.text}”` : voice.text), h('div', {
+  }, heard ? `“${voice.text}”` : voice.text), !amt && !voice && favs.length > 0 && h('div', {
+    className: 'b-favs'
+  }, h('div', {
+    className: 'b-favs-h'
+  }, 'Lo de siempre · un toque y queda anotado'), h('div', {
+    className: 'b-favs-row'
+  }, favs.map(f => h('button', {
+    key: f.k,
+    className: 'b-fav',
+    onClick: () => save(f.cat, f.desc || quickCat(f.cat).n, f)
+  }, h(CatIcon, {
+    c: quickCat(f.cat)
+  }), h('span', null, h('span', {
+    className: 'b-fav-n'
+  }, f.desc || quickCat(f.cat).n), h('span', {
+    className: 'b-fav-a'
+  }, fmt(f.amount), f.method === 'card' ? ' · tarjeta' : f.method === 'debit' ? ' · débito' : ' · efectivo')))))), h('div', {
     className: 'b-paywith',
     role: 'group',
     'aria-label': 'Cómo pagaste'
@@ -8927,11 +9035,11 @@ function QuickAddSheet(_p) {
 }
 function Toast(_p) {
   useEffect(() => {
-    const t = setTimeout(_p.onDone, 5000);
+    const t = setTimeout(_p.onDone, _p.toast.warn ? 9000 : 5000);
     return () => clearTimeout(t);
   }, [_p.toast]);
   return h('div', {
-    className: 'b-toast',
+    className: 'b-toast' + (_p.toast.warn ? ' warn' : ''),
     role: 'status'
   }, h('span', null, _p.toast.text), _p.toast.onUndo && h('button', {
     onClick: () => {
@@ -9351,6 +9459,7 @@ function HistoryList(_p) {
   const [filter, setFilter] = useState('todo');
   const [limit, setLimit] = useState(60);
   const [open, setOpen] = useState(null);
+  const [q, setQ] = useState('');
   const today = new Date().toLocalISO().slice(0, 10);
   const yest = new Date(Date.now() - 864e5).toLocalISO().slice(0, 10);
   const cards = data.debts || [];
@@ -9359,6 +9468,14 @@ function HistoryList(_p) {
     ...(data.extraIncome || []).filter(x => x.date && x.type === 'once').map(x => ({ id: x.id, amount: +x.amount || 0, desc: x.desc || x.label || 'Ingreso extra', date: x.date, kind: 'income' }))];
   let items = filter === 'gastos' ? spend : filter === 'ingresos' ? income : [...spend, ...income];
   items = items.filter(t => t.date).sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')));
+  // Búsqueda: por descripción, categoría, forma de pago, monto o fecha
+  const norm = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const terms = norm(q).trim().split(/\s+/).filter(Boolean);
+  if (terms.length) items = items.filter(t => {
+    const hay = norm([t.desc, quickCat(t.cat) && quickCat(t.cat).n, t.kind === 'income' ? 'ingreso' : t.kind === 'card' ? 'tarjeta ' + (cards.find(d => d.id === t.cardId)?.name || '') : t.method === 'debit' ? 'debito' : 'efectivo', Math.round(+t.amount || 0), t.date, fmtDate(t.date)].join(' '));
+    return terms.every(w => hay.includes(w.replace(/[$,]/g, '')));
+  });
+  const found = terms.length ? items.reduce((s2, t) => s2 + (t.kind === 'income' ? 0 : +t.amount || 0), 0) : 0;
   const shown = items.slice(0, limit);
   const groups = [];
   shown.forEach(t => { const g = groups[groups.length - 1]; if (g && g.date === t.date) g.items.push(t);else groups.push({ date: t.date, items: [t] }); });
@@ -9368,7 +9485,9 @@ function HistoryList(_p) {
     e('div', { className: 'b-seg', role: 'tablist' }, [['todo', 'Todo'], ['gastos', 'Gastos'], ['ingresos', 'Ingresos']].map(o => e('button', {
       key: o[0], role: 'tab', 'aria-selected': filter === o[0], className: filter === o[0] ? 'on' : '', onClick: () => setFilter(o[0])
     }, o[1]))),
-    items.length === 0 && e('p', { className: 'b-note' }, filter === 'ingresos' ? 'Aquí aparecerán tus quincenas e ingresos extra.' : 'Todavía no anotas gastos. Toca el botón + para empezar.'),
+    e('input', { className: 'b-search', type: 'search', value: q, placeholder: 'Buscar: tacos, gasolina, 250…', 'aria-label': 'Buscar movimientos', onChange: ev => { setQ(ev.target.value); setLimit(60); } }),
+    terms.length > 0 && e('p', { className: 'b-note', role: 'status' }, items.length ? `${items.length} ${items.length === 1 ? 'movimiento' : 'movimientos'}${found ? ` · ${fmt(found)} en gastos` : ''}` : 'No encontramos nada con eso.'),
+    !terms.length && items.length === 0 && e('p', { className: 'b-note' }, filter === 'ingresos' ? 'Aquí aparecerán tus quincenas e ingresos extra.' : 'Todavía no anotas gastos. Toca el botón + para empezar.'),
     groups.map(g => e('div', { key: g.date }, e('div', { className: 'b-day' }, label(g.date)), e('div', { className: 'b-rows' }, g.items.map(t => {
       const c = t.kind === 'income' ? METHOD_IC.income : quickCat(t.cat) || METHOD_IC[t.kind === 'card' ? 'card' : t.method === 'debit' ? 'debit' : 'cash'];
       const how = t.kind === 'income' ? 'Ingreso' : t.kind === 'card' ? (cards.find(d => d.id === t.cardId)?.name || 'Tarjeta') : t.method === 'debit' ? 'Débito' : 'Efectivo';
@@ -9388,19 +9507,7 @@ function MyInfo(_p) {
   const [importing, setImporting] = useState(false);
   const [importText, setImportText] = useState('');
   const income = (+data.q1 || 0) + (+data.q2 || 0);
-  const keys = ['mipres-pin', 'mipres-name', 'mipres-data-v6', 'mipres-game-v5', 'budgy-prefs'];
-  const backup = () => {
-    const obj = {};
-    keys.forEach(k => { const v = localStorage.getItem(k); if (v) obj[k] = v; });
-    const txt = JSON.stringify(obj);
-    const blob = new Blob([txt], { type: 'application/json' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `budgy-respaldo-${new Date().toLocalISO().slice(0, 10)}.json`;
-    document.body.appendChild(link); link.click(); link.remove();
-    saveLS('budgy-last-backup', new Date().toLocalISO().slice(0, 10));
-    setMsg('Listo: se descargó tu respaldo. Guárdalo en tu nube o mándatelo por WhatsApp.');
-  };
+  const backup = () => budgyBackup().then(ok => ok && setMsg('Listo: tu respaldo está hecho. Guárdalo en tu nube o mándatelo por WhatsApp.'));
   const restore = txt => {
     try {
       const obj = JSON.parse(txt);
@@ -9579,19 +9686,22 @@ function VariableEstimates(_p) {
   const data = _p.data, a = _p.actions;
   const total = (data.varExps || []).reduce((s, x) => s + (+x.amount || 0), 0);
   return e(React.Fragment, null,
-    e('p', { className: 'b-note', style: { marginTop: 0 } }, '¿Cuánto gastas más o menos al mes en cada cosa? Budgy aparta la mitad en cada quincena.'),
-    e('div', { className: 'b-rows' }, VAR_CATS.map(c => {
+    e('p', { className: 'b-note', style: { marginTop: 0 } }, '¿Cuánto quieres gastar como máximo al mes en cada cosa? Budgy lo toma en cuenta en tu quincena y te avisa cuando te acerques.'),
+    e('div', { className: 'b-rows' }, [...QUICK_CATS, ...(data.varExps || []).filter(x => !quickCat(x.catId)).map(x => ({ id: x.catId, n: x.n || (VAR_CATS.find(c => c.id === x.catId) || {}).n || 'Otro', legacy: true }))].map(c => {
       const cur = (data.varExps || []).find(x => x.catId === c.id);
+      const spent = catSpentMonth(data, c.id);
+      const r = cur && +cur.amount ? spent / cur.amount : 0;
       return e('div', { key: c.id },
         e(CatIcon, { c: quickCat(c.id) || quickCat('v6') }),
-        e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, c.n)),
+        e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, c.n), (spent > 0 || cur) && e('div', { className: 'b-d' + (r > 1 ? ' b-over' : '') }, `Este mes: ${fmt(spent)}`, r > 1 ? ' · te pasaste' : r >= 0.8 ? ' · cerca del límite' : '')),
         e('input', {
           className: 'b-in-inline', inputMode: 'decimal', placeholder: '$0', 'aria-label': `Gasto estimado al mes en ${c.n}`,
           defaultValue: cur ? cur.amount : '',
           onBlur: ev => { const v = ev.target.value.replace(/[^0-9.]/g, ''); if (+v > 0) a.addVar({ catId: c.id, amount: v });else if (cur) a.delVar(cur.id); }
         }));
     })),
-    e('div', { className: 'b-kv strong' }, e('span', null, 'Total al mes'), e('span', { className: 'b-num' }, fmt(total))));
+    e('div', { className: 'b-kv strong' }, e('span', null, 'Total al mes'), e('span', { className: 'b-num' }, fmt(total))),
+    total > 0 && e('p', { className: 'b-note' }, 'Sin tu saldo real, Budgy aparta la mitad de esto en cada quincena.'));
 }
 
 /* ════ FASE 5: juego y anotado avanzado nativos ════ */
@@ -9789,8 +9899,9 @@ function pushPayments(data) {
 }
 function pushLastLog(data) {
   const today = new Date().toLocalISO().slice(0, 10);
-  return [...(data.cashTransactions || []), ...(data.cardTransactions || [])].some(t => t.date === today) ? today : null;
+  return [...(data.cashTransactions || []), ...(data.cardTransactions || [])].some(t => t.date === today) || (data.noSpendDays || []).includes(today) ? today : null;
 }
+const pushPrefs = push => ({ hour: push.hour, daily: push.daily !== false, payments: push.payments !== false, weekly: push.weekly !== false, closing: push.closing !== false });
 async function pushSubscribe(push, data) {
   const reg = await navigator.serviceWorker.ready;
   const key = await pushServerKey();
@@ -9801,7 +9912,7 @@ async function pushSubscribe(push, data) {
     if (cur !== key) { await sub.unsubscribe(); sub = null; }
   }
   if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) });
-  await pushPost('subscribe', { subscription: sub.toJSON(), tz: localTZ(), prefs: { hour: push.hour, daily: push.daily !== false, payments: push.payments !== false }, payments: pushPayments(data), lastLogDate: pushLastLog(data) });
+  await pushPost('subscribe', { subscription: sub.toJSON(), tz: localTZ(), prefs: pushPrefs(push), payments: pushPayments(data), lastLogDate: pushLastLog(data), summary: pushSummary(data) });
   return sub;
 }
 
@@ -9821,7 +9932,7 @@ function NotificationsSection(_p) {
     try {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
-      if (sub) await pushPost('sync', { endpoint: sub.endpoint, tz: localTZ(), prefs: { hour: next.hour, daily: next.daily !== false, payments: next.payments !== false } });
+      if (sub) await pushPost('sync', { endpoint: sub.endpoint, tz: localTZ(), prefs: pushPrefs(next) });
     } catch (err) { /* se reintenta al abrir la app */ }
   };
   const change = patch => { const next = { ...push, ...patch }; save(patch); if (push.on) sync(next); };
@@ -9866,11 +9977,13 @@ function NotificationsSection(_p) {
         e(Switch, { title: 'Recordatorio diario', sub: 'Si ya anotaste ese día, no te molestamos.', on: push.daily !== false, onToggle: () => change({ daily: push.daily === false }) }),
         push.daily !== false && hourSeg,
         e(Switch, { title: 'Pagos por vencer', sub: 'Un día antes, a las 9 a. m.: deudas y pagos fijos.', on: push.payments !== false, onToggle: () => change({ payments: push.payments === false }) }),
+        e(Switch, { title: 'Resumen del domingo', sub: 'A las 7 p. m.: cuánto gastaste en la semana y cuánto te queda.', on: push.weekly !== false, onToggle: () => change({ weekly: push.weekly === false }) }),
+        e(Switch, { title: 'Cierre de quincena', sub: 'El día 1 y el 16: cómo te fue y tu plan para la nueva.', on: push.closing !== false, onToggle: () => change({ closing: push.closing === false }) }),
         e('div', { className: 'b-notice-btns', style: { marginTop: 12 } },
           e('button', { className: 'b-secondary', onClick: test }, 'Enviar aviso de prueba'),
           e('button', { className: 'b-textbtn danger', disabled: busy, onClick: disable }, 'Apagar avisos'))) :
         e(React.Fragment, null,
-          e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Un aviso diario para anotar tus gastos y otro el día antes de que venza un pago. Tú eliges la hora.'),
+          e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Un aviso diario para anotar tus gastos, otro antes de que venza un pago, tu resumen del domingo y el cierre de cada quincena. Tú eliges la hora.'),
           hourSeg,
           e('button', { className: 'b-primary', style: { marginTop: 14 }, disabled: busy || server === 'checking', onClick: enable }, busy ? 'Activando…' : 'Activar avisos'),
           perm === 'denied' && e('p', { className: 'b-note warn' }, 'Tienes los avisos bloqueados para Budgy. Actívalos en los ajustes de tu cel.')),
@@ -10070,6 +10183,360 @@ function FreshStartSheet(_p) {
         e('button', { className: 'b-primary', onClick: () => _p.onApply(build()) }, 'Listo, empezar desde hoy')));
 }
 
+/* ════ FASE 9: racha real, respaldo, búsqueda y exportación, favoritos,
+   límites por categoría, apartados y cierre de quincena ════ */
+const todayISO = () => new Date().toLocalISO().slice(0, 10);
+const shiftDay = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toLocalISO().slice(0, 10); };
+function spendTx(data) {
+  return [...(data.cashTransactions || []).map(t => ({ ...t, kind: 'cash' })), ...(data.cardTransactions || []).map(t => ({ ...t, kind: 'card' }))];
+}
+function loggedDays(data) {
+  const s = new Set(spendTx(data).map(t => t.date).filter(Boolean));
+  (data.noSpendDays || []).forEach(d => s.add(d));
+  return s;
+}
+// Racha = días seguidos anotando (un gasto o "hoy no gasté"). Si hoy aún no anotas, cuenta hasta ayer.
+function logStreak(data, today) {
+  const days = loggedDays(data);
+  let d = today || todayISO(), n = 0;
+  if (!days.has(d)) d = shiftDay(d, -1);
+  while (days.has(d)) { n++; d = shiftDay(d, -1); }
+  return n;
+}
+
+/* ── Respaldo ── */
+const BACKUP_KEYS = ['mipres-pin', 'mipres-name', 'mipres-data-v6', 'mipres-game-v5', 'budgy-prefs'];
+function downloadText(name, txt, type) {
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([txt], { type }));
+  link.download = name;
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 4000);
+}
+// En el cel abre "Compartir" (guardar en Archivos, Drive o WhatsApp); en compu lo descarga
+async function budgyBackup() {
+  const obj = {};
+  BACKUP_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v) obj[k] = v; });
+  const name = `budgy-respaldo-${todayISO()}.json`, txt = JSON.stringify(obj);
+  const mobile = isIOS() || /Android/i.test(navigator.userAgent);
+  let shared = false;
+  if (mobile && navigator.canShare && window.File) {
+    const file = new File([txt], name, { type: 'application/json' });
+    if (navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: 'Respaldo de Budgy' }); shared = true; }
+      catch (err) { if (err && err.name === 'AbortError') return false; }
+    }
+  }
+  if (!shared) downloadText(name, txt, 'application/json');
+  saveLS('budgy-last-backup', todayISO());
+  return true;
+}
+// Pide respaldo si hay datos que perder y el último tiene más de un mes
+function backupDue(data, prefs) {
+  if (spendTx(data).length < 10) return false;
+  const today = todayISO();
+  if (prefs.backupSnooze && prefs.backupSnooze > today) return false;
+  const last = loadLS('budgy-last-backup');
+  return !last || last <= shiftDay(today, -30);
+}
+
+/* ── Favoritos que Budgy aprende solo ── */
+function learnFavorites(data, max) {
+  const since = shiftDay(todayISO(), -90);
+  const cardIds = new Set((data.debts || []).filter(d => d.type === 'tarjeta').map(d => d.id));
+  const groups = {};
+  spendTx(data).forEach(t => {
+    if (!t.date || t.date < since || !quickCat(t.cat) || !(+t.amount > 0)) return;
+    if (t.kind === 'card' && !cardIds.has(t.cardId)) return;
+    const desc = (t.desc || '').trim();
+    const method = t.kind === 'card' ? 'card' : t.method === 'debit' ? 'debit' : 'cash';
+    const k = [t.cat, desc.toLowerCase(), Math.round(+t.amount), method, t.kind === 'card' ? t.cardId : ''].join('|');
+    const g = groups[k] || (groups[k] = { k, cat: t.cat, desc, amount: Math.round(+t.amount), method, cardId: t.cardId || '', n: 0, last: '' });
+    g.n++;
+    if (t.date > g.last) g.last = t.date;
+  });
+  return Object.values(groups).filter(g => g.n >= 3).sort((a, b) => b.n - a.n || b.last.localeCompare(a.last)).slice(0, max || 4);
+}
+
+/* ── Límites por categoría (son tus gastos variables: una sola cifra al mes) ── */
+function catLimit(data, catId) {
+  const v = (data.varExps || []).find(x => x.catId === catId);
+  return v ? +v.amount || 0 : 0;
+}
+function catSpentMonth(data, catId, mk) {
+  mk = mk || todayISO().slice(0, 7);
+  return spendTx(data).filter(t => t.cat === catId && t.date && t.date.startsWith(mk)).reduce((s, t) => s + (+t.amount || 0), 0);
+}
+// Aviso al anotar en una categoría que ya va arriba del 80 % de su límite
+function limitAlert(data, catId, amount) {
+  const lim = catLimit(data, catId);
+  if (!lim) return null;
+  const before = catSpentMonth(data, catId), after = before + (+amount || 0);
+  const c = quickCat(catId) || { n: 'esta categoría' };
+  if (after > lim) return { level: 'over', text: `Te pasaste de tu límite de ${c.n}: llevas ${fmt(after)} de ${fmt(lim)} este mes.` };
+  if (after >= lim * 0.8) return { level: 'near', text: `Ojo: ya llevas ${fmt(after)} de ${fmt(lim)} en ${c.n} este mes. Te quedan ${fmt(lim - after)}.` };
+  return null;
+}
+function limitsNear(data) {
+  return (data.varExps || []).map(v => {
+    const lim = +v.amount || 0, spent = catSpentMonth(data, v.catId);
+    return { catId: v.catId, lim, spent, pct: lim ? spent / lim : 0 };
+  }).filter(x => x.lim > 0 && x.pct >= 0.9 && quickCat(x.catId)).sort((a, b) => b.pct - a.pct);
+}
+
+/* ── Apartados: dinero separado para una meta; deja de contar como libre ── */
+function apartadosTotal(data) {
+  return (data.apartados || []).reduce((s, a) => s + Math.max(0, +a.saved || 0), 0);
+}
+// Sin saldo real, solo resta lo apartado en esta quincena (el estimado se calcula por quincena)
+function apartadosThisQuincena(data, now) {
+  now = now || new Date();
+  const mk = now.toLocalISO().slice(0, 7), q1 = now.getDate() <= 15;
+  return (data.apartados || []).reduce((s, a) => s + (a.moves || []).filter(m => m.date && m.date.startsWith(mk) && (+m.date.slice(8, 10) <= 15) === q1).reduce((x, m) => x + (+m.amount || 0), 0), 0);
+}
+
+function ApartadoSheet(_p) {
+  const a = _p.apartado;
+  const [mode, setMode] = useState(a ? 'add' : 'new');
+  const [f, setF] = useState({ name: a ? a.name : '', goal: a ? a.goal || '' : '', amount: '' });
+  const n = +f.amount || 0;
+  const move = sign => {
+    const amt = sign * n;
+    const saved = Math.max(0, (+a.saved || 0) + amt);
+    _p.onSave({ ...a, saved, moves: [...(a.moves || []), { date: todayISO(), amount: saved - (+a.saved || 0) }] });
+  };
+  return e(Sheet, { title: a ? a.name : 'Nuevo apartado', label: 'Apartado', onClose: _p.onClose },
+    mode === 'new' ? e(React.Fragment, null,
+      e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Separa dinero para algo que viene: vacaciones, regalos, el predial, la tenencia. Lo que apartes ya no cuenta como libre para gastar.'),
+      e(Field, { label: '¿Para qué es?', text: true, value: f.name, ph: 'Ej. Vacaciones de diciembre', onChange: v => setF({ ...f, name: v }) }),
+      e(Field, { label: '¿Cuánto necesitas? (opcional)', value: f.goal, ph: '$0', onChange: v => setF({ ...f, goal: v }) }),
+      e(Field, { label: '¿Cuánto apartas hoy? (opcional)', value: f.amount, ph: '$0', onChange: v => setF({ ...f, amount: v }) }),
+      e('button', { className: 'b-primary', disabled: !f.name.trim(), onClick: () => _p.onSave({ id: 'a' + Date.now(), name: f.name.trim(), goal: +f.goal || 0, saved: n, moves: n ? [{ date: todayISO(), amount: n }] : [], createdAt: todayISO() }) }, 'Crear apartado')) :
+      e(React.Fragment, null,
+        e('div', { className: 'b-seg', role: 'group' }, [['add', 'Apartar más'], ['out', 'Sacar dinero'], ['edit', 'Editar']].map(o => e('button', { key: o[0], className: mode === o[0] ? 'on' : '', onClick: () => setMode(o[0]) }, o[1]))),
+        mode === 'edit' ? e(React.Fragment, null,
+          e(Field, { label: 'Nombre', text: true, value: f.name, onChange: v => setF({ ...f, name: v }) }),
+          e(Field, { label: 'Meta', value: f.goal, ph: '$0', onChange: v => setF({ ...f, goal: v }) }),
+          e('button', { className: 'b-primary', disabled: !f.name.trim(), onClick: () => _p.onSave({ ...a, name: f.name.trim(), goal: +f.goal || 0 }) }, 'Guardar'),
+          e('div', { style: { marginTop: 12 } }, e(ConfirmDelete, { label: 'Borrar este apartado', question: `El dinero (${fmt(a.saved)}) vuelve a contar como libre.`, onYes: _p.onDelete }))) :
+          e(React.Fragment, null,
+            e('p', { className: 'b-note', style: { marginTop: 0 } }, mode === 'add' ? `Llevas ${fmt(a.saved)}${a.goal ? ` de ${fmt(a.goal)}` : ''}. Lo que apartes se resta de tu dinero libre.` : `Tienes ${fmt(a.saved)} apartados. Lo que saques vuelve a tu dinero libre; si lo gastas, anótalo como siempre.`),
+            e(Field, { label: mode === 'add' ? '¿Cuánto apartas?' : '¿Cuánto sacas?', value: f.amount, ph: '$0', onChange: v => setF({ ...f, amount: v }) }),
+            e('button', { className: 'b-primary', disabled: !n || mode === 'out' && n > (+a.saved || 0), onClick: () => move(mode === 'add' ? 1 : -1) }, mode === 'add' ? `Apartar ${fmt(n)}` : `Sacar ${fmt(n)}`))));
+}
+function ApartadosSection(_p) {
+  const data = _p.data, list = data.apartados || [];
+  const [open, setOpen] = useState(null); // 'new' | id
+  const save = a => {
+    const exists = list.some(x => x.id === a.id);
+    _p.onUpdate({ apartados: exists ? list.map(x => x.id === a.id ? a : x) : [...list, a] });
+    setOpen(null);
+  };
+  const cur = open && open !== 'new' ? list.find(x => x.id === open) : null;
+  return e('section', null,
+    e('div', { className: 'b-sh' }, e('h2', null, 'Apartados'), list.length > 0 && e('span', { className: 'b-d' }, fmt(apartadosTotal(data)), ' en total')),
+    list.length === 0 && e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Separa dinero para algo que viene (vacaciones, regalos, el predial) y deja de contarlo como libre. Así no te lo gastas sin darte cuenta.'),
+    list.length > 0 && e('div', { className: 'b-rows' }, list.map(a => {
+      const pctA = a.goal > 0 ? Math.min(100, Math.round((+a.saved || 0) / a.goal * 100)) : null;
+      return e('button', { key: a.id, onClick: () => setOpen(a.id) },
+        e(CatIcon, { c: { fg: '#0E9F6E', bg: 'rgba(16,185,129,.14)', p: '<path d="M4 9.5h16v10a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19.5zM3 6.5h18v3H3zM12 6.5v14.5M12 6.5C10 3 7 3.5 7 5.2S9.5 6.5 12 6.5c2.5 0 5 .4 5-1.3S14 3 12 6.5z"/>' } }),
+        e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, a.name),
+          e('div', { className: 'b-d' }, a.goal > 0 ? `${pctA}% de ${fmt(a.goal)}` : 'Sin meta'),
+          pctA != null && e('span', { className: 'b-track sm', style: { marginTop: 6 } }, e('i', { style: { width: pctA + '%', background: 'var(--emerald)' } }))),
+        e('span', { className: 'b-n b-num' }, fmt(a.saved)));
+    })),
+    e('button', { className: 'b-primary ghost', onClick: () => setOpen('new') }, 'Crear un apartado'),
+    open && e(ApartadoSheet, { apartado: cur, onClose: () => setOpen(null), onSave: save, onDelete: () => { _p.onUpdate({ apartados: list.filter(x => x.id !== cur.id) }); setOpen(null); } }));
+}
+
+/* ── Cierre de quincena ── */
+// Quincenas de presupuesto: del 1 al 15 y del 16 al último día
+function quincenaOf(iso) {
+  const y = +iso.slice(0, 4), m = +iso.slice(5, 7), d = +iso.slice(8, 10);
+  const last = new Date(y, m, 0).getDate(), mk = iso.slice(0, 7);
+  return d <= 15 ? { key: mk + '-1', start: mk + '-01', end: mk + '-15', label: `del 1 al 15 de ${new Date(y, m - 1, 1).toLocaleDateString('es-MX', { month: 'long' })}` } :
+    { key: mk + '-2', start: mk + '-16', end: `${mk}-${String(last).padStart(2, '0')}`, label: `del 16 al ${last} de ${new Date(y, m - 1, 1).toLocaleDateString('es-MX', { month: 'long' })}` };
+}
+const prevQuincena = iso => quincenaOf(shiftDay(quincenaOf(iso).start, -1));
+function quincenaStats(data, q) {
+  const tx = spendTx(data).filter(t => t.date && t.date >= q.start && t.date <= q.end);
+  const total = tx.reduce((s, t) => s + (+t.amount || 0), 0);
+  const byCat = {};
+  tx.forEach(t => { const k = quickCat(t.cat) ? t.cat : 'v6'; byCat[k] = (byCat[k] || 0) + (+t.amount || 0); });
+  const cats = Object.keys(byCat).map(k => ({ id: k, amount: byCat[k] })).sort((a, b) => b.amount - a.amount);
+  const len = Math.round((new Date(q.end + 'T12:00:00') - new Date(q.start + 'T12:00:00')) / 864e5) + 1;
+  const days = loggedDays(data);
+  let logged = 0;
+  for (let i = 0; i < len; i++) if (days.has(shiftDay(q.start, i))) logged++;
+  const income = (data.paydays || []).filter(p => p.addedAt && p.addedAt >= q.start && p.addedAt <= q.end).reduce((s, p) => s + (+p.amount || 0), 0) +
+    (data.extraIncome || []).filter(x => x.type === 'once' && x.date >= q.start && x.date <= q.end).reduce((s, x) => s + (+x.amount || 0), 0);
+  const saved = (data.apartados || []).reduce((s, a) => s + (a.moves || []).filter(m => m.date >= q.start && m.date <= q.end).reduce((x, m) => x + (+m.amount || 0), 0), 0);
+  return { tx, total, cats, len, logged, income, saved, count: tx.length };
+}
+function QuincenaCloseSheet(_p) {
+  const data = _p.data, dp = _p.dp;
+  const q = _p.q || prevQuincena(todayISO());
+  const st = quincenaStats(data, q);
+  const before = quincenaStats(data, prevQuincena(q.start));
+  const diff = before.total > 0 ? Math.round((st.total - before.total) / before.total * 100) : null;
+  const top = st.cats.slice(0, 3);
+  const over = (data.varExps || []).filter(v => v.amount > 0 && quickCat(v.catId)).map(v => {
+    const spent = st.cats.find(c => c.id === v.catId)?.amount || 0;
+    return { c: quickCat(v.catId), spent, half: v.amount / 2 };
+  }).filter(x => x.spent > x.half);
+  const big = top[0];
+  const logPct = Math.round(st.logged / st.len * 100);
+  const dailyAvg = st.total / st.len;
+  const pending = dp.pendingFixed + dp.pendingDebts;
+  const tips = [];
+  if (st.logged < st.len * 0.6) tips.push(`Anotaste ${st.logged} de ${st.len} días. Con el aviso diario es más fácil no dejar huecos.`);
+  if (over.length) tips.push(`Te pasaste en ${over.map(x => x.c.n).join(', ')}. Revisa si el límite es realista o si hay que recortar.`);
+  if (big && st.total > 0 && big.amount / st.total >= 0.35) tips.push(`${quickCat(big.id).n} fue ${Math.round(big.amount / st.total * 100)}% de tu gasto. Bajarle 10% son ${fmt(big.amount * 0.1)} más por quincena.`);
+  if (dp.available > 0 && !(data.apartados || []).length) tips.push('Si te sobra, crea un apartado para tu siguiente meta y sepáralo desde hoy.');
+  return e(Sheet, { title: 'Cierre de quincena', label: 'Cierre de quincena', onClose: _p.onClose },
+    e('div', { className: 'b-close-h' }, e('div', { className: 'b-cap' }, 'Tu quincena ', q.label), e('div', { className: 'b-amount sm' }, e(Money, { n: st.total })), e('div', { className: 'b-cap' }, 'gastados en el día a día', st.income > 0 ? ` · entraron ${fmt(st.income)}` : '')),
+    st.count === 0 ? e('p', { className: 'b-note' }, 'No anotaste gastos en esa quincena. Esta vez arranca con todo: anota cada gasto el mismo día.') : e(React.Fragment, null,
+      e('div', { className: 'b-strip', style: { marginTop: 14 } },
+        e('div', null, e('div', { className: 'k' }, 'Por día'), e('div', { className: 'v' }, fmt(dailyAvg))),
+        e('div', null, e('div', { className: 'k' }, 'Días anotando'), e('div', { className: 'v' }, `${st.logged}/${st.len}`), e('div', { className: 's' }, logPct >= 80 ? '¡Constante!' : 'Puedes mejorar')),
+        e('div', null, e('div', { className: 'k' }, 'Vs. anterior'), e('div', { className: 'v' }, diff == null ? '—' : (diff > 0 ? '+' : '') + diff + '%'), diff != null && e('div', { className: 's' }, diff <= 0 ? 'Gastaste menos' : 'Gastaste más'))),
+      e('div', { className: 'b-sh', style: { marginTop: 18 } }, e('h2', null, 'En qué se fue')),
+      e('div', { className: 'b-rows' }, top.map(c => e('div', { key: c.id }, e(CatIcon, { c: quickCat(c.id) }), e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, quickCat(c.id).n), e('div', { className: 'b-d' }, Math.round(c.amount / Math.max(1, st.total) * 100), '% de tu gasto')), e('span', { className: 'b-n b-num' }, fmt(c.amount))))),
+      st.saved > 0 && e('p', { className: 'b-calm', style: { marginTop: 12 } }, e(Icon, { d: IC.check }), `Apartaste ${fmt(st.saved)} para tus metas.`)),
+    e('div', { className: 'b-sh', style: { marginTop: 18 } }, e('h2', null, 'Para esta quincena')),
+    e('div', { className: 'b-breakdown' },
+      e('div', { className: 'b-kv strong' }, e('span', null, 'Libre para gastar'), e('span', { className: 'b-num' }, fmt(dp.available))),
+      dp.available > 0 && e('div', { className: 'b-kv' }, e('span', null, 'Por día'), e('span', { className: 'b-num' }, fmt(dp.available / dp.daysLeft))),
+      pending > 0 && e('div', { className: 'b-kv' }, e('span', null, 'Pagos que ya están apartados'), e('span', { className: 'b-num' }, fmt(pending)))),
+    tips.length > 0 && e('div', { className: 'b-insight-box', style: { marginTop: 14 } }, e('b', null, 'Tu plan'), tips.slice(0, 3).map((t, i) => e('p', { key: i }, t))),
+    e('button', { className: 'b-primary', style: { marginTop: 16 }, onClick: _p.onDone }, 'Listo, a darle'));
+}
+
+/* ── Resumen para avisos (domingo) ── */
+function mondayOf(iso) {
+  const d = new Date(iso + 'T12:00:00');
+  return shiftDay(iso, -((d.getDay() + 6) % 7));
+}
+function pushSummary(data) {
+  const today = todayISO(), mon = mondayOf(today);
+  const tx = spendTx(data).filter(t => t.date >= mon && t.date <= today);
+  const byCat = {};
+  tx.forEach(t => { const c = quickCat(t.cat); if (c) byCat[c.n] = (byCat[c.n] || 0) + (+t.amount || 0); });
+  const top = Object.keys(byCat).sort((a, b) => byCat[b] - byCat[a])[0];
+  const days = loggedDays(data);
+  let logged = 0;
+  for (let d = mon; d <= today; d = shiftDay(d, 1)) if (days.has(d)) logged++;
+  const dp = calcDP(data);
+  return { week: mon, spent: Math.round(tx.reduce((s, t) => s + (+t.amount || 0), 0)), top: top || '', topAmount: Math.round(byCat[top] || 0), logged, available: Math.round(dp.available || 0), streak: logStreak(data) };
+}
+
+/* ── Exportar ── */
+const csvCell = v => { const s = v == null ? '' : String(v); return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+function exportRows(data) {
+  const cards = data.debts || [];
+  const spend = spendTx(data).map(t => ({ date: t.date, time: t.time || '', tipo: 'Gasto', amount: +t.amount || 0, cat: (quickCat(t.cat) || {}).n || 'Sin categoría', desc: t.desc || '', how: t.kind === 'card' ? (cards.find(d => d.id === t.cardId)?.name || 'Tarjeta') : t.method === 'debit' ? 'Débito' : 'Efectivo' }));
+  const inc = [...(data.paydays || []).map(p => ({ date: p.addedAt, time: '', tipo: 'Ingreso', amount: +p.amount || 0, cat: 'Quincena', desc: 'Pago de quincena', how: 'Débito' })),
+    ...(data.extraIncome || []).filter(x => x.type === 'once' && x.date).map(x => ({ date: x.date, time: '', tipo: 'Ingreso', amount: +x.amount || 0, cat: 'Ingreso extra', desc: x.desc || 'Ingreso extra', how: '' }))];
+  return [...spend, ...inc].filter(r => r.date).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+}
+function buildCSV(data) {
+  const head = ['Fecha', 'Hora', 'Tipo', 'Monto', 'Categoría', 'Descripción', 'Cómo pagaste'];
+  return '﻿' + [head, ...exportRows(data).map(r => [r.date, r.time, r.tipo, r.amount, r.cat, r.desc, r.how])].map(r => r.map(csvCell).join(',')).join('\n');
+}
+// Texto listo para pegar en Claude: contexto, resumen y movimientos, sin nombre ni datos personales
+function buildAIReport(data, months) {
+  months = months || 3;
+  const dp = calcDP(data);
+  const today = todayISO();
+  const since = shiftDay(today, -Math.round(months * 30.5));
+  const L = [];
+  const m = n => Math.round(+n || 0);
+  L.push(`# Mis finanzas personales (exportado de Budgy el ${today})`);
+  L.push('');
+  L.push('Soy una persona en México (pesos MXN) que usa Budgy, una app de presupuesto por quincenas. Abajo están mi situación actual y mis movimientos. Por favor analízalos como un asesor financiero práctico:');
+  L.push('1. ¿En qué se me va el dinero y qué patrones ves (días, lugares, gastos hormiga)?');
+  L.push('2. ¿Dónde puedo recortar sin sufrir? Dame cifras concretas por quincena.');
+  L.push('3. ¿En qué orden me conviene pagar mis deudas y cuánto tiempo me tomaría?');
+  L.push('4. Propón límites por categoría realistas y una meta de ahorro para los próximos 3 meses.');
+  L.push('Sé directo y usa tablas cuando ayuden.');
+  L.push('');
+  L.push('## Ingresos');
+  L.push(`- Quincena del 1 al 15: $${m(data.q1)}`);
+  L.push(`- Quincena del 16 al último: $${m(data.q2)}`);
+  (data.extraIncome || []).filter(x => x.type === 'monthly').forEach(x => L.push(`- Extra cada mes (${x.desc || 'extra'}): $${m(x.amount)}`));
+  L.push('');
+  L.push('## Hoy');
+  if (dp.hasSaldo) {
+    L.push(`- En cuenta de débito: $${m(dp.currentDebit)}`);
+    L.push(`- En efectivo: $${m(dp.currentEfectivo)}`);
+  }
+  L.push(`- Libre para gastar hasta fin de quincena (ya descontando pagos pendientes): $${m(dp.available)}`);
+  L.push(`- Días que faltan de la quincena: ${dp.daysLeft}`);
+  L.push(`- Fondo de emergencia: $${m(data.emerSaved)} de meta $${m(data.emerGoal)}`);
+  (data.apartados || []).forEach(a => L.push(`- Apartado "${a.name}": $${m(a.saved)}${a.goal ? ` de meta $${m(a.goal)}` : ''}`));
+  if ((data.exps || []).length) {
+    L.push('');
+    L.push('## Pagos fijos al mes');
+    L.push('| Concepto | Monto | Día |');
+    L.push('|---|---|---|');
+    data.exps.forEach(x => L.push(`| ${x.name} | $${m(x.amount)} | ${x.day || '—'} |`));
+  }
+  if ((data.debts || []).length) {
+    L.push('');
+    L.push('## Deudas');
+    L.push('| Deuda | Tipo | Saldo | Pago al mes | Día de pago | Tasa anual | Límite |');
+    L.push('|---|---|---|---|---|---|---|');
+    const types = { tarjeta: 'Tarjeta de crédito', prestamo: 'Préstamo', plan: 'Compra a meses', informal: 'Con una persona', deadline: 'Cobranza' };
+    data.debts.forEach(d => L.push(`| ${d.name} | ${types[d.type] || d.type} | $${m(debtBalance(d, cardTxAfter(data)))} | $${m(debtPay(d))} | ${d.dueDay || '—'} | ${d.interestRate ? d.interestRate + '%' : '—'} | ${d.creditLimit ? '$' + m(d.creditLimit) : '—'} |`));
+  }
+  if ((data.varExps || []).length) {
+    L.push('');
+    L.push('## Mis límites por categoría (al mes)');
+    data.varExps.forEach(v => L.push(`- ${(quickCat(v.catId) || {}).n || v.n || v.catId}: $${m(v.amount)} (este mes llevo $${m(catSpentMonth(data, v.catId))})`));
+  }
+  const rows = exportRows(data);
+  const byMonth = {};
+  rows.filter(r => r.tipo === 'Gasto').forEach(r => { const k = r.date.slice(0, 7); byMonth[k] = byMonth[k] || {}; byMonth[k][r.cat] = (byMonth[k][r.cat] || 0) + r.amount; });
+  const mks = Object.keys(byMonth).sort().slice(-6);
+  if (mks.length) {
+    const cats = [...new Set(mks.flatMap(k => Object.keys(byMonth[k])))];
+    L.push('');
+    L.push('## Gasto por mes y categoría');
+    L.push('| Categoría | ' + mks.join(' | ') + ' |');
+    L.push('|---|' + mks.map(() => '---').join('|') + '|');
+    cats.forEach(c => L.push(`| ${c} | ` + mks.map(k => '$' + m(byMonth[k][c] || 0)).join(' | ') + ' |'));
+    L.push('| **Total** | ' + mks.map(k => '$' + m(Object.values(byMonth[k]).reduce((s, v) => s + v, 0))).join(' | ') + ' |');
+  }
+  const recent = rows.filter(r => r.date >= since);
+  L.push('');
+  L.push(`## Movimientos desde el ${since} (${recent.length})`);
+  L.push('```csv');
+  L.push('fecha,hora,tipo,monto,categoria,descripcion,como_pago');
+  recent.forEach(r => L.push([r.date, r.time, r.tipo, r.amount, r.cat, r.desc, r.how].map(csvCell).join(',')));
+  L.push('```');
+  return L.join('\n');
+}
+function ExportSection(_p) {
+  const data = _p.data;
+  const [msg, setMsg] = useState('');
+  const [preview, setPreview] = useState(false);
+  const report = useMemo(() => preview ? buildAIReport(data) : '', [preview, data]);
+  const copy = async () => {
+    const txt = buildAIReport(data);
+    try { await navigator.clipboard.writeText(txt); setMsg('Copiado. Abre Claude, pega el texto y envíalo.'); }
+    catch (err) { setPreview(true); setMsg('No se pudo copiar solo. Mantén presionado el texto de abajo y cópialo.'); }
+  };
+  const count = spendTx(data).length;
+  return e(React.Fragment, null,
+    e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Lleva tus números a Claude (u otra IA) para que te ayude a analizarlos. Va con instrucciones incluidas y sin tu nombre.'),
+    e('button', { className: 'b-primary', disabled: !count, onClick: copy }, 'Copiar para Claude'),
+    e('div', { className: 'b-notice-btns', style: { marginTop: 10 } },
+      e('button', { className: 'b-secondary', disabled: !count, onClick: () => { downloadText(`budgy-para-claude-${todayISO()}.md`, buildAIReport(data), 'text/markdown'); setMsg('Descargado. Súbelo a Claude como archivo.'); } }, 'Descargar como archivo'),
+      e('button', { className: 'b-secondary', disabled: !count, onClick: () => { downloadText(`budgy-movimientos-${todayISO()}.csv`, buildCSV(data), 'text/csv'); setMsg('Descargado. Se abre en Excel o Google Sheets.'); } }, 'Excel (CSV)')),
+    msg && e('p', { className: 'b-note', role: 'status' }, msg),
+    preview && e('textarea', { className: 'b-textarea', readOnly: true, value: report, style: { minHeight: 180, marginTop: 10 }, onFocus: ev => ev.target.select() }));
+}
+
 function MainApp(_ref22) {
   let onLock = _ref22.onLock;
   const todayStr = new Date().toLocalISO().slice(0, 10);
@@ -10112,6 +10579,7 @@ function MainApp(_ref22) {
   const [quickOpen, setQuickOpen] = useState(isQuickAdd);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [freshOpen, setFreshOpen] = useState(false);
+  const [closeQ, setCloseQ] = useState(null);
   const lastTabRef = useRef('inicio');
   const [quickAmount, setQuickAmount] = useState(() => (_qs.get('monto') || '').replace(/[^0-9.]/g, ''));
   const [toast, setToast] = useState(null);
@@ -10362,15 +10830,14 @@ function MainApp(_ref22) {
     const yStr = yesterday.toLocalISO().slice(0, 10);
     const isNewDay = game.lastActiveDate !== todayStr;
     if (isNewDay) {
-      const newStreak = game.lastActiveDate === yStr ? (game.streak || 0) + 1 : 1;
-      const xpGain = 5 + Math.min(newStreak * 3, 25);
+      // La racha ya no sube por abrir la app: cuenta días anotando (ver logStreak)
+      const xpGain = 5;
       setGame(prev => {
         const newXP = prev.xp + xpGain;
         const patch = {
           ...prev,
           xp: newXP,
           thisMonthXP: (prev.thisMonthXP || 0) + xpGain,
-          streak: newStreak,
           lastActiveDate: todayStr,
           todayXP: xpGain,
           todayDate: todayStr,
@@ -10386,7 +10853,7 @@ function MainApp(_ref22) {
         saveLS(GAME_KEY, patch);
         return patch;
       });
-      setTimeout(() => showXPFloat(5 + Math.min((game.streak + 1) * 3, 25), '#D97706'), 700);
+      setTimeout(() => showXPFloat(5, '#D97706'), 700);
     } else {
       setGame(prev => {
         const patch = {
@@ -10555,6 +11022,25 @@ function MainApp(_ref22) {
       })()
     });
   }, [data.debts, data.cardPayments, update]);
+  // Racha = días seguidos anotando gastos (o "hoy no gasté")
+  useEffect(() => {
+    const st = logStreak(data);
+    if (st === (game.streak || 0)) return;
+    setGame(prev => {
+      const patch = {
+        ...prev,
+        streak: st,
+        bestStreak: Math.max(prev.bestStreak || 0, st)
+      };
+      const unlocked = new Set(prev.unlockedIds || []);
+      ACHIEVEMENTS.forEach(a => {
+        if (!unlocked.has(a.id) && a.check(patch)) unlocked.add(a.id);
+      });
+      patch.unlockedIds = [...unlocked];
+      saveLS(GAME_KEY, patch);
+      return patch;
+    });
+  }, [data.cashTransactions, data.cardTransactions, data.noSpendDays]);
   // Avisos: el servidor recibe tus pagos próximos y si ya anotaste hoy
   useEffect(() => {
     if (!prefs.push || !prefs.push.on || !pushSupported()) return;
@@ -10587,7 +11073,7 @@ function MainApp(_ref22) {
     }),
     addVar: vf => {
       if (!vf.amount) return false;
-      const cat = VAR_CATS.find(c => c.id === vf.catId);
+      const cat = VAR_CATS.find(c => c.id === vf.catId) || quickCat(vf.catId);
       const next = data.varExps.find(e => e.catId === vf.catId) ? data.varExps.map(e => e.catId === vf.catId ? {
         ...e,
         amount: +vf.amount
@@ -10764,7 +11250,8 @@ function MainApp(_ref22) {
       return g;
     }),
     onTab: goTab,
-    onAdd: () => setQuickOpen(true)
+    onAdd: () => setQuickOpen(true),
+    onCloseQ: q => setCloseQ(q)
   };
   return _h(React.Fragment, null, showOnboarding && _h(OnboardingFlow, {
     userName: userName,
@@ -10794,7 +11281,22 @@ function MainApp(_ref22) {
     showChest,
     onOpenChest: openChest,
     onMarkPaid: markDebtPaid,
-    onMarkPlan: markPlanPayment
+    onMarkPlan: markPlanPayment,
+    onNoSpend: () => {
+      update({
+        noSpendDays: [...(data.noSpendDays || []).filter(d => d !== todayStr), todayStr].slice(-120)
+      });
+      setToast({
+        text: 'Anotado: hoy sin gastos. Tu racha sigue.',
+        onUndo: () => setData(prev => ({
+          ...prev,
+          noSpendDays: (prev.noSpendDays || []).filter(d => d !== todayStr)
+        }))
+      });
+    },
+    onBackup: () => budgyBackup().then(ok => ok && setToast({
+      text: 'Respaldo listo. Guárdalo en tu nube o mándatelo por WhatsApp.'
+    }))
   }), tab === 'movs' && _h(MovsScreen, {
     ...screenProps,
     actions,
@@ -10873,10 +11375,34 @@ function MainApp(_ref22) {
     onSaved: t => {
       setQuickOpen(false);
       setQuickAmount('');
+      const alert = limitAlert(data, t.cat, t.amount);
       setToast({
-        text: t.text,
+        text: alert ? t.text + '. ' + alert.text : t.text,
+        warn: !!alert,
         onUndo: () => undoQuick(t)
       });
+    }
+  }), closeQ && _h(QuincenaCloseSheet, {
+    data: data,
+    dp: dp,
+    q: closeQ,
+    onClose: () => {
+      updatePrefs({
+        lastCloseSeen: closeQ.key
+      });
+      setCloseQ(null);
+    },
+    onDone: () => {
+      updatePrefs({
+        lastCloseSeen: closeQ.key
+      });
+      setCloseQ(null);
+      if (!prefs.closeRewarded || prefs.closeRewarded !== closeQ.key) {
+        updatePrefs({
+          closeRewarded: closeQ.key
+        });
+        awardXP(30, {});
+      }
     }
   }), freshOpen && _h(FreshStartSheet, {
     data: data,

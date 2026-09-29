@@ -3,6 +3,8 @@
    - Guarda las suscripciones a notificaciones y manda los avisos:
      · recordatorio diario a la hora que elige cada persona (se salta si ya anotó ese día)
      · aviso un día antes de que venza un pago
+     · resumen de la semana los domingos a las 7 p. m.
+     · cierre de quincena los días 1 y 16 a las 10 a. m.
    Variables de entorno:
      PORT               puerto (Railway lo asigna solo)
      VAPID_PUBLIC_KEY   llaves para notificaciones; si faltan se generan y se
@@ -63,7 +65,23 @@ function localParts(tz, now = new Date()) {
     return localParts('America/Mexico_City', now);
   }
   const g = t => parts.find(p => p.type === t).value;
-  return { date: `${g('year')}-${g('month')}-${g('day')}`, day: +g('day'), hour: +g('hour'), minute: +g('minute') };
+  const date = `${g('year')}-${g('month')}-${g('day')}`;
+  return { date, day: +g('day'), hour: +g('hour'), minute: +g('minute'), weekday: new Date(date + 'T12:00:00Z').getUTCDay() };
+}
+// Lunes de la semana de una fecha AAAA-MM-DD
+function mondayOf(date) {
+  const d = new Date(date + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7);
+  return d.toISOString().slice(0, 10);
+}
+function weeklyBody(s, t) {
+  const w = s.summary;
+  if (!w || w.week !== mondayOf(t.date) || !w.logged) return 'Esta semana no anotaste gastos. Retómalo hoy: toma 10 segundos y tu número vuelve a cuadrar.';
+  const parts = [`Esta semana gastaste ${fmt(w.spent)}`];
+  if (w.top && w.topAmount) parts[0] += `; lo que más: ${w.top} (${fmt(w.topAmount)})`;
+  parts.push(`Anotaste ${w.logged} de 7 días.`);
+  if (typeof w.available === 'number') parts.push(w.available >= 0 ? `Te quedan ${fmt(w.available)} libres.` : `Te faltan ${fmt(-w.available)} para cubrir tus pagos.`);
+  return parts[0] + '. ' + parts.slice(1).join(' ');
 }
 const fmt = n => '$' + Math.round(+n || 0).toLocaleString('es-MX');
 const DAILY_TEXTS = [
@@ -92,6 +110,12 @@ function dueNotifications(s, now = new Date()) {
       const body = soon.length === 1 ? `Mañana vence ${soon[0].name}${soon[0].amount ? ` (${fmt(soon[0].amount)})` : ''}.` : `Mañana vencen ${soon.length} pagos: ${soon.map(x => x.name).join(', ')}.`;
       out.push({ mark: { lastPayments: t.date }, payload: { title: 'Pago por vencer', body, url: './', tag: 'budgy-pagos' } });
     } else out.push({ mark: { lastPayments: t.date }, payload: null });
+  }
+  if (p.weekly !== false && t.weekday === 0 && t.hour === 19 && s.lastWeekly !== t.date) {
+    out.push({ mark: { lastWeekly: t.date }, payload: { title: 'Tu semana en Budgy', body: weeklyBody(s, t), url: './', tag: 'budgy-semana' } });
+  }
+  if (p.closing !== false && (t.day === 1 || t.day === 16) && t.hour === 10 && s.lastClosing !== t.date) {
+    out.push({ mark: { lastClosing: t.date }, payload: { title: 'Cerró tu quincena', body: 'Mira cómo te fue, en qué se fue tu dinero y arranca la nueva con plan.', url: './', tag: 'budgy-cierre' } });
   }
   return out;
 }
@@ -141,6 +165,10 @@ function readBody(req) {
 function cleanPayments(list) {
   return (Array.isArray(list) ? list : []).slice(0, 40).map(x => ({ name: String(x.name || '').slice(0, 40), day: Math.max(1, Math.min(31, +x.day || 0)), amount: Math.max(0, +x.amount || 0), paid: !!x.paid })).filter(x => x.name && x.day);
 }
+function cleanSummary(w) {
+  const n = v => Math.round(+v || 0);
+  return { week: /^\d{4}-\d{2}-\d{2}$/.test(w.week) ? w.week : '', spent: Math.max(0, n(w.spent)), top: String(w.top || '').slice(0, 30), topAmount: Math.max(0, n(w.topAmount)), logged: Math.max(0, Math.min(7, n(w.logged))), available: n(w.available), streak: Math.max(0, n(w.streak)) };
+}
 async function api(req, res, url) {
   if (url.pathname === '/api/push/key' && req.method === 'GET') return json(res, 200, { key: KEYS.publicKey });
   if (req.method !== 'POST') return json(res, 405, { error: 'Método no permitido' });
@@ -158,8 +186,9 @@ async function api(req, res, url) {
       ...prev,
       subscription: sub || prev.subscription,
       tz: String(body.tz || prev.tz || 'America/Mexico_City').slice(0, 60),
-      prefs: { hour: Math.max(0, Math.min(23, parseInt(p.hour, 10) || 21)), daily: p.daily !== false, payments: p.payments !== false },
+      prefs: { hour: Math.max(0, Math.min(23, parseInt(p.hour, 10) || 21)), daily: p.daily !== false, payments: p.payments !== false, weekly: p.weekly !== false, closing: p.closing !== false },
       payments: body.payments ? cleanPayments(body.payments) : prev.payments || [],
+      summary: body.summary ? cleanSummary(body.summary) : prev.summary || null,
       lastLogDate: body.lastLogDate || prev.lastLogDate || null,
       updatedAt: new Date().toISOString()
     };
@@ -205,4 +234,4 @@ if (require.main === module) {
   server.listen(PORT, () => console.log(`[budgy] escuchando en ${PORT} · ${Object.keys(subs).length} suscripciones`));
   setInterval(() => tick().catch(e => console.error('[budgy] tick', e)), 60 * 1000);
 }
-module.exports = { server, dueNotifications, localParts, tick, _subs: () => subs, _setSender: fn => { webpush.sendNotification = fn; } };
+module.exports = { server, dueNotifications, localParts, mondayOf, tick, _subs: () => subs, _setSender: fn => { webpush.sendNotification = fn; } };
