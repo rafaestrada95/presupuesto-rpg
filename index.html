@@ -803,6 +803,12 @@ if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){window
 <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script>
+// Fechas en la hora del teléfono, no en UTC: en México, después de las 6 p. m.
+// la fecha UTC ya es "mañana" y los gastos de la noche caían en el día equivocado.
+Date.prototype.toLocalISO = function () {
+  const p = n => String(n).padStart(2, '0');
+  return `${this.getFullYear()}-${p(this.getMonth() + 1)}-${p(this.getDate())}T${p(this.getHours())}:${p(this.getMinutes())}:${p(this.getSeconds())}`;
+};
 function _slicedToArray2(r, e) { return _arrayWithHoles2(r) || _iterableToArrayLimit2(r, e) || _unsupportedIterableToArray2(r, e) || _nonIterableRest2(); }
 function _nonIterableRest2() { throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
 function _unsupportedIterableToArray2(r, a) { if (r) { if ("string" == typeof r) return _arrayLikeToArray2(r, a); var t = {}.toString.call(r).slice(8, -1); return "Object" === t && r.constructor && (t = r.constructor.name), "Map" === t || "Set" === t ? Array.from(r) : "Arguments" === t || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(t) ? _arrayLikeToArray2(r, a) : void 0; } }
@@ -2118,7 +2124,7 @@ function calcDP(data) {
   const day = today.getDate();
   const isQ1 = day <= 15;
   const baseIncome = parseFloat(isQ1 ? data.q1 : data.q2) || 0;
-  const curMonth = today.toISOString().slice(0, 7);
+  const curMonth = today.toLocalISO().slice(0, 7);
   const extraQ = (data.extraIncome || []).reduce(function (s, ei) {
     return ei.type === "monthly" ? s + +(ei.amount || 0) / 2 : ei.type === "once" && (ei.date || "").startsWith(curMonth) ? s + +(ei.amount || 0) : s;
   }, 0);
@@ -2138,7 +2144,7 @@ function calcDP(data) {
     return isQ1 && dd <= 15 || !isQ1 && dd >= 16 ? s + (+d.minPayment || 0) : s;
   }, 0);
   const cardReserved = data.debts.filter(d => d.type === "tarjeta").reduce((s, d) => s + getCardInfo(d, data.cardTransactions, today).cycleSpend, 0);
-  const todayStr = today.toISOString().slice(0, 10);
+  const todayStr = today.toLocalISO().slice(0, 10);
   const cashSpentToday = (data.cashTransactions || []).filter(t => t.date === todayStr).reduce((s, t) => s + (+t.amount || 0), 0);
   const committed = fixedQ + varH + debtQ + cardPayQ + cardReserved + cashSpentToday;
   const remaining = income - committed;
@@ -2199,7 +2205,7 @@ function getActualBalance(data) {
 function getPendingPaydays(data) {
   const today = new Date();
   const todayDay = today.getDate();
-  const curMonthKey = today.toISOString().slice(0, 7);
+  const curMonthKey = today.toLocalISO().slice(0, 7);
   const q1Full = parseFloat(data.q1) || 0;
   const q2Full = parseFloat(data.q2) || 0;
   const q1Received = (data.paydays || []).some(p => p.quincena === curMonthKey + '-Q1');
@@ -2309,7 +2315,7 @@ function calcHealthScore(data, game, dp) {
     return u.key === 'critical' || u.key === 'danger';
   });
   if (criticalDebts.length === 0) score += 20;else if (criticalDebts.length === 1) score += 10;
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = new Date().toLocalISO().slice(0, 10);
   const doneTodayCount = Object.keys(game.doneMissions || {}).filter(k => k.startsWith(todayStr)).length;
   if (doneTodayCount >= 3) score += 20;else if (doneTodayCount >= 1) score += 10;
   const emerPct = data.emerGoal ? Math.min(100, (+data.emerSaved || 0) / +data.emerGoal * 100) : 0;
@@ -2499,7 +2505,7 @@ function getCountdowns(data) {
   const today = new Date();
   const day = today.getDate();
   const isQ1 = day <= 15;
-  const curMonth = today.toISOString().slice(0, 7);
+  const curMonth = today.toLocalISO().slice(0, 7);
   const items = [];
   const nextQ = isQ1 ? new Date(today.getFullYear(), today.getMonth(), 16) : new Date(today.getFullYear(), today.getMonth() + 1, 1);
   items.push({
@@ -3680,9 +3686,9 @@ function getMonthlySpending(data, mk) {
 function SpendingBreakdown(_ref_sb) {
   let data = _ref_sb.data;
   const now = new Date();
-  const curMk = now.toISOString().slice(0, 7);
+  const curMk = now.toLocalISO().slice(0, 7);
   const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const prevMk = prevDate.toISOString().slice(0, 7);
+  const prevMk = prevDate.toLocalISO().slice(0, 7);
   const cur = getMonthlySpending(data, curMk);
   const prev = getMonthlySpending(data, prevMk);
   if (cur.total === 0 && prev.total === 0) return null;
@@ -4641,7 +4647,7 @@ function DebtCard(_ref12) {
     _useState96 = _slicedToArray2(_useState95, 2),
     ef = _useState96[0],
     setEf = _useState96[1];
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  const currentMonth = new Date().toLocalISO().slice(0, 7);
   const paidThisMonth = (d.monthlyPayments || []).some(p => p.month === currentMonth);
   const u = d.urg;
   const uc = URG[u.key];
@@ -4692,7 +4698,7 @@ function DebtCard(_ref12) {
     meta = `📋 ${info.remaining} pagos restantes de ${fmt(info.amount)} · Día ${d.dueDay || '?'}`;
   } else if (d.type === 'informal') meta = d.informalMode === 'fixed' ? `🤝 ${d.person || '?'} · Día ${d.dueDay || '?'} · ${fmt(+(d.paymentAmount || 0))}/quinc` : `🎯 ${d.person || '?'} · Liquida antes de ${fmtDate(d.deadlineDate)}`;else meta = `⚠️ ${d.entity || '?'} · ${fmtDate(d.deadlineDate)}`;
   const displayBal = d.type === 'plan' ? getPlanInfo(d).remainingAmount : d.type === 'tarjeta' && cardTransactions ? +(d.balance || 0) + getCardInfo(d, cardTransactions, new Date()).cycleSpend : +(d.balance || 0);
-  const last6Months = d.type !== 'plan' ? [5, 4, 3, 2, 1, 0].map(i => new Date(new Date().getFullYear(), new Date().getMonth() - i, 1).toISOString().slice(0, 7)) : [];
+  const last6Months = d.type !== 'plan' ? [5, 4, 3, 2, 1, 0].map(i => new Date(new Date().getFullYear(), new Date().getMonth() - i, 1).toLocalISO().slice(0, 7)) : [];
   const monthPaySet = new Set((d.monthlyPayments || []).map(p => p.month));
   return /*#__PURE__*/React.createElement("div", {
     className: "pri-card",
@@ -5434,7 +5440,7 @@ function ExpenseLogger(_ref15) {
     ev.target.value = '';
   };
   const cards = debts.filter(d => d.type === 'tarjeta');
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = new Date().toLocalISO().slice(0, 10);
   const todayCash = (data.cashTransactions || []).filter(t => t.date === todayStr);
   const todayCard = (data.cardTransactions || []).filter(t => t.date === todayStr);
   const allToday = [...todayCash.map(t => ({
@@ -6282,7 +6288,7 @@ function TabGastos(_ref18) {
     onAddCash = _ref18.onAddCash,
     onAddCard = _ref18.onAddCard,
     onToggleVarPaid = _ref18.onToggleVarPaid;
-  const curMonthV = new Date().toISOString().slice(0, 7);
+  const curMonthV = new Date().toLocalISO().slice(0, 7);
   const _useState41 = useState({
       name: '',
       amount: '',
@@ -7454,7 +7460,7 @@ function TabInfo(_ref21) {
         amount: +extraAmt,
         desc: extraDesc || "Extra",
         type: extraType,
-        date: new Date().toISOString().slice(0, 10)
+        date: new Date().toLocalISO().slice(0, 10)
       });
       setExtraDesc("");
       setExtraAmt("");
@@ -8118,7 +8124,7 @@ function HomeScreen(_p) {
   const monthName = now.toLocaleDateString('es-MX', {
     month: 'long'
   });
-  const monthKeyA = now.toISOString().slice(0, 7);
+  const monthKeyA = now.toLocalISO().slice(0, 7);
   const fixedDue = (data.exps || []).filter(x => x.day && !(data.paidExps || {})[`${x.id}_${monthKeyA}`]).map(x => ({
     kind: 'exp', id: 'e' + x.id, x, name: x.name, pay: +x.amount || 0, days: +x.day - now.getDate()
   })).filter(x => x.days >= 0 && x.days <= 3);
@@ -8129,7 +8135,7 @@ function HomeScreen(_p) {
   const lvl = getLvl(game.xp || 0),
     prog = getXPProg(game.xp || 0);
   const nextReq = prog.next ? prog.blocked ? (levelReqs(prog.next.n, data, game).find(r => !r.ok) || {}).label : `${prog.need - prog.cur} XP más` : null;
-  const todayStr = now.toISOString().slice(0, 10);
+  const todayStr = now.toLocalISO().slice(0, 10);
   const loggedToday = [...(data.cashTransactions || []), ...(data.cardTransactions || [])].some(t => t.date === todayStr);
   const eveningAsk = now.getHours() >= 18 && !loggedToday;
   const missions = getDailyMissions(todayStr);
@@ -8331,7 +8337,7 @@ function HomeScreen(_p) {
 /* ════ MOVIMIENTOS ════ */
 function MovsScreen(_p) {
   const data = _p.data;
-  const mk = new Date().toISOString().slice(0, 7);
+  const mk = new Date().toLocalISO().slice(0, 7);
   const spent = getMonthlySpending(data, mk);
   const monthName = new Date().toLocaleDateString('es-MX', {
     month: 'long'
@@ -8372,7 +8378,7 @@ function PresupuestoScreen(_p) {
   const libre = Math.max(0, dp.income - fijos - deudas);
   const total = Math.max(1, fijos + deudas + libre);
   const w = v => (v / total * 100).toFixed(1) + '%';
-  const mk = new Date().toISOString().slice(0, 7);
+  const mk = new Date().toLocalISO().slice(0, 7);
   const monthTx = [...(data.cashTransactions || []), ...(data.cardTransactions || [])].filter(t => t.date && t.date.startsWith(mk));
   const byCat = {};
   monthTx.forEach(t => {
@@ -8642,7 +8648,11 @@ function PerfilScreen(_p) {
     title: 'Botón en tu pantalla de inicio'
   }, h('ol', {
     className: 'b-steps'
-  }, h('li', null, 'En el navegador toca ', h('b', null, 'Compartir'), ' (iPhone) o el menú ', h('b', null, '⋮'), ' (Android).'), h('li', null, 'Elige ', h('b', null, 'Agregar a pantalla de inicio'), '.')))), h(ReminderSection), h(MyInfo, _p.infoProps), h('section', {
+  }, h('li', null, 'En el navegador toca ', h('b', null, 'Compartir'), ' (iPhone) o el menú ', h('b', null, '⋮'), ' (Android).'), h('li', null, 'Elige ', h('b', null, 'Agregar a pantalla de inicio'), '.')))), h(NotificationsSection, {
+    prefs: _p.prefs,
+    setPrefs: _p.setPrefs,
+    data: _p.data
+  }), h(MyInfo, _p.infoProps), h('section', {
     className: 'b-rows'
   }, h('button', {
     onClick: _p.onFeedback
@@ -8733,7 +8743,7 @@ function QuickAddSheet(_p) {
     const base = {
       amount: n,
       desc: desc || c.n,
-      date: new Date().toISOString().slice(0, 10),
+      date: new Date().toLocalISO().slice(0, 10),
       time,
       cat: c.id,
       qid
@@ -9153,7 +9163,7 @@ function ConfirmDelete(_p) {
 /* ── Deudas ── */
 function DebtSheet(_p) {
   const d = _p.d, a = _p.actions;
-  const month = new Date().toISOString().slice(0, 7);
+  const month = new Date().toLocalISO().slice(0, 7);
   const paidThisMonth = (d.monthlyPayments || []).some(p => p.month === month);
   const pay = debtPay(d);
   const bal = debtBalance(d, _p.cardTx);
@@ -9207,7 +9217,7 @@ function DebtSheet(_p) {
       extraPayoff && !extraPayoff.neverPaysOff && e('p', { className: 'b-note good' }, `Terminas en ${monthsTxt(extraPayoff.months)}` + (payoff.neverPaysOff ? '.' : ` (${monthsTxt(Math.max(0, payoff.months - extraPayoff.months))} antes) y te ahorras ${fmt(Math.max(0, payoff.totalInterest - extraPayoff.totalInterest))} de intereses.`))),
     d.type !== 'plan' && e('div', null, e('div', { className: 'b-d', style: { marginBottom: 8 } }, 'Tus pagos de los últimos 6 meses'),
       e('div', { className: 'b-months' }, last6.map(m => {
-        const key = m.toISOString().slice(0, 7);
+        const key = m.toLocalISO().slice(0, 7);
         return e('div', { key, className: paidSet.has(key) ? 'on' : '' }, e('i', null, paidSet.has(key) ? '✓' : ''), m.toLocaleDateString('es-MX', { month: 'short' }));
       }))),
     e(More, { title: 'Editar datos' },
@@ -9230,7 +9240,7 @@ function DebtsSection(_p) {
   const [open, setOpen] = useState(null);
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState('');
-  const month = new Date().toISOString().slice(0, 7);
+  const month = new Date().toLocalISO().slice(0, 7);
   const payoffs = data.debts.filter(d => (d.type === 'tarjeta' || d.type === 'prestamo') && +d.interestRate > 0).map(d => getPayoffProjection(d.balance, debtPay(d), d.interestRate)).filter(Boolean);
   const minCost = payoffs.reduce((s, p) => s + (p.neverPaysOff ? 0 : p.totalInterest), 0);
   const never = payoffs.some(p => p.neverPaysOff);
@@ -9308,8 +9318,8 @@ function HistoryList(_p) {
   const [filter, setFilter] = useState('todo');
   const [limit, setLimit] = useState(60);
   const [open, setOpen] = useState(null);
-  const today = new Date().toISOString().slice(0, 10);
-  const yest = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+  const today = new Date().toLocalISO().slice(0, 10);
+  const yest = new Date(Date.now() - 864e5).toLocalISO().slice(0, 10);
   const cards = data.debts || [];
   const spend = [...(data.cashTransactions || []).map(t => ({ ...t, kind: 'cash' })), ...(data.cardTransactions || []).map(t => ({ ...t, kind: 'card' }))];
   const income = [...(data.paydays || []).map(p => ({ id: p.quincena, amount: p.amount, desc: 'Pago de quincena', date: p.addedAt, kind: 'income' })),
@@ -9353,9 +9363,9 @@ function MyInfo(_p) {
     const blob = new Blob([txt], { type: 'application/json' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `budgy-respaldo-${new Date().toISOString().slice(0, 10)}.json`;
+    link.download = `budgy-respaldo-${new Date().toLocalISO().slice(0, 10)}.json`;
     document.body.appendChild(link); link.click(); link.remove();
-    saveLS('budgy-last-backup', new Date().toISOString().slice(0, 10));
+    saveLS('budgy-last-backup', new Date().toLocalISO().slice(0, 10));
     setMsg('Listo: se descargó tu respaldo. Guárdalo en tu nube o mándatelo por WhatsApp.');
   };
   const restore = txt => {
@@ -9389,7 +9399,7 @@ function MyInfo(_p) {
         e(Field, { label: '¿Cuánto?', value: xf.amount, ph: '$0', onChange: v => setXf({ ...xf, amount: v }) }),
         e('div', { className: 'b-seg' }, [['monthly', 'Cada mes'], ['once', 'Solo una vez']].map(o => e('button', { key: o[0], className: xf.type === o[0] ? 'on' : '', onClick: () => setXf({ ...xf, type: o[0] }) }, o[1]))),
         e('div', { className: 'b-form-btns' }, e('button', { className: 'b-secondary', onClick: () => setXf(null) }, 'Cancelar'),
-          e('button', { className: 'b-primary sm', disabled: !(+xf.amount > 0), onClick: () => { _p.onAddExtra({ amount: +xf.amount, desc: xf.desc || 'Extra', type: xf.type, date: new Date().toISOString().slice(0, 10) }); setXf(null); } }, 'Guardar')))
+          e('button', { className: 'b-primary sm', disabled: !(+xf.amount > 0), onClick: () => { _p.onAddExtra({ amount: +xf.amount, desc: xf.desc || 'Extra', type: xf.type, date: new Date().toLocalISO().slice(0, 10) }); setXf(null); } }, 'Guardar')))
         : e('button', { className: 'b-primary ghost', onClick: () => setXf({ desc: '', amount: '', type: 'monthly' }) }, 'Agregar ingreso extra')),
     e('section', null, e('div', { className: 'b-sh' }, e('h2', null, 'Fondo para emergencias')),
       e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Sin este colchón, cada imprevisto se vuelve deuda. Lo recomendado: un mes de lo que ganas', income > 0 ? ` (${fmt(income)}).` : '.'),
@@ -9474,8 +9484,8 @@ function CashFlowNative(_p) {
 function CompareNative(_p) {
   const data = _p.data, game = _p.game;
   const now = new Date();
-  const cur = getMonthlySpending(data, now.toISOString().slice(0, 7));
-  const prev = getMonthlySpending(data, new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 7));
+  const cur = getMonthlySpending(data, now.toLocalISO().slice(0, 7));
+  const prev = getMonthlySpending(data, new Date(now.getFullYear(), now.getMonth() - 1, 1).toLocalISO().slice(0, 7));
   const diff = cur.total - prev.total;
   const pm = new Date(now.getFullYear(), now.getMonth() - 1, 1).toLocaleDateString('es-MX', { month: 'long' });
   const rows = [['Gasto registrado', prev.total, cur.total, true], ['Con débito', prev.debit, cur.debit, true], ['En efectivo', prev.cash, cur.cash, true], ['Con tarjeta', prev.card, cur.card, true],
@@ -9500,7 +9510,7 @@ function CardsNative(_p) {
 }
 function FixedExpenses(_p) {
   const data = _p.data, a = _p.actions;
-  const month = new Date().toISOString().slice(0, 7);
+  const month = new Date().toLocalISO().slice(0, 7);
   const [f, setF] = useState(null);
   const list = (data.exps || []).slice().sort((x, y) => (+x.day || 99) - (+y.day || 99));
   const total = list.reduce((s, x) => s + (+x.amount || 0), 0);
@@ -9600,7 +9610,7 @@ function ChestNative(_p) {
 function AdvancedLogger(_p) {
   const data = _p.data;
   const cards = (data.debts || []).filter(d => d.type === 'tarjeta');
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocalISO().slice(0, 10);
   const blank = { amount: '', desc: '', cat: '', method: 'debit', cardId: cards[0] ? cards[0].id : '', date: today, photo: '' };
   const [f, setF] = useState(blank);
   const [msg, setMsg] = useState('');
@@ -9708,9 +9718,128 @@ function FeedbackSheet(_p) {
     e('p', { className: 'b-note', style: { textAlign: 'center' } }, 'Se abre WhatsApp con tu mensaje listo. Solo toca enviar.'));
 }
 
+/* ════ FASE 7: avisos de Budgy (notificaciones push) ════ */
+const PUSH_API = 'api/push/';
+const pushSupported = () => location.protocol.indexOf('http') === 0 && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const localTZ = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (err) { return 'America/Mexico_City'; } };
+function b64ToBytes(b64) {
+  const pad = '='.repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+async function pushPost(path, body) {
+  const r = await fetch(PUSH_API + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error('push ' + r.status);
+  return r.json();
+}
+async function pushServerKey() {
+  const r = await fetch(PUSH_API + 'key', { cache: 'no-store' });
+  if (!r.ok) throw new Error('sin servidor');
+  const j = await r.json();
+  if (!j.key) throw new Error('sin llave');
+  return j.key;
+}
+// Lo mínimo que el servidor necesita para avisarte de pagos: nombre, día, monto y si ya pagaste
+function pushPayments(data) {
+  const month = new Date().toLocalISO().slice(0, 7);
+  const debts = (data.debts || []).filter(d => d.dueDay).map(d => ({ name: d.name, day: +d.dueDay, amount: debtPay(d), paid: (d.monthlyPayments || []).some(p => p.month === month) }));
+  const fixed = (data.exps || []).filter(x => x.day).map(x => ({ name: x.name, day: +x.day, amount: +x.amount || 0, paid: !!(data.paidExps || {})[`${x.id}_${month}`] }));
+  return [...debts, ...fixed];
+}
+function pushLastLog(data) {
+  const today = new Date().toLocalISO().slice(0, 10);
+  return [...(data.cashTransactions || []), ...(data.cardTransactions || [])].some(t => t.date === today) ? today : null;
+}
+async function pushSubscribe(push, data) {
+  const reg = await navigator.serviceWorker.ready;
+  const key = await pushServerKey();
+  let sub = await reg.pushManager.getSubscription();
+  // Si el servidor cambió de llave, la suscripción vieja ya no sirve
+  if (sub && sub.options && sub.options.applicationServerKey) {
+    const cur = btoa(String.fromCharCode(...new Uint8Array(sub.options.applicationServerKey))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    if (cur !== key) { await sub.unsubscribe(); sub = null; }
+  }
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) });
+  await pushPost('subscribe', { subscription: sub.toJSON(), tz: localTZ(), prefs: { hour: push.hour, daily: push.daily !== false, payments: push.payments !== false }, payments: pushPayments(data), lastLogDate: pushLastLog(data) });
+  return sub;
+}
+
+function NotificationsSection(_p) {
+  const prefs = _p.prefs, data = _p.data;
+  const push = prefs.push || { on: false, hour: 21, daily: true, payments: true };
+  const [server, setServer] = useState('checking');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const perm = 'Notification' in window ? Notification.permission : 'default';
+  useEffect(() => {
+    if (!pushSupported()) return setServer('no');
+    pushServerKey().then(() => setServer('ok')).catch(() => setServer('no'));
+  }, []);
+  const save = patch => _p.setPrefs({ push: { ...push, ...patch } });
+  const sync = async next => {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) await pushPost('sync', { endpoint: sub.endpoint, tz: localTZ(), prefs: { hour: next.hour, daily: next.daily !== false, payments: next.payments !== false } });
+    } catch (err) { /* se reintenta al abrir la app */ }
+  };
+  const change = patch => { const next = { ...push, ...patch }; save(patch); if (push.on) sync(next); };
+  const enable = async () => {
+    setBusy(true); setMsg('');
+    try {
+      const p = await Notification.requestPermission();
+      if (p !== 'granted') { setMsg('Sin tu permiso no te podemos avisar. Puedes darlo en los ajustes de tu cel, en Notificaciones.'); return; }
+      await pushSubscribe(push, data);
+      save({ on: true });
+      setMsg('Listo. Te llegará un aviso de prueba en unos segundos.');
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) pushPost('test', { endpoint: sub.endpoint }).catch(() => {});
+    } catch (err) {
+      setMsg('No pudimos activar los avisos. Revisa tu conexión e intenta otra vez.');
+    } finally { setBusy(false); }
+  };
+  const disable = async () => {
+    setBusy(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) { await pushPost('unsubscribe', { endpoint: sub.endpoint }).catch(() => {}); await sub.unsubscribe(); }
+    } catch (err) { /* nada */ }
+    save({ on: false }); setMsg('Avisos apagados.'); setBusy(false);
+  };
+  const test = async () => {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return setMsg('Vuelve a activar los avisos.');
+    pushPost('test', { endpoint: sub.endpoint }).then(() => setMsg('Enviamos un aviso de prueba.')).catch(() => setMsg('No se pudo enviar. Apaga y vuelve a activar los avisos.'));
+  };
+  const hours = [[9, '9:00 a. m.'], [14, '2:00 p. m.'], [20, '8:00 p. m.'], [21, '9:00 p. m.'], [22, '10:00 p. m.']];
+  const hourSeg = e('div', { className: 'b-seg', role: 'group', 'aria-label': 'Hora del recordatorio' }, hours.map(o => e('button', { key: o[0], className: push.hour === o[0] ? 'on' : '', onClick: () => change({ hour: o[0] }) }, o[1])));
+  const needsInstall = isIOS() && !isStandalone();
+  if (server === 'no' || !pushSupported()) return e(ReminderSection);
+  return e('section', null,
+    e('div', { className: 'b-sh' }, e('h2', null, 'Avisos de Budgy')),
+    needsInstall ? e('div', { className: 'b-insight-box' }, e('b', null, 'Primero instala Budgy'), e('p', null, 'En iPhone los avisos solo funcionan con la app instalada: toca Compartir y luego “Agregar a pantalla de inicio”. Ábrela desde el ícono y vuelve aquí.')) :
+      push.on && perm === 'granted' ? e(React.Fragment, null,
+        e(Switch, { title: 'Recordatorio diario', sub: 'Si ya anotaste ese día, no te molestamos.', on: push.daily !== false, onToggle: () => change({ daily: push.daily === false }) }),
+        push.daily !== false && hourSeg,
+        e(Switch, { title: 'Pagos por vencer', sub: 'Un día antes, a las 9 a. m.: deudas y pagos fijos.', on: push.payments !== false, onToggle: () => change({ payments: push.payments === false }) }),
+        e('div', { className: 'b-notice-btns', style: { marginTop: 12 } },
+          e('button', { className: 'b-secondary', onClick: test }, 'Enviar aviso de prueba'),
+          e('button', { className: 'b-textbtn danger', disabled: busy, onClick: disable }, 'Apagar avisos'))) :
+        e(React.Fragment, null,
+          e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Un aviso diario para anotar tus gastos y otro el día antes de que venza un pago. Tú eliges la hora.'),
+          hourSeg,
+          e('button', { className: 'b-primary', style: { marginTop: 14 }, disabled: busy || server === 'checking', onClick: enable }, busy ? 'Activando…' : 'Activar avisos'),
+          perm === 'denied' && e('p', { className: 'b-note warn' }, 'Tienes los avisos bloqueados para Budgy. Actívalos en los ajustes de tu cel.')),
+    msg && e('p', { className: 'b-note', role: 'status' }, msg),
+    e(More, { title: 'Otra opción: recordatorio en tu calendario' }, e(ReminderSection)));
+}
+
 function MainApp(_ref22) {
   let onLock = _ref22.onLock;
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = new Date().toLocalISO().slice(0, 10);
   const monthKey = todayStr.slice(0, 7);
   const dateLabel = new Date().toLocaleDateString('es-MX', {
     weekday: 'long',
@@ -9996,7 +10125,7 @@ function MainApp(_ref22) {
   useEffect(() => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const yStr = yesterday.toISOString().slice(0, 10);
+    const yStr = yesterday.toLocalISO().slice(0, 10);
     const isNewDay = game.lastActiveDate !== todayStr;
     if (isNewDay) {
       const newStreak = game.lastActiveDate === yStr ? (game.streak || 0) + 1 : 1;
@@ -10050,7 +10179,7 @@ function MainApp(_ref22) {
     const isQ1 = day <= 15;
     const isPayday = isQ1 ? day === 1 : day === 16;
     if (!isPayday) return;
-    const quincena = `${today.toISOString().slice(0, 7)}-${isQ1 ? 'Q1' : 'Q2'}`;
+    const quincena = `${today.toLocalISO().slice(0, 7)}-${isQ1 ? 'Q1' : 'Q2'}`;
     const alreadyAdded = (data.paydays || []).some(p => p.quincena === quincena);
     if (alreadyAdded) return;
     const incomeAmount = isQ1 ? +data.q1 || 0 : +data.q2 || 0;
@@ -10144,8 +10273,8 @@ function MainApp(_ref22) {
     vibrate([100, 50, 200]);
   }, [data.debts, update, awardXP, awardBits]);
   const markDebtPaid = useCallback((debtId, amount) => {
-    const month = new Date().toISOString().slice(0, 7);
-    const paidAt = new Date().toISOString().slice(0, 10);
+    const month = new Date().toLocalISO().slice(0, 7);
+    const paidAt = new Date().toLocalISO().slice(0, 10);
     const debtObj = data.debts.find(d => d.id === debtId) || {};
     update({
       debts: data.debts.map(d => {
@@ -10179,7 +10308,7 @@ function MainApp(_ref22) {
     vibrate([100, 50, 200]);
   }, [data.debts, data.cardPayments, update, awardXP, awardBits]);
   const unmarkDebtPaid = useCallback(debtId => {
-    const month = new Date().toISOString().slice(0, 7);
+    const month = new Date().toLocalISO().slice(0, 7);
     update({
       debts: data.debts.map(d => {
         if (d.id !== debtId) return d;
@@ -10199,6 +10328,14 @@ function MainApp(_ref22) {
       })()
     });
   }, [data.debts, data.cardPayments, update]);
+  // Avisos: el servidor recibe tus pagos próximos y si ya anotaste hoy
+  useEffect(() => {
+    if (!prefs.push || !prefs.push.on || !pushSupported()) return;
+    const t = setTimeout(() => {
+      pushSubscribe(prefs.push, data).catch(() => {});
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [data, prefs.push]);
   // Las misiones del día se revisan solas, estés en la pantalla que estés
   useEffect(() => {
     getDailyMissions(todayStr).forEach(m => {
@@ -10339,7 +10476,7 @@ function MainApp(_ref22) {
       loans: [...(data.loans || []), {
         ...lf,
         id: uid(),
-        date: new Date().toISOString().slice(0, 10),
+        date: new Date().toLocalISO().slice(0, 10),
         amount: +lf.amount
       }]
     }),
@@ -10350,7 +10487,7 @@ function MainApp(_ref22) {
   const sorted = useMemo(() => sortDebts(data.debts), [data.debts]);
   const dp = useMemo(() => calcDP(data), [data]);
   const income = (parseFloat(data.q1) || 0) + (parseFloat(data.q2) || 0);
-  const _currentMonth = new Date().toISOString().slice(0, 7);
+  const _currentMonth = new Date().toLocalISO().slice(0, 7);
   const upcoming = sorted.filter(d => {
     if (d.urg.daysLeft == null || d.urg.daysLeft > 30) return false;
     if (d.type === 'plan') return true; // plan siempre visible (tiene sus propios dots)
