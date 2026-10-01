@@ -817,6 +817,8 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-daterow{display:flex;gap:10px;align-items:center}
 .b-daterow .b-in{flex:1}
 .b-paystate>b.b-late{color:var(--warn)}
+.b-sheet .b-what,.b-what{width:100%;box-sizing:border-box;font:inherit;font-size:1rem;color:var(--text);background:var(--surface);border:0;border-radius:var(--r-b);padding:12px 14px;margin:4px 0 2px;outline:none}
+.b-what:focus{box-shadow:0 0 0 2px var(--indigo)}
 </style>
 </head>
 <body>
@@ -3173,7 +3175,12 @@ function HomeScreen(_p) {
     n: cardUsed
   })), cardLimit > 0 && h('div', {
     className: 's'
-  }, 'de tu límite')))), gameOn && _p.showChest && h(ChestNative, {
+  }, 'de tu límite')))), cards.length > 0 && h('button', {
+    className: 'b-secondary wide',
+    onClick: _p.onCardPay
+  }, h(Icon, {
+    d: IC.card
+  }), 'Registrar pago a tarjeta'), gameOn && _p.showChest && h(ChestNative, {
     onOpen: _p.onOpenChest
   }), gameOn && h('button', {
     className: 'b-game',
@@ -3620,6 +3627,8 @@ function QuickAddSheet(_p) {
   const [cardId, setCardId] = useState(cards[0]?.id || '');
   const _method = method, _cardId = cardId;
   const [voice, setVoice] = useState(null); // {state:'listening'|'heard'|'error', text, desc, cat}
+  const [what, setWhat] = useState('');
+  const sug = what.trim() ? guessCat(what) : null;
   const counts = {};
   [...(data.cashTransactions || []), ...(data.cardTransactions || [])].forEach(t => {
     if (t.cat) counts[t.cat] = (counts[t.cat] || 0) + 1;
@@ -3639,7 +3648,7 @@ function QuickAddSheet(_p) {
     });
     const base = {
       amount: n,
-      desc: desc || c.n,
+      desc: desc || what.trim() || c.n,
       date: new Date().toLocalISO().slice(0, 10),
       time,
       cat: c.id,
@@ -3747,7 +3756,14 @@ function QuickAddSheet(_p) {
     className: 'b-amt-h'
   }, hint)), voice && voice.state !== 'listening' && h('div', {
     className: 'b-heard' + (voice.state === 'error' ? ' err' : '')
-  }, heard ? `“${voice.text}”` : voice.text), !amt && !voice && favs.length > 0 && h('div', {
+  }, heard ? `“${voice.text}”` : voice.text), !heard && h('input', {
+    className: 'b-what',
+    value: what,
+    maxLength: 40,
+    placeholder: '¿Qué fue? (opcional) Ej. tacos, Uber, regalo',
+    'aria-label': '¿Qué fue? (opcional)',
+    onChange: ev => setWhat(ev.target.value)
+  }), !amt && !voice && !what && favs.length > 0 && h('div', {
     className: 'b-favs'
   }, h('div', {
     className: 'b-favs-h'
@@ -3781,7 +3797,7 @@ function QuickAddSheet(_p) {
     className: 'b-cats'
   }, cats.map(c => h('button', {
     key: c.id,
-    className: 'b-cat' + (heard && voice.cat === c.id ? ' sel' : ''),
+    className: 'b-cat' + (heard && voice.cat === c.id || !heard && sug && sug.id === c.id ? ' sel' : ''),
     disabled: !amt,
     onClick: () => heard ? setVoice({
       ...voice,
@@ -5541,6 +5557,25 @@ function monthlyOutlook(data, months) {
   return { ...sim, months: res };
 }
 
+/* ── Registrar pago a tarjeta (el monto que sea: mínimo, total o un abono) ── */
+function CardPaySheet(_p) {
+  const cards = (_p.data.debts || []).filter(d => d.type === 'tarjeta');
+  const [id, setId] = useState(cards[0] ? cards[0].id : '');
+  const [amt, setAmt] = useState('');
+  const c = cards.find(x => x.id === id) || cards[0];
+  if (!c) return null;
+  const owed = debtBalance(c, cardTxAfter(_p.data));
+  const n = +amt || 0;
+  return e(Sheet, { title: 'Registrar pago a tarjeta', label: 'Registrar pago a tarjeta', onClose: _p.onClose },
+    cards.length > 1 && e('div', { className: 'b-chips' }, cards.map(x => e('button', { key: x.id, className: 'b-chip' + (x.id === c.id ? ' on' : ''), onClick: () => { setId(x.id); setAmt(''); } }, x.name))),
+    e('div', { className: 'b-kv', style: { marginTop: 12 } }, e('span', null, `Debes en ${c.name}`), e('span', { className: 'b-num' }, fmt(owed))),
+    e(Field, { label: '¿Cuánto pagaste?', value: amt, ph: '$0', onChange: setAmt }),
+    e('div', { className: 'b-chips', style: { marginTop: 8 } },
+      +c.minPayment > 0 && e('button', { className: 'b-chip', onClick: () => setAmt(String(+c.minPayment)) }, `Mínimo ${fmt(c.minPayment)}`),
+      owed > 0 && e('button', { className: 'b-chip', onClick: () => setAmt(String(Math.round(owed))) }, `Todo ${fmt(owed)}`)),
+    e('p', { className: 'b-note' }, 'Se resta de tu cuenta de débito y baja lo que debes en la tarjeta.'),
+    e('button', { className: 'b-primary', disabled: !(n > 0), onClick: () => _p.onPay(c, n) }, n > 0 ? `Registrar pago de ${fmt(n)}` : 'Registrar pago'));
+}
 function MainApp(_ref22) {
   let onLock = _ref22.onLock;
   const todayStr = new Date().toLocalISO().slice(0, 10);
@@ -5584,6 +5619,7 @@ function MainApp(_ref22) {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [freshOpen, setFreshOpen] = useState(false);
   const [closeQ, setCloseQ] = useState(null);
+  const [cardPayOpen, setCardPayOpen] = useState(false);
   const lastTabRef = useRef('inicio');
   const [quickAmount, setQuickAmount] = useState(() => (_qs.get('monto') || '').replace(/[^0-9.]/g, ''));
   const [toast, setToast] = useState(null);
@@ -5993,7 +6029,7 @@ function MainApp(_ref22) {
           amount: amount || 0,
           ts: Date.now()
         };
-        const newMonthlyPayments = [...(d.monthlyPayments || []).filter(p => p.month !== month), payRecord];
+        const newMonthlyPayments = [...(d.monthlyPayments || []), payRecord];
         const newBalance = amount && d.balance ? Math.max(0, +(d.balance || 0) - amount) : d.balance;
         return {
           ...d,
@@ -6023,12 +6059,14 @@ function MainApp(_ref22) {
       debts: data.debts.map(d => {
         if (d.id !== debtId) return d;
         // Deshacer también devuelve al saldo lo que se había descontado
-        const rec = (d.monthlyPayments || []).find(p => p.month === month);
+        // Deshace solo el último pago registrado
+        const list = d.monthlyPayments || [];
+        const rec = list[list.length - 1];
         const back = rec && rec.amount && d.balance != null && d.balance !== '' ? +(d.balance || 0) + +rec.amount : d.balance;
         return {
           ...d,
           balance: back,
-          monthlyPayments: (d.monthlyPayments || []).filter(p => p.month !== month)
+          monthlyPayments: list.slice(0, -1)
         };
       }),
       cardPayments: (() => {
@@ -6304,6 +6342,7 @@ function MainApp(_ref22) {
     onMarkPaid: markDebtPaid,
     onMarkPlan: markPlanPayment,
     onPayExp: (x, month) => actions.setExpPaid(x, month, true),
+    onCardPay: () => setCardPayOpen(true),
     onPayOverdue: o => {
       const rest = {
         ...(data.overdue || {})
@@ -6419,6 +6458,17 @@ function MainApp(_ref22) {
         text: alert ? t.text + '. ' + alert.text : t.text,
         warn: !!alert,
         onUndo: () => undoQuick(t)
+      });
+    }
+  }), cardPayOpen && _h(CardPaySheet, {
+    data: data,
+    onClose: () => setCardPayOpen(false),
+    onPay: (c, n) => {
+      markDebtPaid(c.id, n);
+      setCardPayOpen(false);
+      setToast({
+        text: `Pago registrado: ${fmt(n)} a ${c.name}`,
+        onUndo: () => unmarkDebtPaid(c.id)
       });
     }
   }), closeQ && _h(QuincenaCloseSheet, {
