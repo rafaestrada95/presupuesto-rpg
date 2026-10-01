@@ -819,6 +819,14 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-paystate>b.b-late{color:var(--warn)}
 .b-sheet .b-what,.b-what{width:100%;box-sizing:border-box;font:inherit;font-size:1rem;color:var(--text);background:var(--surface);border:0;border-radius:var(--r-b);padding:12px 14px;margin:4px 0 2px;outline:none}
 .b-what:focus{box-shadow:0 0 0 2px var(--indigo)}
+
+.b-two{grid-template-columns:1fr 1fr!important;margin:6px 0 4px}
+.b-sheet .b-two button,.b-two button{min-height:44px;font:inherit;font-weight:700;font-size:.9rem;border:0;border-radius:var(--r-s);background:transparent;color:var(--dim)}
+.b-sheet .b-two button.on,.b-two button.on{background:var(--indigo);color:#fff}
+.b-sheet .b-two{display:grid;background:var(--surface);border-radius:var(--r-b);padding:4px;gap:4px}
+.b-linkrow{background:none;border:0;padding:0;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.b-tag{display:inline-block;margin-left:6px;font-size:.7rem;font-weight:700;padding:2px 7px;border-radius:99px;background:var(--gs);color:var(--good);vertical-align:middle}
+.b-warn-t{color:var(--warn);font-weight:600}
 </style>
 </head>
 <body>
@@ -2155,12 +2163,29 @@ function dueMonthOf(d, now) {
   return new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocalISO().slice(0, 7);
 }
 const debtMonthPay = d => d.type === 'plan' ? +(d.paymentAmount || 0) : d.type === 'informal' && d.informalMode === 'fixed' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
+// ¿Ya cubriste el pago de ese mes? (los abonos extra no cuentan)
+const paidFor = (d, M) => (d.monthlyPayments || []).some(p => !p.extra && p.month === M);
+// Cómo se paga un gasto fijo: débito (default), efectivo o una tarjeta
+const expCard = (x, data) => x.payWith && x.payWith !== 'debit' && x.payWith !== 'cash' ? (data.debts || []).find(d => d.id === x.payWith) : null;
+// Estado de una tarjeta en palabras: al corriente o pago pendiente, con fecha
+function cardStatus(d, now) {
+  now = now || new Date();
+  if (!d.dueDay) return { ok: null, text: 'Ponle fecha límite de pago para saber si vas al corriente.' };
+  const M = dueMonthOf(d, now);
+  const [y, m] = M.split('-').map(Number);
+  const day = n => Math.min(+d.dueDay, new Date(y, n, 0).getDate());
+  if (paidFor(d, M)) {
+    const nx = new Date(y, m, 1);
+    return { ok: true, month: M, text: `Al corriente. Tu siguiente pago es el ${Math.min(+d.dueDay, new Date(nx.getFullYear(), nx.getMonth() + 1, 0).getDate())} de ${MES_CORTO[nx.getMonth()]}.` };
+  }
+  return { ok: false, month: M, text: `Pago pendiente${+d.minPayment > 0 ? ` (mínimo ${fmt(d.minPayment)})` : ''} antes del ${day(m)} de ${MES_CORTO[m - 1]}.` };
+}
 // Pagos que ya vencieron y marcaste como "no lo pagué": se apartan hasta que los pagues
 function overdueItems(data) {
   return Object.keys(data.overdue || {}).map(k => {
     const [id, M] = k.split('|');
     const d = (data.debts || []).find(x => String(x.id) === id);
-    if (d) return (d.monthlyPayments || []).some(p => p.month === M) ? null : { key: k, id: d.id, kind: 'debt', name: d.name, pay: debtMonthPay(d), day: +d.dueDay, month: M };
+    if (d) return paidFor(d, M) ? null : { key: k, id: d.id, kind: 'debt', name: d.name, pay: debtMonthPay(d), day: +d.dueDay, month: M };
     const x = (data.exps || []).find(x => String(x.id) === id);
     if (x) return (data.paidExps || {})[`${x.id}_${M}`] ? null : { key: k, id: x.id, kind: 'exp', name: x.name, pay: +x.amount || 0, day: +x.day, month: M, x };
     return null;
@@ -2200,7 +2225,7 @@ function calcDP(data) {
   const varQ = Math.max(varH, spentQ);
   const apartadoQ = apartadosThisQuincena(data, today);
   const apartados = apartadosTotal(data);
-  const overdue = overdueItems(data).reduce((s, o) => s + o.pay, 0);
+  const overdue = overdueItems(data).filter(o => !(o.kind === 'exp' && expCard(o.x, data))).reduce((s, o) => s + o.pay, 0);
   const committed = fixedQ + varQ + debtQ + cardPayQ + apartadoQ + overdue;
   const remaining = income - committed;
   const saldoD = +data.saldoDebito || 0;
@@ -2217,15 +2242,16 @@ function calcDP(data) {
     const spentCash = (data.cashTransactions || []).filter(t => (!t.method || t.method === 'cash') && afterBaseline(data, t.date, t.ts)).reduce((s, t) => s + (+t.amount || 0), 0);
     // Pagos marcados con "Ya pagué" después de poner tus cuentas al día: salen de tu cuenta
     const paidOut = (data.debts || []).reduce((s, d) => s + (d.monthlyPayments || []).filter(p => +p.amount > 0 && afterBaseline(data, p.paidAt, p.ts)).reduce((x, p) => x + +p.amount, 0), 0) +
-      (data.expPayLog || []).filter(p => afterBaseline(data, p.date, p.ts)).reduce((x, p) => x + (+p.amount || 0), 0);
+      (data.expPayLog || []).filter(p => p.method !== 'cash' && afterBaseline(data, p.date, p.ts)).reduce((x, p) => x + (+p.amount || 0), 0);
+    const paidCash = (data.expPayLog || []).filter(p => p.method === 'cash' && afterBaseline(data, p.date, p.ts)).reduce((x, p) => x + (+p.amount || 0), 0);
     currentDebit = saldoD + totalPaydays - spentDebit - paidOut;
-    currentEfectivo = saldoE - spentCash;
-    pendingFixed = data.exps.filter(e => e.day && +e.day >= day && (isQ1 ? +e.day <= 15 : +e.day >= 16)).filter(e => !(data.paidExps || {})[`${e.id}_${curMonth}`]).reduce((s, e) => s + (+e.amount || 0), 0);
+    currentEfectivo = saldoE - spentCash - paidCash;
+    pendingFixed = data.exps.filter(e => !expCard(e, data)).filter(e => e.day && +e.day >= day && (isQ1 ? +e.day <= 15 : +e.day >= 16)).filter(e => !(data.paidExps || {})[`${e.id}_${curMonth}`]).reduce((s, e) => s + (+e.amount || 0), 0);
     pendingDebts = data.debts.filter(d => {
       if (!d.dueDay) return false;
       const dd = +d.dueDay;
       if (isQ1 ? !(dd <= 15 && dd >= day) : !(dd >= 16 && dd >= day)) return false;
-      return !(d.monthlyPayments || []).some(p => p.month === curMonth);
+      return !paidFor(d, curMonth);
     }).reduce((s, d) => {
       const pay = d.type === 'plan' ? +(d.paymentAmount || 0) : d.type === 'informal' && d.informalMode === 'fixed' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
       return s + pay;
@@ -3125,7 +3151,7 @@ function HomeScreen(_p) {
       className: 'b-m'
     }, h('div', {
       className: 'b-n'
-    }, it.kind === 'exp' ? `Pagar ${it.name}${pay > 0 ? ` (${fmt(pay)})` : ''}` : pay > 0 ? `Pagar ${fmt(pay)} a ${it.name}` : `Pagar a ${it.name}`), h('div', {
+    }, it.kind === 'exp' ? `${it.x && it.x.saving ? 'Ahorro' : 'Pagar'} ${it.name}${pay > 0 ? ` (${fmt(pay)})` : ''}${it.x && expCard(it.x, data) ? ` · con ${expCard(it.x, data).name}` : ''}` : pay > 0 ? `Pagar ${fmt(pay)} a ${it.name}` : `Pagar a ${it.name}`), h('div', {
       className: 'b-d'
     }, it.overdue ? `Venció el ${it.day} de ${MES_CORTO[+it.month.slice(5, 7) - 1]} · no lo has pagado` : it.note || dueLabel(it.days))), h('button', {
       className: 'b-secondary',
@@ -4095,12 +4121,13 @@ function ConfirmDelete(_p) {
 function DebtSheet(_p) {
   const d = _p.d, a = _p.actions;
   const month = new Date().toLocalISO().slice(0, 7);
-  const paidThisMonth = (d.monthlyPayments || []).some(p => p.month === dueMonthOf(d));
+  const paidThisMonth = paidFor(d, dueMonthOf(d));
   const pay = debtPay(d);
   const bal = debtBalance(d, _p.cardTx);
   const plan = d.type === 'plan' ? getPlanInfo(d) : null;
   const [amt, setAmt] = useState(String(pay || ''));
   const [extra, setExtra] = useState('');
+  const [extraAmt, setExtraAmt] = useState('');
   const [ef, setEf] = useState({
     name: d.name || '', balance: String(d.balance ?? ''), pay: String(pay || ''), dueDay: String(d.dueDay || ''),
     paidPayments: String(d.paidPayments || ''), totalPayments: String(d.totalPayments || ''), interestRate: String(d.interestRate || '')
@@ -4125,7 +4152,7 @@ function DebtSheet(_p) {
     _p.onClose();
   };
   const last6 = [5, 4, 3, 2, 1, 0].map(i => new Date(new Date().getFullYear(), new Date().getMonth() - i, 1));
-  const paidSet = new Set((d.monthlyPayments || []).map(p => p.month));
+  const paidSet = new Set((d.monthlyPayments || []).filter(p => !p.extra).map(p => p.month));
   const k = debtKind(d.type);
   return e(Sheet, { title: k.t, label: d.name, onClose: _p.onClose },
     e('div', { className: 'b-debt-head' }, e(CatIcon, { c: k, big: true }), e('div', null,
@@ -4136,9 +4163,12 @@ function DebtSheet(_p) {
       e('div', { className: 'b-d', style: { marginTop: 6 } }, `${plan.paid} de ${plan.total} pagos hechos · te faltan ${plan.remaining}`)),
     // Pago del mes
     d.type === 'plan' ? e('button', { className: 'b-primary', onClick: () => { a.onMarkPayment(d.id); _p.onClose(); } }, `Registrar pago de ${fmt(plan.amount)}`) :
-      paidThisMonth ? e('div', { className: 'b-paid' }, e(Icon, { d: IC.check }), e('span', null, 'Ya pagaste este mes'), e('button', { className: 'b-textbtn', onClick: () => a.onUndoPaid(d.id) }, 'Deshacer')) :
-        e('div', { className: 'b-payrow' }, e(Field, { label: '¿Cuánto pagaste?', value: amt, ph: '$0', onChange: setAmt }),
-          e('button', { className: 'b-primary', onClick: () => { a.onMarkPaid(d.id, +amt || pay); _p.onClose(); } }, 'Registrar pago')),
+      e(React.Fragment, null,
+        d.type === 'tarjeta' && e('p', { className: 'b-note' + (cardStatus(d).ok === false ? ' warn' : ' good'), style: { marginTop: 0 } }, cardStatus(d).text),
+        paidThisMonth && e('div', { className: 'b-paid' }, e(Icon, { d: IC.check }), e('span', null, d.type === 'tarjeta' ? 'Pago de este corte cubierto' : 'Ya pagaste este mes'), e('button', { className: 'b-textbtn', onClick: () => a.onUndoPaid(d.id) }, 'Deshacer')),
+        e('div', { className: 'b-payrow' }, e(Field, { label: paidThisMonth ? '¿Quieres abonar? ¿Cuánto?' : '¿Cuánto pagaste?', value: paidThisMonth ? extraAmt : amt, ph: '$0', onChange: paidThisMonth ? setExtraAmt : setAmt }),
+          e('button', { className: 'b-primary', disabled: paidThisMonth && !(+extraAmt > 0), onClick: () => { paidThisMonth ? a.onMarkPaid(d.id, +extraAmt, null, true) : a.onMarkPaid(d.id, +amt || pay); _p.onClose(); } }, paidThisMonth ? 'Registrar abono' : 'Registrar pago')),
+        paidThisMonth && e('p', { className: 'b-note' }, 'Un abono baja lo que debes y libera crédito. No cambia tu siguiente fecha de pago.')),
     // Lo que cuesta
     (interest > 0 || payoff) && e('div', { className: 'b-insight-box' },
       interest > 0 && e('b', null, `Te cobra unos ${fmt(interest)} al mes de intereses.`),
@@ -4182,7 +4212,7 @@ function DebtsSection(_p) {
     added && e('p', { className: 'b-calm', style: { marginTop: 12 } }, e(Icon, { d: IC.check }), `Listo: agregamos “${added}” a tu plan.`),
     list.length > 0 && e('div', { className: 'b-rows b-debts' }, list.map((d, i) => {
       const pay = debtPay(d);
-      const paid = d.type !== 'plan' && (d.monthlyPayments || []).some(p => p.month === dueMonthOf(d));
+      const paid = d.type !== 'plan' && paidFor(d, dueMonthOf(d));
       return e('button', { key: d.id, onClick: () => setOpen(d.id) },
         e(CatIcon, { c: debtKind(d.type) }),
         e('div', { className: 'b-m' },
@@ -4399,9 +4429,10 @@ function AffordTool(_p) {
     e('div', { className: 'b-breakdown' },
       kv('Te entra', fmt(m.income)),
       m.fixed > 0 && kv('Pagos fijos', '−' + fmt(m.fixed)),
+      m.savings > 0 && kv('Tu ahorro programado', '−' + fmt(m.savings)),
       m.debts > 0 && kv('Pagos de deudas', '−' + fmt(m.debts)),
       kv('Gasto del día a día', m.variable > 0 ? '−' + fmt(m.variable) : '¿?'),
-      kv(m.surplus >= 0 ? 'Te sobra al mes' : 'Te falta al mes', fmt(Math.abs(m.surplus)), true)),
+      kv(m.surplus >= 0 ? m.savings > 0 ? 'Te sobra al mes (ya con tu ahorro)' : 'Te sobra al mes' : 'Te falta al mes', fmt(Math.abs(m.surplus)), true)),
     e('p', { className: 'b-note' + (m.source === 'none' ? ' warn' : '') }, sourceNote(m)),
     e(Field, { label: '¿Cuánto cuesta lo que quieres?', value: amt, ph: '$0', onChange: setAmt }),
     e('div', { className: 'b-field' }, '¿Para cuándo lo quieres?', e('div', { className: 'b-seg' }, [[1, 'Este mes'], [3, '3 meses'], [6, '6 meses'], [12, '1 año']].map(o => e('button', { key: o[0], className: months === o[0] ? 'on' : '', onClick: () => setMonths(o[0]) }, o[1])))),
@@ -4453,6 +4484,7 @@ function CardsNative(_p) {
     return e('div', { key: c.id, className: 'b-cardrow' },
       e('div', { className: 'b-cardrow-top' }, e('span', { className: 'b-n' }, c.name), e('span', { className: 'b-n b-num' }, fmt(used))),
       pct != null && e('span', { className: 'b-track sm' }, e('i', { style: { width: pct + '%', background: pct >= 85 ? 'var(--danger)' : pct >= 60 ? 'var(--mango)' : 'var(--indigo)' } })),
+      e('div', { className: 'b-d' + (cardStatus(c).ok === false ? ' b-warn-t' : '') }, cardStatus(c).text),
       e('div', { className: 'b-d' }, [pct != null ? `Usas ${pct}% de tu límite de ${fmt(lim)}` : null, info.cycleSpend > 0 ? `${fmt(info.cycleSpend)} en este corte` : null, info.daysUntilCut != null ? `corte en ${info.daysUntilCut} días` : null, info.daysUntilPay != null ? `pago en ${info.daysUntilPay} días` : null].filter(Boolean).join(' · ')));
   }));
 }
@@ -4460,31 +4492,45 @@ function FixedExpenses(_p) {
   const data = _p.data, a = _p.actions;
   const month = new Date().toLocalISO().slice(0, 7);
   const [f, setF] = useState(null);
+  const cards = (data.debts || []).filter(d => d.type === 'tarjeta');
   const list = (data.exps || []).slice().sort((x, y) => (+x.day || 99) - (+y.day || 99));
   const total = list.reduce((s, x) => s + (+x.amount || 0), 0);
+  const savings = list.filter(x => x.saving).reduce((s, x) => s + (+x.amount || 0), 0);
   const togglePaid = x => a.setExpPaid(x, month, !(data.paidExps || {})[`${x.id}_${month}`]);
+  const howTxt = x => { const c = expCard(x, data); return c ? `con ${c.name}` : x.payWith === 'cash' ? 'en efectivo' : null; };
+  const save = () => {
+    if (!f.name || !(+f.amount > 0)) return;
+    if (f.id) a.editExp(f.id, { name: f.name, amount: f.amount, day: f.day, catId: f.catId, payWith: f.payWith || 'debit', saving: !!f.saving });
+    else a.addExp({ name: f.name, amount: f.amount, day: f.day, catId: f.catId, payWith: f.payWith || 'debit', saving: !!f.saving });
+    setF(null);
+  };
   return e(React.Fragment, null,
-    e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Lo que pagas cada mes: renta, luz, internet, suscripciones. Budgy lo aparta de la quincena en que cae.'),
+    e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Lo que pagas cada mes: renta, luz, internet, suscripciones, tus ahorros. Toca uno para cambiarlo.'),
     e('div', { className: 'b-rows' }, list.map(x => {
       const paid = !!(data.paidExps || {})[`${x.id}_${month}`];
-      const cat = CATS.find(c => c.id === +x.catId);
       return e('div', { key: x.id },
         e(CatIcon, { c: quickCat(FIXED_CAT_IC[+x.catId] || 'v6') }),
-        e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, x.name), e('div', { className: 'b-d' }, [x.day ? `Día ${x.day}` : 'Sin día', cat && cat.n].filter(Boolean).join(' · '), paid ? e('span', { className: 'b-ok' }, ' · ✓ pagado') : '')),
+        e('button', { className: 'b-m b-linkrow', onClick: () => setF({ ...x, amount: String(x.amount), day: String(x.day || ''), payWith: x.payWith || 'debit' }) }, e('div', { className: 'b-n' }, x.name, x.saving ? e('span', { className: 'b-tag' }, 'ahorro') : null),
+          e('div', { className: 'b-d' }, [x.day ? `Día ${x.day}` : 'Sin día', howTxt(x)].filter(Boolean).join(' · '), paid ? e('span', { className: 'b-ok' }, ' · ✓ pagado') : '')),
         e('span', { className: 'b-n b-num' }, fmt(x.amount)),
         e('button', { className: 'b-check' + (paid ? ' on' : ''), 'aria-label': paid ? 'Marcar como no pagado' : 'Marcar como pagado este mes', onClick: () => togglePaid(x) }, paid ? '✓' : ''));
     })),
     list.length > 0 && e('div', { className: 'b-kv strong' }, e('span', null, 'Total al mes'), e('span', { className: 'b-num' }, fmt(total))),
+    savings > 0 && e('p', { className: 'b-note good' }, `De eso, ${fmt(savings)} son ahorro.`),
     f ? e('div', { className: 'b-form' },
-      e(Field, { label: '¿Qué pagas?', text: true, value: f.name, ph: 'Ej. Renta, luz, Netflix', onChange: v => setF({ ...f, name: v }) }),
+      e(Field, { label: '¿Qué pagas?', text: true, value: f.name, ph: 'Ej. Renta, luz, seguro de ahorro', onChange: v => setF({ ...f, name: v }) }),
       e('div', { className: 'b-grid2' }, e(Field, { label: '¿Cuánto?', value: f.amount, ph: '$0', onChange: v => setF({ ...f, amount: v }) }),
         e(Field, { label: '¿Qué día?', value: f.day, ph: 'Ej. 5', onChange: v => setF({ ...f, day: v.replace(/\D/g, '').slice(0, 2) }) })),
-      e('div', { className: 'b-field' }, 'Tipo', e('div', { className: 'b-chips' }, CATS.map(c => e('button', { key: c.id, className: 'b-chip' + (f.catId === c.id ? ' on' : ''), onClick: () => setF({ ...f, catId: c.id }) }, c.n)))),
+      e('div', { className: 'b-field' }, '¿Cómo lo pagas?', e('div', { className: 'b-chips' }, [['debit', 'Débito'], ['cash', 'Efectivo'], ...cards.map(c => [c.id, c.name])].map(o => e('button', { key: o[0], className: 'b-chip' + ((f.payWith || 'debit') === o[0] ? ' on' : ''), onClick: () => setF({ ...f, payWith: o[0] }) }, o[1])))),
+      expCard(f, data) && e('p', { className: 'b-note', style: { marginTop: 4 } }, `Cuando lo marques como pagado se suma a lo que debes en ${expCard(f, data).name}; no sale de tu débito.`),
+      e(Switch, { title: 'Es un ahorro', sub: 'Seguros de ahorro, tandas, inversión mensual. Budgy lo muestra como ahorro, no como gasto.', on: !!f.saving, onToggle: () => setF({ ...f, saving: !f.saving }) }),
+      e('div', { className: 'b-field' }, 'Tipo', e('div', { className: 'b-chips' }, CATS.map(c => e('button', { key: c.id, className: 'b-chip' + (+f.catId === c.id ? ' on' : ''), onClick: () => setF({ ...f, catId: c.id }) }, c.n)))),
       e('div', { className: 'b-form-btns' }, e('button', { className: 'b-secondary', onClick: () => setF(null) }, 'Cancelar'),
-        e('button', { className: 'b-primary sm', disabled: !f.name || !(+f.amount > 0), onClick: () => { if (a.addExp(f)) setF(null); } }, 'Guardar')))
-      : e('button', { className: 'b-primary ghost', onClick: () => setF({ name: '', amount: '', day: '', catId: 1 }) }, 'Agregar gasto fijo'),
-    list.length > 0 && e(More, { title: 'Quitar un gasto fijo' }, e('div', { className: 'b-rows' }, list.map(x => e('div', { key: x.id }, e('div', { className: 'b-m' }, x.name), e(ConfirmDelete, { label: 'Quitar', onYes: () => a.delExp(x.id) }))))));
+        e('button', { className: 'b-primary sm', disabled: !f.name || !(+f.amount > 0), onClick: save }, 'Guardar')),
+      f.id && e('div', { style: { marginTop: 10 } }, e(ConfirmDelete, { label: 'Quitar este pago fijo', onYes: () => { a.delExp(f.id); setF(null); } })))
+      : e('button', { className: 'b-primary ghost', onClick: () => setF({ name: '', amount: '', day: '', catId: 1, payWith: 'debit', saving: false }) }, 'Agregar pago fijo'));
 }
+
 function VariableEstimates(_p) {
   const data = _p.data, a = _p.actions;
   const total = (data.varExps || []).reduce((s, x) => s + (+x.amount || 0), 0);
@@ -4696,7 +4742,7 @@ async function pushServerKey() {
 // Lo mínimo que el servidor necesita para avisarte de pagos: nombre, día, monto y si ya pagaste
 function pushPayments(data) {
   const month = new Date().toLocalISO().slice(0, 7);
-  const debts = (data.debts || []).filter(d => d.dueDay).map(d => ({ name: d.name, day: +d.dueDay, amount: debtPay(d), paid: (d.monthlyPayments || []).some(p => p.month === dueMonthOf(d)) }));
+  const debts = (data.debts || []).filter(d => d.dueDay).map(d => ({ name: d.name, day: +d.dueDay, amount: debtPay(d), paid: paidFor(d, dueMonthOf(d)) }));
   const fixed = (data.exps || []).filter(x => x.day).map(x => ({ name: x.name, day: +x.day, amount: +x.amount || 0, paid: !!(data.paidExps || {})[`${x.id}_${month}`] }));
   return [...debts, ...fixed];
 }
@@ -4837,7 +4883,7 @@ function FreshStartSheet(_p) {
   const cards0 = (data.debts || []).filter(d => d.type === 'tarjeta');
   const others0 = (data.debts || []).filter(d => d.type !== 'tarjeta');
   const cardTx = cardTxAfter(data);
-  const paidThisMonth = d => (d.monthlyPayments || []).some(p => p.month === month);
+  const paidThisMonth = d => paidFor(d, month);
   // Si su fecha ya pasó y no hay registro, lo normal es que sí se pagó; tú lo corriges si no
   const paidDefault = (day, recorded) => recorded || payWhen(day, now).kind === 'past';
   const [step, setStep] = useState(0);
@@ -4866,8 +4912,8 @@ function FreshStartSheet(_p) {
     const keepPaid = (d, on, day) => {
       const w = payWhen(day, now);
       if (w.kind !== 'now' && w.kind !== 'past') return d.monthlyPayments || [];
-      const others = (d.monthlyPayments || []).filter(p => p.month !== month);
-      const had = (d.monthlyPayments || []).find(p => p.month === month);
+      const others = (d.monthlyPayments || []).filter(p => p.month !== month || p.extra);
+      const had = (d.monthlyPayments || []).find(p => p.month === month && !p.extra);
       if (!on && w.kind === 'past') overdue[`${d.id}|${month}`] = true;
       return on ? [...others, had || { month, paidAt: today, amount: 0 }] : others;
     };
@@ -4911,7 +4957,7 @@ function FreshStartSheet(_p) {
     };
   };
   // Pregunta clara según la fecha: solo si el pago es de esta quincena o ya venció
-  const payRow = (day, paid, onSet, name, title) => {
+  const payRow = (day, paid, onSet, name, title, cardNote) => {
     const w = payWhen(day, now);
     if (w.kind === 'none') return e('div', { className: 'b-cardedit-row' }, e('span', null, 'Día de pago', e('small', null, 'Ponle día para que Budgy lo aparte a tiempo')));
     if (w.kind === 'later') return e('div', { className: 'b-paystate later' }, e('b', null, (title ? title + ' · ' : '') + w.label), e('span', null, 'Todavía no toca. Budgy lo aparta en esa quincena.'));
@@ -4920,7 +4966,7 @@ function FreshStartSheet(_p) {
       e('div', { className: 'b-seg3', role: 'group', 'aria-label': `¿Ya pagaste ${name}?` },
         e('button', { className: paid ? 'on' : '', 'aria-pressed': !!paid, onClick: () => onSet(true) }, 'Ya lo pagué'),
         e('button', { className: !paid ? 'on' : '', 'aria-pressed': !paid, onClick: () => onSet(false) }, w.kind === 'past' ? 'No lo pagué' : 'Falta pagar')),
-      e('span', null, paid ? 'No se descuenta de tu dinero.' : w.kind === 'past' ? 'Está vencido: Budgy lo aparta y te lo recuerda.' : 'Budgy lo aparta de tu dinero de esta quincena.'));
+      e('span', null, cardNote && !paid ? cardNote : paid ? 'No se descuenta de tu dinero.' : w.kind === 'past' ? 'Está vencido: Budgy lo aparta y te lo recuerda.' : 'Budgy lo aparta de tu dinero de esta quincena.'));
   };
   const toggle = (on, onClick, label) => e('button', { className: 'b-check' + (on ? ' on' : ''), 'aria-pressed': on, 'aria-label': label, onClick }, on ? '✓' : '');
   const inline = (value, onChange, label, ph) => e('input', { className: 'b-in-inline', inputMode: 'decimal', value, placeholder: ph || '$0', 'aria-label': label, onChange: ev => onChange(ev.target.value.replace(/[^0-9.]/g, '')) });
@@ -5014,7 +5060,7 @@ function FreshStartSheet(_p) {
           e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, x.name), e('div', { className: 'b-d' }, v.gone ? 'Se va a quitar' : x.day ? `Día ${x.day}` : 'Sin día'),
             !v.gone && e('button', { className: 'b-textbtn b-quiet', onClick: () => upd({ gone: true }) }, 'Ya no lo pago')),
           v.gone ? e('button', { className: 'b-textbtn', onClick: () => upd({ gone: false }) }, 'Dejar') : inline(v.amount, a => upd({ amount: a }), `Monto de ${x.name}`),
-          !v.gone && e('div', { className: 'b-rowfull' }, payRow(x.day, !!v.paid, p => upd({ paid: p }), x.name)));
+          !v.gone && e('div', { className: 'b-rowfull' }, payRow(x.day, !!v.paid, p => upd({ paid: p }), x.name, null, expCard(x, data) ? `Se cobra a ${expCard(x, data).name}: no se descuenta de tu débito.` : null)));
       })) : !f.newExps.length && e('p', { className: 'b-note' }, 'Lo que pagas cada mes sin falta: renta, luz, internet, celular, colegiaturas, suscripciones.'),
       f.newExps.map(newExpEditor),
       e('button', { className: 'b-secondary wide', onClick: () => set({ newExps: [...f.newExps, { name: '', amount: '', day: '', paid: false }] }) }, (data.exps || []).length || f.newExps.length ? '+ Agregar otro pago fijo' : '+ Agregar un pago fijo')),
@@ -5033,7 +5079,7 @@ function FreshStartSheet(_p) {
       // Lista de lo que se aparta: pagos de esta quincena que faltan y vencidos sin pagar
       const mk0 = today.slice(0, 7);
       const apart = [
-        ...(nd.debts || []).filter(d => payWhen(d.dueDay, now).kind === 'now' && !(d.monthlyPayments || []).some(x => x.month === mk0) && debtMonthPay(d) > 0).map(d => ({ k: 'd' + d.id, name: d.name, pay: debtMonthPay(d), label: payWhen(d.dueDay, now).label })),
+        ...(nd.debts || []).filter(d => payWhen(d.dueDay, now).kind === 'now' && !paidFor(d, mk0) && debtMonthPay(d) > 0).map(d => ({ k: 'd' + d.id, name: d.name, pay: debtMonthPay(d), label: payWhen(d.dueDay, now).label })),
         ...(nd.exps || []).filter(x => payWhen(x.day, now).kind === 'now' && !(nd.paidExps || {})[`${x.id}_${mk0}`] && +x.amount > 0).map(x => ({ k: 'x' + x.id, name: x.name, pay: +x.amount, label: payWhen(x.day, now).label })),
         ...overdueItems(nd).map(o => ({ k: 'o' + o.key, name: o.name, pay: o.pay, label: 'Vencido, sin pagar' }))
       ];
@@ -5454,7 +5500,7 @@ function spendingPace(data, opts) {
   const since = shiftDay(today, -60);
   const fixedNames = (data.exps || []).map(x => String(x.name || '').toLowerCase().trim()).filter(n => n.length >= 3);
   const isFixed = t => { const d = String(t.desc || '').toLowerCase(); return fixedNames.some(n => d.includes(n)); };
-  const tx = spendTx(data).filter(t => t.date && t.date > since && t.date <= today && !isFixed(t) && (!opts.noCard || t.kind !== 'card'));
+  const tx = spendTx(data).filter(t => t.date && t.date > since && t.date <= today && !t.fixedRef && !isFixed(t) && (!opts.noCard || t.kind !== 'card'));
   const all = spendTx(data).filter(t => t.date && t.date > since && t.date <= today);
   if (!all.length) return null;
   // Cuenta desde el primer día que anotaste (en la ventana), no desde hace 60 días
@@ -5467,7 +5513,8 @@ function spendingPace(data, opts) {
 function monthlyModel(data) {
   const extra = (data.extraIncome || []).reduce((s, x) => x.type === 'monthly' ? s + (+x.amount || 0) : s, 0);
   const income = (+data.q1 || 0) + (+data.q2 || 0) + extra;
-  const fixed = (data.exps || []).reduce((s, x) => s + (+x.amount || 0), 0);
+  const fixed = (data.exps || []).filter(x => !x.saving).reduce((s, x) => s + (+x.amount || 0), 0);
+  const savings = (data.exps || []).filter(x => x.saving).reduce((s, x) => s + (+x.amount || 0), 0);
   const debts = (data.debts || []).reduce((s, d) => {
     if (d.type === 'plan') return getPlanInfo(d).remaining > 0 ? s + (+d.paymentAmount || 0) : s;
     if (d.type === 'deadline' || d.type === 'informal' && d.informalMode !== 'fixed') return s;
@@ -5479,7 +5526,7 @@ function monthlyModel(data) {
   if (pace && pace.reliable) { variable = pace.daily * DAYS_MONTH; source = 'real'; }
   else if (limits > 0) { variable = limits; source = 'limits'; }
   else if (pace) { variable = pace.daily * DAYS_MONTH; source = 'short'; }
-  return { income, extra, fixed, debts, limits, variable, source, pace, surplus: income - fixed - debts - variable };
+  return { income, extra, fixed, savings, debts, limits, variable, source, pace, surplus: income - fixed - savings - debts - variable };
 }
 const sourceNote = m => m.source === 'real' ? `Tu gasto del día a día (${fmt(m.variable)} al mes) sale de lo que de verdad anotaste en los últimos ${m.pace.days} días, incluyendo compras con tarjeta.` :
   m.source === 'limits' ? `Tu gasto del día a día (${fmt(m.variable)} al mes) sale de tus límites por categoría. Cuando lleves 2 semanas anotando, Budgy usará lo que de verdad gastas.` :
@@ -5498,7 +5545,7 @@ function simulateQuincenas(data, count) {
   const planLeft = {};
   (data.debts || []).filter(d => d.type === 'plan').forEach(d => {
     let left = getPlanInfo(d).remaining;
-    if (payWhen(d.dueDay, now).kind === 'now' && !(d.monthlyPayments || []).some(p => p.month === curMonth)) left--;
+    if (payWhen(d.dueDay, now).kind === 'now' && !paidFor(d, curMonth)) left--;
     planLeft[d.id] = Math.max(0, left);
   });
   const start = dp.available - varDaily * dp.daysLeft;
@@ -5539,7 +5586,7 @@ function quincenaPlan(data, now) {
   const income = (isQ1 ? +data.q1 || 0 : +data.q2 || 0) + m.extra / 2;
   const fixed = (data.exps || []).filter(x => inHalf(x.day) || !x.day && !isQ1).reduce((s, x) => s + (+x.amount || 0), 0);
   const debts = (data.debts || []).filter(d => d.type !== 'deadline' && !(d.type === 'informal' && d.informalMode !== 'fixed') && (inHalf(d.dueDay) || !d.dueDay && !isQ1))
-    .filter(d => d.type !== 'plan' || getPlanInfo(d).remaining > 0 || (d.monthlyPayments || []).some(p => p.month === mk))
+    .filter(d => d.type !== 'plan' || getPlanInfo(d).remaining > 0 || paidFor(d, mk))
     .reduce((s, d) => s + debtMonthPay(d), 0);
   const variable = m.variable / DAYS_MONTH * len;
   return { income, fixed, debts, variable, rest: income - fixed - debts - variable, model: m };
@@ -5562,20 +5609,31 @@ function CardPaySheet(_p) {
   const cards = (_p.data.debts || []).filter(d => d.type === 'tarjeta');
   const [id, setId] = useState(cards[0] ? cards[0].id : '');
   const [amt, setAmt] = useState('');
+  const [kind, setKind] = useState(null); // 'month' | 'extra'
   const c = cards.find(x => x.id === id) || cards[0];
   if (!c) return null;
   const owed = debtBalance(c, cardTxAfter(_p.data));
+  const lim = +c.creditLimit || 0;
+  const st = cardStatus(c);
   const n = +amt || 0;
+  const isExtra = st.ok === true || kind === 'extra';
   return e(Sheet, { title: 'Registrar pago a tarjeta', label: 'Registrar pago a tarjeta', onClose: _p.onClose },
-    cards.length > 1 && e('div', { className: 'b-chips' }, cards.map(x => e('button', { key: x.id, className: 'b-chip' + (x.id === c.id ? ' on' : ''), onClick: () => { setId(x.id); setAmt(''); } }, x.name))),
-    e('div', { className: 'b-kv', style: { marginTop: 12 } }, e('span', null, `Debes en ${c.name}`), e('span', { className: 'b-num' }, fmt(owed))),
-    e(Field, { label: '¿Cuánto pagaste?', value: amt, ph: '$0', onChange: setAmt }),
+    cards.length > 1 && e('div', { className: 'b-chips' }, cards.map(x => e('button', { key: x.id, className: 'b-chip' + (x.id === c.id ? ' on' : ''), onClick: () => { setId(x.id); setAmt(''); setKind(null); } }, x.name))),
+    e('div', { className: 'b-breakdown', style: { marginTop: 12 } },
+      e('div', { className: 'b-kv' }, e('span', null, `Debes en ${c.name}`), e('span', { className: 'b-num' }, fmt(owed))),
+      lim > 0 && e('div', { className: 'b-kv' }, e('span', null, 'Crédito disponible'), e('span', { className: 'b-num' }, fmt(Math.max(0, lim - owed))))),
+    e('p', { className: 'b-note' + (st.ok === false ? ' warn' : st.ok ? ' good' : '') }, st.text),
+    st.ok === false && e('div', { className: 'b-seg3 b-two', role: 'group', 'aria-label': '¿Qué tipo de pago es?' },
+      e('button', { className: kind !== 'extra' ? 'on' : '', onClick: () => setKind('month') }, 'Es mi pago del mes'),
+      e('button', { className: kind === 'extra' ? 'on' : '', onClick: () => setKind('extra') }, 'Es un abono extra')),
+    e(Field, { label: isExtra ? '¿Cuánto abonaste?' : '¿Cuánto pagaste?', value: amt, ph: '$0', onChange: setAmt }),
     e('div', { className: 'b-chips', style: { marginTop: 8 } },
-      +c.minPayment > 0 && e('button', { className: 'b-chip', onClick: () => setAmt(String(+c.minPayment)) }, `Mínimo ${fmt(c.minPayment)}`),
+      !isExtra && +c.minPayment > 0 && e('button', { className: 'b-chip', onClick: () => setAmt(String(+c.minPayment)) }, `Mínimo ${fmt(c.minPayment)}`),
       owed > 0 && e('button', { className: 'b-chip', onClick: () => setAmt(String(Math.round(owed))) }, `Todo ${fmt(owed)}`)),
-    e('p', { className: 'b-note' }, 'Se resta de tu cuenta de débito y baja lo que debes en la tarjeta.'),
-    e('button', { className: 'b-primary', disabled: !(n > 0), onClick: () => _p.onPay(c, n) }, n > 0 ? `Registrar pago de ${fmt(n)}` : 'Registrar pago'));
+    e('p', { className: 'b-note' }, isExtra ? 'Abono: se resta de tu débito, baja lo que debes y libera crédito. Tu siguiente fecha de pago no cambia.' : 'Pago del mes: quedas al corriente con este corte. Se resta de tu débito y baja lo que debes.'),
+    e('button', { className: 'b-primary', disabled: !(n > 0), onClick: () => _p.onPay(c, n, isExtra) }, n > 0 ? `${isExtra ? 'Registrar abono' : 'Registrar pago'} de ${fmt(n)}` : 'Registrar'));
 }
+
 function MainApp(_ref22) {
   let onLock = _ref22.onLock;
   const todayStr = new Date().toLocalISO().slice(0, 10);
@@ -6016,9 +6074,9 @@ function MainApp(_ref22) {
     awardBits(5);
     vibrate([100, 50, 200]);
   }, [data.debts, update, awardXP, awardBits]);
-  const markDebtPaid = useCallback((debtId, amount, forMonth) => {
+  const markDebtPaid = useCallback((debtId, amount, forMonth, extra) => {
     const debtObj = data.debts.find(d => d.id === debtId) || {};
-    const month = forMonth || dueMonthOf(debtObj);
+    const month = forMonth || (extra ? new Date().toLocalISO().slice(0, 7) : dueMonthOf(debtObj));
     const paidAt = new Date().toLocalISO().slice(0, 10);
     update({
       debts: data.debts.map(d => {
@@ -6027,7 +6085,8 @@ function MainApp(_ref22) {
           month,
           paidAt,
           amount: amount || 0,
-          ts: Date.now()
+          ts: Date.now(),
+          extra: !!extra
         };
         const newMonthlyPayments = [...(d.monthlyPayments || []), payRecord];
         const newBalance = amount && d.balance ? Math.max(0, +(d.balance || 0) - amount) : d.balance;
@@ -6125,7 +6184,31 @@ function MainApp(_ref22) {
     delExp: id => update({
       exps: data.exps.filter(e => e.id !== id)
     }),
-    setExpPaid: (x, month, on) => update({
+    setExpPaid: (x, month, on) => {
+      const card = expCard(x, data);
+      const ref = `${x.id}_${month}`;
+      // Con tarjeta: el cargo sube la deuda de la tarjeta y no toca tu débito
+      if (card) return update({
+        paidExps: {
+          ...(data.paidExps || {}),
+          [ref]: on
+        },
+        cardTransactions: on ? [...(data.cardTransactions || []).filter(t => t.fixedRef !== ref), {
+          id: uid(),
+          amount: +x.amount || 0,
+          desc: x.name,
+          cat: null,
+          date: new Date().toLocalISO().slice(0, 10),
+          time: new Date().toLocaleTimeString('es-MX', {
+            hour: '2-digit',
+            minute: '2-digit'
+          }),
+          cardId: card.id,
+          fixedRef: ref,
+          ts: Date.now()
+        }] : (data.cardTransactions || []).filter(t => t.fixedRef !== ref)
+      });
+      update({
       paidExps: {
         ...(data.paidExps || {}),
         [`${x.id}_${month}`]: on
@@ -6134,9 +6217,19 @@ function MainApp(_ref22) {
         id: x.id,
         month,
         amount: +x.amount || 0,
+        method: x.payWith === 'cash' ? 'cash' : 'debit',
         date: new Date().toLocalISO().slice(0, 10),
         ts: Date.now()
       }].slice(-300) : (data.expPayLog || []).filter(p => !(p.id === x.id && p.month === month))
+    });
+    },
+    editExp: (id, patch) => update({
+      exps: data.exps.map(x => x.id === id ? {
+        ...x,
+        ...patch,
+        amount: +patch.amount || x.amount,
+        day: patch.day ? +patch.day : null
+      } : x)
     }),
     addVar: vf => {
       if (!vf.amount) return false;
@@ -6274,7 +6367,7 @@ function MainApp(_ref22) {
     if (d.urg.daysLeft == null || d.urg.daysLeft > 30) return false;
     if (d.type === 'plan' ? getPlanInfo(d).remaining <= 0 : !(+d.balance > 0) && d.type !== 'tarjeta') return false;
     if (isDeadlineDebt(d)) return d.urg.daysLeft <= 7;
-    return !(d.monthlyPayments || []).some(p => p.month === dueMonthOf(d));
+    return !paidFor(d, dueMonthOf(d));
   });
   const pill = saveStatus === 'saved' ? {
     bg: 'rgba(5,150,105,.1)',
@@ -6463,11 +6556,11 @@ function MainApp(_ref22) {
   }), cardPayOpen && _h(CardPaySheet, {
     data: data,
     onClose: () => setCardPayOpen(false),
-    onPay: (c, n) => {
-      markDebtPaid(c.id, n);
+    onPay: (c, n, extra) => {
+      markDebtPaid(c.id, n, null, extra);
       setCardPayOpen(false);
       setToast({
-        text: `Pago registrado: ${fmt(n)} a ${c.name}`,
+        text: `${extra ? 'Abono' : 'Pago'} registrado: ${fmt(n)} a ${c.name}`,
         onUndo: () => unmarkDebtPaid(c.id)
       });
     }
