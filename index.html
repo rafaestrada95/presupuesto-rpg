@@ -829,6 +829,14 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-warn-t{color:var(--warn);font-weight:600}
 .b-askbtns{display:flex;flex-direction:column;align-items:center;gap:2px}
 .b-askbtns .b-secondary{min-width:64px}
+
+.b-date,.b-sheet .b-date{min-height:48px;-webkit-appearance:none;appearance:none;background:var(--surface);border:0!important;border-radius:var(--r-b);padding:10px 14px!important;font-size:1.05rem!important;display:block;width:100%;box-sizing:border-box;text-align:left}
+.b-date::-webkit-date-and-time-value{text-align:left}
+.b-datepick .b-field{margin-top:12px}
+.b-daterow input[type=date]{min-height:44px;-webkit-appearance:none;appearance:none;background:var(--surface);border:0;border-radius:var(--r-b);padding:8px 12px}
+.b-next{margin-top:10px;padding:12px 14px;border-radius:var(--r-c);background:var(--surface)}
+.b-next b{font-size:.9rem}
+.b-next p{margin:6px 0 0;font-size:.85rem;color:var(--dim)}
 </style>
 </head>
 <body>
@@ -2193,6 +2201,39 @@ function overdueItems(data) {
     return null;
   }).filter(Boolean);
 }
+// Pagos de la siguiente quincena contra el sueldo que llega justo antes de ellos.
+// Si no alcanza, la diferencia se aparta desde hoy.
+function nextQuincenaGap(data, now) {
+  now = now || new Date();
+  const q1 = now.getDate() <= 15;
+  let y = now.getFullYear(), mo = now.getMonth();
+  const half = q1 ? 2 : 1;
+  if (!q1) { mo++; if (mo > 11) { mo = 0; y++; } }
+  const last = new Date(y, mo + 1, 0).getDate();
+  const mk = `${y}-${String(mo + 1).padStart(2, '0')}`;
+  const qStart = `${mk}-${half === 1 ? '01' : '16'}`, qEnd = `${mk}-${half === 1 ? '15' : String(last).padStart(2, '0')}`;
+  const inHalf = day => { const d = Math.min(+day || 0, last); return d > 0 && (half === 1 ? d <= 15 : d >= 16); };
+  const extra = (data.extraIncome || []).reduce((s, x) => x.type === 'monthly' ? s + (+x.amount || 0) : s, 0) / 2;
+  // Con pago el 15 y el último día, el sueldo que llega antes del 16-31 es el del 15 (y viceversa)
+  const late = (data.paySchedule || '15-ultimo') === '15-ultimo';
+  const pay = (half === 2 ? (late ? +data.q1 : +data.q2) : (late ? +data.q2 : +data.q1)) || 0;
+  const income = pay + extra;
+  const items = [];
+  (data.exps || []).filter(x => inHalf(x.day) && !expCard(x, data) && !(data.paidExps || {})[`${x.id}_${mk}`] && +x.amount > 0)
+    .forEach(x => items.push({ name: x.name, amount: +x.amount, day: Math.min(+x.day, last) }));
+  (data.debts || []).forEach(d => {
+    if (isDeadlineDebt(d)) {
+      if (d.deadlineDate && d.deadlineDate >= qStart && d.deadlineDate <= qEnd && +d.balance > 0) items.push({ name: d.name, amount: +d.balance, day: +d.deadlineDate.slice(8) });
+      return;
+    }
+    if (!inHalf(d.dueDay) || paidFor(d, mk) || d.type === 'plan' && getPlanInfo(d).remaining <= 0) return;
+    const p = debtMonthPay(d);
+    if (p > 0) items.push({ name: d.name, amount: p, day: Math.min(+d.dueDay, last) });
+  });
+  items.sort((a, b) => a.day - b.day);
+  const need = items.reduce((s, i) => s + i.amount, 0);
+  return { gap: Math.max(0, need - income), need, income, items, label: half === 1 ? `del 1 al 15 de ${MES_CORTO[mo]}` : `del 16 al ${last} de ${MES_CORTO[mo]}` };
+}
 function calcDP(data) {
   const today = new Date();
   const day = today.getDate();
@@ -2228,7 +2269,9 @@ function calcDP(data) {
   const apartadoQ = apartadosThisQuincena(data, today);
   const apartados = apartadosTotal(data);
   const overdue = overdueItems(data).filter(o => !(o.kind === 'exp' && expCard(o.x, data))).reduce((s, o) => s + o.pay, 0);
-  const committed = fixedQ + varQ + debtQ + cardPayQ + apartadoQ + overdue;
+  const next = nextQuincenaGap(data, today);
+  const nextGap = next.gap;
+  const committed = fixedQ + varQ + debtQ + cardPayQ + apartadoQ + overdue + nextGap;
   const remaining = income - committed;
   const saldoD = +data.saldoDebito || 0;
   const saldoE = +data.saldoEfectivo || 0;
@@ -2259,7 +2302,7 @@ function calcDP(data) {
       return s + pay;
     }, 0);
     // Lo apartado para metas sigue en tu cuenta, pero ya no es libre
-    realBalance = currentDebit + currentEfectivo - pendingFixed - pendingDebts - apartados - overdue;
+    realBalance = currentDebit + currentEfectivo - pendingFixed - pendingDebts - apartados - overdue - nextGap;
   }
   return {
     income,
@@ -2287,6 +2330,8 @@ function calcDP(data) {
     apartados,
     apartadoQ,
     overdue,
+    nextGap,
+    next,
     balanceDate: data.balanceDate || null
   };
 }
@@ -2954,11 +2999,13 @@ function DailyBreakdown(_p) {
   }, v));
   if (dp.hasSaldo) return h('div', {
     className: 'b-breakdown'
-  }, row('En tu cuenta', fmt(dp.currentDebit)), row('En efectivo', fmt(dp.currentEfectivo)), dp.pendingFixed > 0 && row('Pagos fijos que faltan esta quincena', '−' + fmt(dp.pendingFixed)), dp.pendingDebts > 0 && row('Pagos de deudas que faltan', '−' + fmt(dp.pendingDebts)), dp.overdue > 0 && row('Pagos vencidos sin pagar', '−' + fmt(dp.overdue)), dp.apartados > 0 && row('Apartado para tus metas', '−' + fmt(dp.apartados)), row('Te queda libre', fmt(dp.realBalance), true), dp.cardReserved > 0 && h('p', {
+  }, row('En tu cuenta', fmt(dp.currentDebit)), row('En efectivo', fmt(dp.currentEfectivo)), dp.pendingFixed > 0 && row('Pagos fijos que faltan esta quincena', '−' + fmt(dp.pendingFixed)), dp.pendingDebts > 0 && row('Pagos de deudas que faltan', '−' + fmt(dp.pendingDebts)), dp.overdue > 0 && row('Pagos vencidos sin pagar', '−' + fmt(dp.overdue)), dp.nextGap > 0 && row(`Para tus pagos ${dp.next.label} (tu quincena no alcanza)`, '−' + fmt(dp.nextGap)), dp.apartados > 0 && row('Apartado para tus metas', '−' + fmt(dp.apartados)), row('Te queda libre', fmt(dp.realBalance), true), dp.cardReserved > 0 && h('p', {
     className: 'b-note'
   }, 'Llevas ', fmt(dp.cardReserved), ' en compras con tarjeta desde tu último corte. No se descuentan todavía: los pagas en la siguiente fecha límite de tu tarjeta.'), dp.balanceDate && h('p', {
     className: 'b-note'
-  }, 'Contando desde el ', fmtDate(dp.balanceDate), ', cuando pusiste tus cuentas al día. Se suman tus quincenas y se restan los gastos en efectivo y débito.'));
+  }, 'Contando desde el ', fmtDate(dp.balanceDate), ', cuando pusiste tus cuentas al día. Se suman tus quincenas y se restan los gastos en efectivo y débito.'), dp.next && dp.next.items.length > 0 && h('div', {
+    className: 'b-next'
+  }, h('b', null, `Lo que viene ${dp.next.label}: ${fmt(dp.next.need)}`), h('p', null, dp.next.items.map(i => `${i.name} ${fmt(i.amount)} (día ${i.day})`).join(' · ')), h('p', null, dp.nextGap > 0 ? `Tu quincena de ${fmt(dp.next.income)} no alcanza: Budgy aparta desde hoy los ${fmt(dp.nextGap)} que faltan.` : `Lo cubre tu quincena de ${fmt(dp.next.income)}, por eso no se aparta de hoy.`)));
   return h('div', {
     className: 'b-breakdown'
   }, row('Tu quincena', fmt(dp.income)), dp.fixedQ > 0 && row('Gastos fijos por pagar', '−' + fmt(dp.fixedQ)), dp.varQ > 0 && row(dp.spentQ > dp.varH ? 'Lo que llevas gastado esta quincena' : 'Tu presupuesto del día a día', '−' + fmt(dp.varQ)), dp.debtQ + dp.cardPayQ > 0 && row('Pagos de deudas', '−' + fmt(dp.debtQ + dp.cardPayQ)), dp.apartadoQ > 0 && row('Apartado para tus metas', '−' + fmt(dp.apartadoQ)), row('Te queda', fmt(dp.remaining), true), dp.hasSaldo && row('Después de pagos pendientes', fmt(dp.realBalance)));
@@ -3998,7 +4045,16 @@ function AddDebtSheet(_p) {
       autoFocus: cur.fields.indexOf(f) === 0 && f.kind !== 'date'
     };
     if (f.kind === 'text') return h('input', { ...common, className: 'b-in text', placeholder: f.ph, autoComplete: 'off', onChange: e => set(f.k, e.target.value) });
-    if (f.kind === 'date') return h('input', { ...common, className: 'b-in', type: 'date', onChange: e => set(f.k, e.target.value) });
+    if (f.kind === 'date') {
+      const plus = days => { const d = new Date(); d.setDate(d.getDate() + days); return d.toLocalISO().slice(0, 10); };
+      const endMonth = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 0).toLocalISO().slice(0, 10); };
+      const opts = [['En 15 días', plus(15)], ['Fin de mes', endMonth()], ['En 1 mes', plus(30)], ['En 3 meses', plus(90)]];
+      return h('div', { className: 'b-datepick' },
+        h('div', { className: 'b-chips' }, opts.map(o => h('button', { key: o[0], className: 'b-chip' + (df[f.k] === o[1] ? ' on' : ''), onClick: () => set(f.k, o[1]) }, o[0])),
+          h('button', { className: 'b-chip' + (!df[f.k] ? ' on' : ''), onClick: () => set(f.k, '') }, 'Sin fecha fija')),
+        h('label', { className: 'b-field' }, 'O elige el día exacto', h('input', { ...common, className: 'b-in b-date', type: 'date', onChange: e => set(f.k, e.target.value) })),
+        h('p', { className: 'b-note' }, df[f.k] ? `Quedaste de pagarle el ${fmtDate(df[f.k])}. Budgy te avisa unos días antes.` : 'Sin fecha: cuenta en lo que debes, pero no se aparta ni te avisa.'));
+    }
     const clean = v => f.kind === 'day' ? v.replace(/\D/g, '').slice(0, 2) : f.kind === 'int' ? v.replace(/\D/g, '').slice(0, 3) : v.replace(/[^0-9.]/g, '');
     return h('input', {
       ...common,
@@ -5569,7 +5625,7 @@ function simulateQuincenas(data, count) {
     if (payWhen(d.dueDay, now).kind === 'now' && !paidFor(d, curMonth)) left--;
     planLeft[d.id] = Math.max(0, left);
   });
-  const start = dp.available - varDaily * dp.daysLeft;
+  const start = dp.available + (dp.nextGap || 0) - varDaily * dp.daysLeft;
   const out = [{ y: now.getFullYear(), mo: now.getMonth(), half: now.getDate() <= 15 ? 1 : 2, current: true, income: 0, fixed: 0, debts: 0, variable: varDaily * dp.daysLeft, end: start }];
   let y = now.getFullYear(), mo = now.getMonth(), half = out[0].half, bal = start;
   for (let k = 0; k < count; k++) {
