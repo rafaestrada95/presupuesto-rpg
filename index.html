@@ -839,7 +839,8 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-next p{margin:6px 0 0;font-size:.85rem;color:var(--dim)}
 .b-cats{grid-template-columns:repeat(5,1fr)!important;gap:4px!important}
 .b-cat{font-size:.74rem!important;padding:6px 0!important;min-width:0}
-.b-cat>span:last-child,.b-cat{overflow-wrap:anywhere}
+.b-cat{overflow-wrap:normal;word-break:normal;line-height:1.15}
+.b-cat-more .b-cat-ic{display:inline-flex;align-items:center;justify-content:center;background:var(--surface);color:var(--dim);font-size:1.6rem;font-weight:700}
 </style>
 </head>
 <body>
@@ -2838,7 +2839,11 @@ const QUICK_CATS = [{
 }, {
   id: 'v2', n: 'Transporte', fg: '#0B8FCC', bg: 'rgba(56,189,248,.16)',
   p: '<path d="M4 16.5V12l2-5.5h12L20 12v4.5M4 16.5h16M4 12h16"/><circle cx="7.5" cy="16.5" r="1.8"/><circle cx="16.5" cy="16.5" r="1.8"/>',
-  kw: /gasolin|uber|didi|taxi|metro|cami[oó]n|estacion|caseta|transporte|pasaje/i
+  kw: /uber|didi|taxi|metro|cami[oó]n|caseta|transporte|pasaje|estacionamiento|parqu[ií]metro/i
+}, {
+  id: 'gas', n: 'Gasolina', fg: '#C2410C', bg: 'rgba(251,146,60,.16)',
+  p: '<path d="M4 20.5V5a1.5 1.5 0 0 1 1.5-1.5h7A1.5 1.5 0 0 1 14 5v15.5M3 20.5h12M4 10h10M14 8l3 3v6.5a1.5 1.5 0 0 0 3 0V9l-2.5-2.5"/>',
+  kw: /gasolin|pemex|shell\b|mobil\b|\bbp\b|g500|magna|premium|di[eé]sel|cargar gas|llenar (el )?tanque/i
 }, {
   id: 'casa', n: 'Casa', fg: '#4F46E5', bg: 'rgba(79,70,229,.13)',
   p: '<path d="M3.5 10.5 12 3.5l8.5 7V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19z"/><path d="M9.5 20.5v-5h5v5"/>',
@@ -2854,7 +2859,23 @@ const QUICK_CATS = [{
 }, {
   id: 'v5', n: 'Personal', fg: '#B98100', bg: 'rgba(251,191,36,.2)',
   p: '<path d="M8.5 3.5 3.5 6.5l2 4 2.5-1v11h8v-11l2.5 1 2-4-5-3a3.5 3.5 0 0 1-7 0z"/>',
-  kw: /ropa|zapat|corte|pelo|est[eé]tica|personal|regalo|maquillaje/i
+  kw: /ropa|zapat|corte|pelo|est[eé]tica|personal|maquillaje|barber|u[ñn]as/i
+}, {
+  id: 'subs', n: 'Plataformas', fg: '#6D28D9', bg: 'rgba(139,92,246,.14)',
+  p: '<rect x="3.5" y="5" width="17" height="12.5" rx="2.5"/><path d="M10.5 9v5l4-2.5zM8 20.5h8"/>',
+  kw: /netflix|spotify|disney|hbo|\bmax\b|prime video|amazon prime|youtube premium|apple (music|tv|one)|icloud|suscrip|chatgpt|xbox|playstation|game ?pass|crunchyroll|paramount|\bvix\b|google one|canva|plataforma/i
+}, {
+  id: 'compras', n: 'Compras en línea', fg: '#0F766E', bg: 'rgba(20,184,166,.14)',
+  p: '<path d="M5 8h14l-1.2 11.2a1.5 1.5 0 0 1-1.5 1.3H7.7a1.5 1.5 0 0 1-1.5-1.3zM9 8V6.5a3 3 0 0 1 6 0V8"/>',
+  kw: /amazon|mercado ?libre|shein|temu|aliexpress|liverpool|palacio de hierro|sears|en l[ií]nea|online|tienda en l[ií]nea/i
+}, {
+  id: 'mascota', n: 'Mascotas', fg: '#B45309', bg: 'rgba(251,191,36,.18)',
+  p: '<circle cx="7" cy="10" r="1.6"/><circle cx="10.5" cy="6.5" r="1.6"/><circle cx="14.5" cy="6.5" r="1.6"/><circle cx="18" cy="10" r="1.6"/><path d="M12.5 11.5c-3 0-5.5 3.5-5.5 5.7 0 1.6 1.3 2.3 2.8 2.3 1.2 0 1.8-.6 2.7-.6s1.5.6 2.7.6c1.5 0 2.8-.7 2.8-2.3 0-2.2-2.5-5.7-5.5-5.7z"/>',
+  kw: /\bperr|\bgat(o|a|os|as|ito|ita)\b|mascota|veterinari|croqueta|petco|\+kota|arena para/i
+}, {
+  id: 'regalo', n: 'Regalos', fg: '#DB2777', bg: 'rgba(236,72,153,.13)',
+  p: '<rect x="3.5" y="9" width="17" height="4" rx="1"/><path d="M5 13v7.5h14V13M12 9v11.5M12 9C10 5 6.5 5.5 6.5 7.3S9.5 9 12 9c2.5 0 5.5.1 5.5-1.7S14 5 12 9z"/>',
+  kw: /regalo|cumplea|obsequio|detalle para|boda|baby shower|aniversario|intercambio/i
 }, {
   id: 'v6', n: 'Otro', fg: '#6B7280', bg: 'rgba(107,114,128,.14)',
   p: '<circle cx="6" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18" cy="12" r="1.2"/>',
@@ -3730,6 +3751,7 @@ function QuickAddSheet(_p) {
   const [voice, setVoice] = useState(null); // {state:'listening'|'heard'|'error', text, desc, cat}
   const [what, setWhat] = useState('');
   const sug = what.trim() ? guessCat(what) : null;
+  const [showAll, setShowAll] = useState(false);
   const counts = {};
   [...(data.cashTransactions || []), ...(data.cardTransactions || [])].forEach(t => {
     if (t.cat) counts[t.cat] = (counts[t.cat] || 0) + 1;
@@ -3896,7 +3918,13 @@ function QuickAddSheet(_p) {
     onClick: () => setCardId(c.id)
   }, c.name))), h('div', {
     className: 'b-cats'
-  }, cats.map(c => h('button', {
+  }, (() => {
+    if (showAll) return cats;
+    const want = heard ? voice.cat : sug && sug.id;
+    let top = cats.filter(c => c.id !== 'v6').slice(0, 8);
+    if (want && want !== 'v6' && !top.some(c => c.id === want)) top = [...top.slice(0, 7), quickCat(want)];
+    return [...top, quickCat('v6')];
+  })().map(c => h('button', {
     key: c.id,
     className: 'b-cat' + (heard && voice.cat === c.id || !heard && sug && sug.id === c.id ? ' sel' : ''),
     disabled: !amt,
@@ -3907,7 +3935,14 @@ function QuickAddSheet(_p) {
   }, h(CatIcon, {
     c: c,
     big: true
-  }), c.n))), heard ? h('button', {
+  }), c.n)), h('button', {
+    key: 'more',
+    className: 'b-cat b-cat-more',
+    onClick: () => setShowAll(!showAll)
+  }, h('span', {
+    className: 'b-cat-ic big',
+    'aria-hidden': 'true'
+  }, showAll ? '−' : '+'), showAll ? 'Menos' : 'Más')), heard ? h('button', {
     className: 'b-primary',
     onClick: () => save(voice.cat, voice.desc)
   }, `Guardar ${fmt(+amt)} en ${quickCat(voice.cat).n}`) : h(React.Fragment, null, h('div', {
@@ -6221,18 +6256,29 @@ function MainApp(_ref22) {
   }, [data.debts, data.cardPayments, update]);
   // Café ahora es categoría propia: los cafés que anotaste como Comida se mueven solos (una vez)
   useEffect(() => {
-    if (data.cafeMigrated) return;
-    const isCafe = t => t.cat === 'comida' && quickCat('cafe').kw.test(t.desc || '');
-    const fix = list => (list || []).map(t => isCafe(t) ? {
-      ...t,
-      cat: 'cafe'
-    } : t);
+    if (data.cafeMigrated && data.catsV2) return;
+    // Solo mueve gastos cuya descripción deja claro que son de una categoría nueva
+    const NEW = ['cafe', 'gas', 'subs', 'compras', 'mascota', 'regalo'];
+    const target = t => {
+      if (t.fixedRef) return null;
+      const d = t.desc || '';
+      const hit = NEW.find(id => quickCat(id).kw.test(d));
+      return hit && hit !== t.cat && (!t.cat || ['comida', 'v2', 'v5', 'v6', 'casa'].includes(t.cat) || hit === 'mascota' && t.cat === 'salud') ? hit : null;
+    };
+    const fix = list => (list || []).map(t => {
+      const c = target(t);
+      return c ? {
+        ...t,
+        cat: c
+      } : t;
+    });
     update({
       cashTransactions: fix(data.cashTransactions),
       cardTransactions: fix(data.cardTransactions),
-      cafeMigrated: true
+      cafeMigrated: true,
+      catsV2: true
     });
-  }, [data.cafeMigrated]);
+  }, [data.cafeMigrated, data.catsV2]);
   // Racha = días seguidos anotando gastos (o "hoy no gasté")
   useEffect(() => {
     const st = logStreak(data);
