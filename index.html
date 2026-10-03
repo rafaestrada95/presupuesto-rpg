@@ -841,6 +841,9 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-cat{font-size:.74rem!important;padding:6px 0!important;min-width:0}
 .b-cat{overflow-wrap:normal;word-break:normal;line-height:1.15}
 .b-cat-more .b-cat-ic{display:inline-flex;align-items:center;justify-content:center;background:var(--surface);color:var(--dim);font-size:1.6rem;font-weight:700}
+.b-heroline{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:4px 12px;margin-top:8px;font-size:.88rem;color:var(--dim)}
+.b-heroline b{color:var(--text)}
+.b-heroline .b-textbtn{font-size:.85rem;min-height:36px;padding:0}
 </style>
 </head>
 <body>
@@ -2143,6 +2146,14 @@ function afterBaseline(data, date, ts) {
 }
 // Compras con tarjeta que cuentan: las posteriores al último "Poner Budgy al día"
 // (lo que debías ese día ya incluye las anteriores)
+// Nuevo punto de partida: tu saldo de hoy. Las tarjetas conservan lo que compraste desde el anterior.
+function rebaseBalances(data, debit, cash) {
+  const tx = cardTxAfter(data);
+  return {
+    saldoDebito: String(debit), saldoEfectivo: String(cash), balanceDate: new Date().toLocalISO().slice(0, 10), balanceAt: Date.now(),
+    debts: (data.debts || []).map(d => d.type === 'tarjeta' ? { ...d, balance: Math.round(debtBalance(d, tx)) } : d)
+  };
+}
 function cardTxAfter(data) {
   const tx = data.cardTransactions || [];
   if (data.balanceDate) return tx.filter(t => afterBaseline(data, t.date, t.ts));
@@ -2285,6 +2296,7 @@ function calcDP(data) {
   let currentEfectivo = saldoE;
   let pendingFixed = 0,
     pendingDebts = 0;
+  const pendingItems = [];
   if (hasSaldo) {
     const totalPaydays = (data.paydays || []).filter(p => afterBaseline(data, p.addedAt, p.ts)).reduce((s, p) => s + (+p.amount || 0), 0);
     const spentDebit = (data.cashTransactions || []).filter(t => t.method === 'debit' && afterBaseline(data, t.date, t.ts)).reduce((s, t) => s + (+t.amount || 0), 0);
@@ -2295,14 +2307,20 @@ function calcDP(data) {
     const paidCash = (data.expPayLog || []).filter(p => p.method === 'cash' && afterBaseline(data, p.date, p.ts)).reduce((x, p) => x + (+p.amount || 0), 0);
     currentDebit = saldoD + totalPaydays - spentDebit - paidOut;
     currentEfectivo = saldoE - spentCash - paidCash;
-    pendingFixed = data.exps.filter(e => !expCard(e, data)).filter(e => e.day && +e.day >= day && (isQ1 ? +e.day <= 15 : +e.day >= 16)).filter(e => !(data.paidExps || {})[`${e.id}_${curMonth}`]).reduce((s, e) => s + (+e.amount || 0), 0);
+    const fixedPend = data.exps.filter(e => !expCard(e, data)).filter(e => e.day && +e.day >= day && (isQ1 ? +e.day <= 15 : +e.day >= 16)).filter(e => !(data.paidExps || {})[`${e.id}_${curMonth}`]);
+    pendingFixed = fixedPend.reduce((s, e) => s + (+e.amount || 0), 0);
+    fixedPend.forEach(e => pendingItems.push({ name: e.name, amount: +e.amount || 0, when: `día ${e.day}` }));
+    const qEndStr = curMonth + '-' + String(isQ1 ? 15 : new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()).padStart(2, '0');
     pendingDebts = data.debts.filter(d => {
+      // Deudas de fecha única: si la fecha cae en esta quincena (o ya pasó) se aparta lo que debes
+      if (isDeadlineDebt(d)) return !!d.deadlineDate && d.deadlineDate <= qEndStr && +d.balance > 0;
       if (!d.dueDay) return false;
       const dd = +d.dueDay;
       if (isQ1 ? !(dd <= 15 && dd >= day) : !(dd >= 16 && dd >= day)) return false;
       return !paidFor(d, curMonth);
     }).reduce((s, d) => {
-      const pay = d.type === 'plan' ? +(d.paymentAmount || 0) : d.type === 'informal' && d.informalMode === 'fixed' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
+      const pay = isDeadlineDebt(d) ? +d.balance : d.type === 'plan' ? +(d.paymentAmount || 0) : d.type === 'informal' && d.informalMode === 'fixed' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
+      if (pay > 0) pendingItems.push({ name: d.name, amount: pay, when: isDeadlineDebt(d) ? fmtDate(d.deadlineDate) : `día ${d.dueDay}` });
       return s + pay;
     }, 0);
     // Lo apartado para metas sigue en tu cuenta, pero ya no es libre
@@ -2336,6 +2354,7 @@ function calcDP(data) {
     overdue,
     nextGap,
     next,
+    pendingItems,
     balanceDate: data.balanceDate || null
   };
 }
@@ -3027,7 +3046,14 @@ function DailyBreakdown(_p) {
   }, v));
   if (dp.hasSaldo) return h('div', {
     className: 'b-breakdown'
-  }, row('En tu cuenta', fmt(dp.currentDebit)), row('En efectivo', fmt(dp.currentEfectivo)), dp.pendingFixed > 0 && row('Pagos fijos que faltan esta quincena', '−' + fmt(dp.pendingFixed)), dp.pendingDebts > 0 && row('Pagos de deudas que faltan', '−' + fmt(dp.pendingDebts)), dp.overdue > 0 && row('Pagos vencidos sin pagar', '−' + fmt(dp.overdue)), dp.nextGap > 0 && row(`Para tus pagos ${dp.next.label} (tu quincena no alcanza)`, '−' + fmt(dp.nextGap)), dp.apartados > 0 && row('Apartado para tus metas', '−' + fmt(dp.apartados)), row('Te queda libre', fmt(dp.realBalance), true), dp.cardReserved > 0 && h('p', {
+  }, row('En tu cuenta', fmt(dp.currentDebit)), row('En efectivo', fmt(dp.currentEfectivo)), (dp.pendingItems || []).map((it, i) => h('div', {
+    key: 'pi' + i,
+    className: 'b-kv'
+  }, h('span', null, it.name, h('small', {
+    className: 'b-kv-sub'
+  }, `Se aparta · ${it.when}`)), h('span', {
+    className: 'b-num'
+  }, '−' + fmt(it.amount)))), dp.overdue > 0 && row('Pagos vencidos sin pagar', '−' + fmt(dp.overdue)), dp.nextGap > 0 && row(`Para tus pagos ${dp.next.label} (tu quincena no alcanza)`, '−' + fmt(dp.nextGap)), dp.apartados > 0 && row('Apartado para tus metas', '−' + fmt(dp.apartados)), row('Te queda libre', fmt(dp.realBalance), true), dp.cardReserved > 0 && h('p', {
     className: 'b-note'
   }, 'Llevas ', fmt(dp.cardReserved), ' en compras con tarjeta desde tu último corte. No se descuentan todavía: los pagas en la siguiente fecha límite de tu tarjeta.'), dp.balanceDate && h('p', {
     className: 'b-note'
@@ -3129,7 +3155,16 @@ function HomeScreen(_p) {
     n: avail
   })), h('div', {
     className: 'b-cap'
-  }, avail >= 0 ? real ? `libres hasta el ${endDay} de ${monthName}, con tus pagos ya apartados` : `disponibles hasta el ${endDay} de ${monthName}` : real ? 'te faltan para cubrir tus pagos de esta quincena' : 'te faltan para cubrir esta quincena'), avail > 0 && h('div', {
+  }, avail >= 0 ? real ? `libres hasta el ${endDay} de ${monthName}, con tus pagos ya apartados` : `disponibles hasta el ${endDay} de ${monthName}` : real ? 'te faltan para cubrir tus pagos de esta quincena' : 'te faltan para cubrir esta quincena'), real && h('div', {
+    className: 'b-heroline'
+  }, h('span', null, 'En tus cuentas ', h('b', {
+    className: 'b-num'
+  }, fmt(dp.currentDebit + dp.currentEfectivo)), dp.currentDebit + dp.currentEfectivo - dp.realBalance > 0 ? h(React.Fragment, null, ' · apartado ', h('b', {
+    className: 'b-num'
+  }, fmt(dp.currentDebit + dp.currentEfectivo - dp.realBalance))) : null), h('button', {
+    className: 'b-textbtn',
+    onClick: _p.onFixBalance
+  }, '¿No cuadra con tu banco?')), avail > 0 && h('div', {
     className: 'b-daily'
   }, h(Icon, {
     d: IC.cal
@@ -4466,8 +4501,8 @@ function MyInfo(_p) {
     e('section', null, e('div', { className: 'b-sh' }, e('h2', null, 'Lo que tienes hoy')),
       e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Cuando lo cambias, Budgy empieza a contar desde ese momento: lo anotado antes ya está incluido en esta cifra.'),
       e('div', { className: 'b-grid2' },
-        e(Field, { label: 'En tu cuenta (débito)', value: data.saldoDebito, ph: '$0', onChange: v => set({ saldoDebito: v, saldoEfectivo: data.saldoEfectivo || '0', balanceDate: new Date().toLocalISO().slice(0, 10), balanceAt: Date.now() }) }),
-        e(Field, { label: 'En efectivo', value: data.saldoEfectivo, ph: '$0', onChange: v => set({ saldoEfectivo: v, saldoDebito: data.saldoDebito || '0', balanceDate: new Date().toLocalISO().slice(0, 10), balanceAt: Date.now() }) }))),
+        e(Field, { label: 'En tu cuenta (débito)', value: data.saldoDebito, ph: '$0', onChange: v => set({ ...rebaseBalances(data, v, data.saldoEfectivo || '0'), saldoDebito: v }) }),
+        e(Field, { label: 'En efectivo', value: data.saldoEfectivo, ph: '$0', onChange: v => set({ ...rebaseBalances(data, data.saldoDebito || '0', v), saldoEfectivo: v }) }))),
     e('section', null, e('div', { className: 'b-sh' }, e('h2', null, 'Ingresos extra')),
       (data.extraIncome || []).length === 0 && !xf && e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Freelance, comisiones, bonos o rentas, aparte de tu quincena.'),
       e('div', { className: 'b-rows' }, (data.extraIncome || []).map((x, i) => e('div', { key: x.id || i },
@@ -5723,6 +5758,17 @@ function monthlyOutlook(data, months) {
   return { ...sim, months: res };
 }
 
+/* ── Corregir saldo con lo que dice tu banco ── */
+function BalanceSheet(_p) {
+  const dp = _p.dp;
+  const [deb, setDeb] = useState('');
+  const [cash, setCash] = useState('');
+  return e(Sheet, { title: 'Corregir mi saldo', label: 'Corregir mi saldo', onClose: _p.onClose },
+    e('p', { className: 'b-note', style: { marginTop: 0 } }, `Budgy calcula ${fmt(dp.currentDebit)} en tu cuenta y ${fmt(dp.currentEfectivo)} en efectivo. Pon lo que dice tu banco hoy y Budgy cuenta desde ahí. Tus pagos y deudas no se tocan.`),
+    e(Field, { label: 'En tu cuenta (débito)', value: deb, ph: String(Math.round(dp.currentDebit)), onChange: setDeb }),
+    e(Field, { label: 'En efectivo', value: cash, ph: String(Math.max(0, Math.round(dp.currentEfectivo))), onChange: setCash }),
+    e('button', { className: 'b-primary', disabled: deb === '' && cash === '', onClick: () => _p.onSave(deb === '' ? Math.round(dp.currentDebit) : +deb, cash === '' ? Math.max(0, Math.round(dp.currentEfectivo)) : +cash) }, 'Guardar mi saldo'));
+}
 /* ── Registrar pago a tarjeta (el monto que sea: mínimo, total o un abono) ── */
 function CardPaySheet(_p) {
   const cards = (_p.data.debts || []).filter(d => d.type === 'tarjeta');
@@ -5797,6 +5843,7 @@ function MainApp(_ref22) {
   const [freshOpen, setFreshOpen] = useState(false);
   const [closeQ, setCloseQ] = useState(null);
   const [cardPayOpen, setCardPayOpen] = useState(false);
+  const [balOpen, setBalOpen] = useState(false);
   const lastTabRef = useRef('inicio');
   const [quickAmount, setQuickAmount] = useState(() => (_qs.get('monto') || '').replace(/[^0-9.]/g, ''));
   const [toast, setToast] = useState(null);
@@ -6587,6 +6634,7 @@ function MainApp(_ref22) {
       }
     }),
     onCardPay: () => setCardPayOpen(true),
+    onFixBalance: () => setBalOpen(true),
     onPayOverdue: o => {
       const rest = {
         ...(data.overdue || {})
@@ -6702,6 +6750,16 @@ function MainApp(_ref22) {
         text: alert ? t.text + '. ' + alert.text : t.text,
         warn: !!alert,
         onUndo: () => undoQuick(t)
+      });
+    }
+  }), balOpen && _h(BalanceSheet, {
+    dp: dp,
+    onClose: () => setBalOpen(false),
+    onSave: (deb, cash) => {
+      update(rebaseBalances(data, deb, cash));
+      setBalOpen(false);
+      setToast({
+        text: 'Listo: Budgy cuenta desde tu saldo de hoy'
       });
     }
   }), cardPayOpen && _h(CardPaySheet, {
