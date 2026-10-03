@@ -837,6 +837,9 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-next{margin-top:10px;padding:12px 14px;border-radius:var(--r-c);background:var(--surface)}
 .b-next b{font-size:.9rem}
 .b-next p{margin:6px 0 0;font-size:.85rem;color:var(--dim)}
+.b-cats{grid-template-columns:repeat(5,1fr)!important;gap:4px!important}
+.b-cat{font-size:.74rem!important;padding:6px 0!important;min-width:0}
+.b-cat>span:last-child,.b-cat{overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -2823,7 +2826,11 @@ const PREFS_INIT = {
 const QUICK_CATS = [{
   id: 'comida', n: 'Comida', fg: '#E2574A', bg: 'rgba(255,107,94,.14)',
   p: '<path d="M7 3v7a2 2 0 0 0 2 2v9M11 3v7a2 2 0 0 1-2 2M17 21V3c-2 0-3.5 2.5-3.5 6s1.5 4 3.5 4"/>',
-  kw: /comid|taco|restaur|caf|desayun|almuer|cena|antoj|pizza|hamburg|torta|pan\b|uber ?eats|rappi|didi food/i
+  kw: /comid|taco|restaur|desayun|almuer|cena|antoj|pizza|hamburg|torta|pan\b|uber ?eats|rappi|didi food/i
+}, {
+  id: 'cafe', n: 'Café', fg: '#9A5B2E', bg: 'rgba(154,91,46,.14)',
+  p: '<path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM16 10.5h1.5a2.5 2.5 0 0 1 0 5H16M8 3.5c0 1 1 1 1 2s-1 1-1 2M12 3.5c0 1 1 1 1 2s-1 1-1 2"/>',
+  kw: /caf[eé]|starbucks|cafeter|latte|capuch|cappucc|americano|espresso|frapp|tim hortons|cielito|punta del cielo|chai/i
 }, {
   id: 'v1', n: 'Súper', fg: '#0E9F6E', bg: 'rgba(16,185,129,.14)',
   p: '<path d="M2.5 3.5h3l2.4 11.5h10.6l2-8.5H6.4"/><circle cx="9.5" cy="19.5" r="1.4"/><circle cx="17.5" cy="19.5" r="1.4"/>',
@@ -3434,7 +3441,7 @@ function PresupuestoScreen(_p) {
       n: 'Sin categoría',
       fg: '#6B7280',
       bg: 'rgba(107,114,128,.14)',
-      p: QUICK_CATS[7].p
+      p: quickCat('v6').p
     };
     const lim = catLimit(data, k);
     const ratio = lim ? byCat[k] / lim : 0;
@@ -6212,6 +6219,20 @@ function MainApp(_ref22) {
       })()
     });
   }, [data.debts, data.cardPayments, update]);
+  // Café ahora es categoría propia: los cafés que anotaste como Comida se mueven solos (una vez)
+  useEffect(() => {
+    if (data.cafeMigrated) return;
+    const isCafe = t => t.cat === 'comida' && quickCat('cafe').kw.test(t.desc || '');
+    const fix = list => (list || []).map(t => isCafe(t) ? {
+      ...t,
+      cat: 'cafe'
+    } : t);
+    update({
+      cashTransactions: fix(data.cashTransactions),
+      cardTransactions: fix(data.cardTransactions),
+      cafeMigrated: true
+    });
+  }, [data.cafeMigrated]);
   // Racha = días seguidos anotando gastos (o "hoy no gasté")
   useEffect(() => {
     const st = logStreak(data);
