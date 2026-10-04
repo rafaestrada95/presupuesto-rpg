@@ -918,6 +918,7 @@ function attachBtn(id,fn){var el=document.getElementById(id);if(!el)return;var t
 ['1','2','3','4','5','6','7','8','9','0'].forEach(function(n){attachBtn('b'+n,function(){pinPress(n);});});
 attachBtn('bc',pinClear);
 pinInit();
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(function(){});}catch(e){}
 if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js').catch(function(){});});}
 
 </script>
@@ -1632,6 +1633,13 @@ function WealthSection(_p) {
     React.createElement('div', { className: 'b-debt-sum' },
       React.createElement('span', { className: 'b-amount sm' }, React.createElement(Money, { n: w.netWorth })),
       React.createElement('span', { className: 'b-cap' }, 'patrimonio neto: lo que tienes menos lo que debes')),
+    (() => {
+      const prevMk = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocalISO().slice(0, 7);
+      const prev = (data.nwHistory || {})[prevMk];
+      if (prev == null) return null;
+      const d = w.netWorth - prev;
+      return React.createElement('p', { className: 'b-note' + (d >= 0 ? ' good' : '') }, d >= 0 ? `Subió ${fmt(d)} contra el mes pasado.` : `Bajó ${fmt(-d)} contra el mes pasado.`);
+    })(),
     React.createElement('div', { className: 'b-strip', style: { marginTop: 14 } },
       React.createElement('div', null, React.createElement('div', { className: 'k' }, 'Tienes'), React.createElement('div', { className: 'v' }, moneyShort(w.assetsTotal + w.emer + w.cash))),
       React.createElement('div', null, React.createElement('div', { className: 'k' }, 'Debes'), React.createElement('div', { className: 'v' }, moneyShort(w.debt))),
@@ -1642,7 +1650,7 @@ function WealthSection(_p) {
         React.createElement('div', { className: 'b-d' }, (ASSET_TYPES.find(x => x.key === a.type) || {}).label, a.monthlyIncome ? ` · te deja ${fmt(a.monthlyIncome)} al mes` : '')),
       React.createElement('span', { className: 'b-n b-num' }, fmt(a.value))))),
     form ? React.createElement('div', { className: 'b-form' },
-      React.createElement('div', { className: 'b-seg' }, ASSET_TYPES.map(x => React.createElement('button', {
+      React.createElement('div', { className: 'b-seg' }, ASSET_TYPES.filter(x => x.key !== 'inversion' || form.type === 'inversion').map(x => React.createElement('button', {
         key: x.key, className: form.type === x.key ? 'on' : '', onClick: () => setForm({ ...form, type: x.key })
       }, x.label))),
       React.createElement('p', { className: 'b-note', style: { marginTop: 6 } }, t.hint),
@@ -1653,7 +1661,7 @@ function WealthSection(_p) {
         form.id && React.createElement('button', { className: 'b-secondary danger', onClick: () => { _p.onChange({ assets: assets.filter(a => a.id !== form.id) }); setForm(null); } }, 'Borrar'),
         React.createElement('button', { className: 'b-secondary', onClick: () => setForm(null) }, 'Cancelar'),
         React.createElement('button', { className: 'b-primary sm', onClick: save }, 'Guardar'))) :
-      React.createElement('button', { className: 'b-primary ghost', onClick: () => setForm({ type: 'inversion', name: '', value: '', monthlyIncome: '' }) }, 'Agregar inversión o propiedad'));
+      React.createElement('button', { className: 'b-primary ghost', onClick: () => setForm({ type: 'propiedad', name: '', value: '', monthlyIncome: '' }) }, 'Agregar propiedad, negocio u otro bien'));
 }
 
 
@@ -2026,6 +2034,8 @@ function vibrate(pattern) {
 }
 
 /* ── CARD LOGIC ── */
+// Día de un mes sin desbordarse: el 31 en febrero es el 28 (o 29)
+const dayOf = (y, m, d) => new Date(y, m, Math.min(+d, new Date(y, m + 1, 0).getDate()));
 function getCardInfo(card, cardTxs) {
   let today = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : new Date();
   if (!card.cutDay) return {
@@ -2038,15 +2048,16 @@ function getCardInfo(card, cardTxs) {
   const day = today.getDate();
   const cutDay = +card.cutDay;
   const limit = +(card.creditLimit || 0);
-  let cycleStart = day >= cutDay ? new Date(today.getFullYear(), today.getMonth(), cutDay) : new Date(today.getFullYear(), today.getMonth() - 1, cutDay);
+  const cutThis = dayOf(today.getFullYear(), today.getMonth(), cutDay).getDate();
+  let cycleStart = day >= cutThis ? dayOf(today.getFullYear(), today.getMonth(), cutDay) : dayOf(today.getFullYear(), today.getMonth() - 1, cutDay);
   const cycleTxs = (cardTxs || []).filter(t => t.cardId === card.id && t.date && new Date(t.date + 'T12:00:00') >= cycleStart);
   const cycleSpend = cycleTxs.reduce((s, t) => s + (+t.amount || 0), 0);
-  const nextCut = cutDay > day ? new Date(today.getFullYear(), today.getMonth(), cutDay) : new Date(today.getFullYear(), today.getMonth() + 1, cutDay);
+  const nextCut = cutThis > day ? dayOf(today.getFullYear(), today.getMonth(), cutDay) : dayOf(today.getFullYear(), today.getMonth() + 1, cutDay);
   const daysUntilCut = Math.ceil((nextCut - today) / 86400000);
   let daysUntilPay = null;
   if (card.dueDay) {
     const pd = +card.dueDay;
-    const np = pd > day ? new Date(today.getFullYear(), today.getMonth(), pd) : new Date(today.getFullYear(), today.getMonth() + 1, pd);
+    const np = dayOf(today.getFullYear(), today.getMonth(), pd).getDate() > day ? dayOf(today.getFullYear(), today.getMonth(), pd) : dayOf(today.getFullYear(), today.getMonth() + 1, pd);
     daysUntilPay = Math.ceil((np - today) / 86400000);
   }
   return {
@@ -2081,8 +2092,8 @@ function calcUrgency(debt) {
   today.setHours(0, 0, 0, 0);
   let target = null;
   if (debt.deadlineDate) target = new Date(debt.deadlineDate + "T00:00:00");else if (debt.dueDay) {
-    target = new Date(today.getFullYear(), today.getMonth(), +debt.dueDay);
-    if (target <= today) target = new Date(today.getFullYear(), today.getMonth() + 1, +debt.dueDay);
+    target = dayOf(today.getFullYear(), today.getMonth(), +debt.dueDay);
+    if (target < today) target = dayOf(today.getFullYear(), today.getMonth() + 1, +debt.dueDay);
   }
   if (!target) return {
     key: "none",
@@ -2223,7 +2234,8 @@ function dueMonthOf(d, now) {
   if (!day || day >= now.getDate()) return now.toLocalISO().slice(0, 7);
   return new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocalISO().slice(0, 7);
 }
-const debtMonthPay = d => d.type === 'plan' ? +(d.paymentAmount || 0) : d.type === 'informal' && d.informalMode === 'fixed' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
+// Tarjeta: si registraste el "pago para no generar intereses", ese es el pago del mes
+const debtMonthPay = d => d.type === 'tarjeta' && +d.pngi > 0 ? +d.pngi : d.type === 'plan' ? +(d.paymentAmount || 0) : d.type === 'informal' && d.informalMode === 'fixed' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
 // ¿Ya cubriste el pago de ese mes? (los abonos extra no cuentan)
 const paidFor = (d, M) => (d.monthlyPayments || []).some(p => !p.extra && p.month === M);
 // Cómo se paga un gasto fijo: débito (default), efectivo o una tarjeta
@@ -2239,7 +2251,7 @@ function cardStatus(d, now) {
     const nx = new Date(y, m, 1);
     return { ok: true, month: M, text: `Al corriente. Tu siguiente pago es el ${Math.min(+d.dueDay, new Date(nx.getFullYear(), nx.getMonth() + 1, 0).getDate())} de ${MES_CORTO[nx.getMonth()]}.` };
   }
-  return { ok: false, month: M, text: `Pago pendiente${+d.minPayment > 0 ? ` (mínimo ${fmt(d.minPayment)})` : ''} antes del ${day(m)} de ${MES_CORTO[m - 1]}.` };
+  return { ok: false, month: M, text: `Pago pendiente${+d.pngi > 0 ? ` (${fmt(d.pngi)} para no generar intereses)` : +d.minPayment > 0 ? ` (mínimo ${fmt(d.minPayment)})` : ''} antes del ${day(m)} de ${MES_CORTO[m - 1]}.` };
 }
 // Pagos que ya vencieron y marcaste como "no lo pagué": se apartan hasta que los pagues
 function overdueItems(data) {
@@ -2358,7 +2370,7 @@ function calcDP(data) {
       if (isQ1 ? !(dd <= 15 && dd >= day) : !(dd >= 16 && dd >= day)) return false;
       return !paidFor(d, curMonth);
     }).reduce((s, d) => {
-      const pay = isDeadlineDebt(d) ? +d.balance : d.type === 'plan' ? +(d.paymentAmount || 0) : d.type === 'informal' && d.informalMode === 'fixed' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
+      const pay = isDeadlineDebt(d) ? +d.balance : debtMonthPay(d);
       if (pay > 0) pendingItems.push({ name: d.name, amount: pay, when: isDeadlineDebt(d) ? fmtDate(deadlineOf(d)) : `día ${d.dueDay}` });
       return s + pay;
     }, 0);
@@ -2432,18 +2444,25 @@ function canAfford(data, amount, months) {
 /* ── HEALTH SCORE ── */
 function calcHealthScore(data, game, dp) {
   let score = 0;
-  if (game.streak >= 30) score += 20;else if (game.streak >= 7) score += 15;else if (game.streak >= 3) score += 10;else if (game.streak >= 1) score += 5;
+  if (game.streak >= 30) score += 10;else if (game.streak >= 7) score += 8;else if (game.streak >= 3) score += 5;else if (game.streak >= 1) score += 2;
+  // Deudas vs. ingreso (sano: menos de 36 %) y tasa de ahorro (sano: 10 % o más)
+  const mm0 = monthlyModel(data);
+  const dti = mm0.income > 0 ? mm0.debts / mm0.income : 0;
+  const saveRate = mm0.income > 0 ? (mm0.savings + Math.max(0, mm0.surplus)) / mm0.income : 0;
+  if (dti <= 0.2) score += 10;else if (dti <= 0.36) score += 6;else if (dti <= 0.5) score += 2;
+  if (saveRate >= 0.2) score += 10;else if (saveRate >= 0.1) score += 7;else if (saveRate > 0) score += 3;
   const avail = dp.available != null ? dp.available : dp.remaining;
   // Un mes normal en rojo pesa más que tener dinero hoy
   const monthOk = monthlyModel(data).surplus >= 0;
-  if (!monthOk) score += avail > 0 ? 5 : 0;else if (avail > dp.daily * 3) score += 25;else if (avail > 0) score += 15;else if (avail > -1000) score += 5;
-  const criticalDebts = (data.debts || []).filter(d => {
+  if (!monthOk) score += avail > 0 ? 5 : 0;else if (avail > dp.daily * 3) score += 20;else if (avail > 0) score += 12;else if (avail > -1000) score += 4;
+  const criticalDebts = (data.debts || []).filter(d => !paidFor(d, dueMonthOf(d))).filter(d => {
     const u = calcUrgency(d);
     return u.key === 'critical' || u.key === 'danger';
   });
-  if (criticalDebts.length === 0) score += 20;else if (criticalDebts.length === 1) score += 10;
+  if (criticalDebts.length === 0) score += 15;else if (criticalDebts.length === 1) score += 7;
   const weekAgo = new Date(Date.now() - 6 * 864e5).toLocalISO().slice(0, 10);
   const daysLogged = new Set([...(data.cashTransactions || []), ...(data.cardTransactions || [])].map(t => t.date).filter(d => d && d >= weekAgo)).size;
+  // Máximo: 10 racha + 20 dinero + 15 urgentes + 20 anotar + 15 fondo + 10 deudas + 10 ahorro = 100
   if (daysLogged >= 5) score += 20;else if (daysLogged >= 3) score += 12;else if (daysLogged >= 1) score += 6;
   const emerPct = data.emerGoal ? Math.min(100, emerSavedOf(data) / +data.emerGoal * 100) : 0;
   if (emerPct >= 100) score += 15;else if (emerPct >= 50) score += 8;else if (emerPct >= 20) score += 4;
@@ -2563,7 +2582,7 @@ function getSmartSuggestions(data, dp) {
     const card = cards[0];
     suggestions.push({
       icon: '💳',
-      text: `Pagar solo el mínimo en ${card.name} es lo más caro. Lo ideal es pagar el “pago para no generar intereses” de tu estado de cuenta; si no alcanza, abona al menos el doble del mínimo (${fmt(+(card.minPayment || 0) * 2)}).`
+      text: +card.pngi > 0 ? `Vas por buen camino con ${card.name}: pagando ${fmt(card.pngi)} no te cobran intereses.` : `Pagar solo el mínimo en ${card.name} es lo más caro. Registra el “pago para no generar intereses” de tu estado de cuenta (en la ficha de la tarjeta) y Budgy lo aparta por ti.`
     });
   }
 
@@ -3013,7 +3032,7 @@ const deadlineOf = d => {
   const base = day >= now.getDate() ? new Date(now.getFullYear(), now.getMonth(), 1) : new Date(now.getFullYear(), now.getMonth() + 1, 1);
   return new Date(base.getFullYear(), base.getMonth(), Math.min(day, new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate())).toLocalISO().slice(0, 10);
 };
-const debtPay = d => d.type === 'plan' ? +(d.paymentAmount || 0) : d.type === 'informal' && d.informalMode === 'fixed' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
+const debtPay = d => debtMonthPay(d);
 function dueLabel(days) {
   if (days == null) return h('span', null, 'Sin fecha');
   if (days < 0) return h('span', {
@@ -3137,7 +3156,7 @@ function HomeScreen(_p) {
   });
   const monthKeyA = now.toLocalISO().slice(0, 7);
   const fixedDue = (data.exps || []).filter(x => x.day && !(data.paidExps || {})[`${x.id}_${monthKeyA}`]).map(x => ({
-    kind: 'exp', id: 'e' + x.id, x, name: x.name, pay: +x.amount || 0, days: +x.day - now.getDate()
+    kind: 'exp', id: 'e' + x.id, x, name: x.name, pay: +x.amount || 0, days: Math.min(+x.day, new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()) - now.getDate()
   })).filter(x => x.days >= 0 && x.days <= 3);
   const overdueRows = overdueItems(data).map(o => ({
     ...o, id: 'o' + o.key, overdue: true, days: -1
@@ -3583,7 +3602,19 @@ function PresupuestoScreen(_p) {
         background: ratio > 1 ? 'var(--danger)' : ratio >= 0.8 ? 'var(--mango)' : 'var(--sky)'
       }
     })));
-  })), h(HealthNative, {
+  })), (() => {
+    const hm = hormigaMonth(data);
+    return hm.total > 0 && h('section', null, h('div', {
+      className: 'b-sh'
+    }, h('h2', null, 'Gastos hormiga')), h('p', {
+      className: 'b-note',
+      style: {
+        marginTop: 0
+      }
+    }, `Este mes: ${fmt(hm.total)} en ${hm.count} compras chicas (café, plataformas, antojos de menos de ${fmt(HORMIGA_MAX)}). A este ritmo son unos `, h('b', null, fmt(hm.year)), ' al año.'), hm.top.length > 0 && h('p', {
+      className: 'b-note'
+    }, 'Lo que más pesa: ', hm.top.map(t => `${t[0]} ${fmt(t[1])}`).join(' · ')));
+  })(), h(HealthNative, {
     data: data,
     dp: dp,
     game: _p.game
@@ -4384,7 +4415,7 @@ function DebtSheet(_p) {
   const [extraAmt, setExtraAmt] = useState('');
   const [ef, setEf] = useState({
     name: d.name || '', balance: String(d.balance ?? ''), pay: String(pay || ''), dueDay: String(d.dueDay || ''),
-    paidPayments: String(d.paidPayments || ''), totalPayments: String(d.totalPayments || ''), interestRate: String(d.interestRate || '')
+    paidPayments: String(d.paidPayments || ''), totalPayments: String(d.totalPayments || ''), interestRate: String(d.interestRate || ''), pngi: String(d.pngi || '')
   });
   const interest = getDebtInterestCost(d);
   const payoff = (d.type === 'tarjeta' || d.type === 'prestamo') && +d.interestRate > 0 ? getPayoffProjection(d.balance, pay, d.interestRate) : null;
@@ -4397,7 +4428,7 @@ function DebtSheet(_p) {
       patch.totalPayments = +ef.totalPayments || d.totalPayments;
     } else {
       patch.balance = +ef.balance || 0;
-      if (d.type === 'tarjeta') patch.minPayment = +ef.pay || d.minPayment;
+      if (d.type === 'tarjeta') { patch.minPayment = +ef.pay || d.minPayment; patch.pngi = +ef.pngi || ''; }
       else if (d.type === 'prestamo') patch.monthlyPayment = +ef.pay || d.monthlyPayment;
       else patch.paymentAmount = +ef.pay || d.paymentAmount;
       if (d.type === 'tarjeta' || d.type === 'prestamo') patch.interestRate = ef.interestRate !== '' ? +ef.interestRate : d.interestRate;
@@ -4444,6 +4475,7 @@ function DebtSheet(_p) {
         e(React.Fragment, null,
           e(Field, { label: 'Lo que debes hoy', value: ef.balance, onChange: v => setEf({ ...ef, balance: v }) }),
           e(Field, { label: d.type === 'tarjeta' ? 'Pago mínimo' : 'Pago al mes', value: ef.pay, onChange: v => setEf({ ...ef, pay: v }) }),
+          d.type === 'tarjeta' && e(Field, { label: 'Pago para no generar intereses', value: ef.pngi, ph: 'Viene en tu estado de cuenta', help: 'Si lo pones, Budgy aparta ese pago (el sano) en lugar del mínimo.', onChange: v => setEf({ ...ef, pngi: v }) }),
           (d.type === 'tarjeta' || d.type === 'prestamo') && e(Field, { label: 'Interés al año (%)', value: ef.interestRate, onChange: v => setEf({ ...ef, interestRate: v }) })),
       e(Field, { label: 'Día de pago', value: ef.dueDay, onChange: v => setEf({ ...ef, dueDay: v.replace(/\D/g, '').slice(0, 2) }) }),
       e('button', { className: 'b-primary', onClick: saveEdit }, 'Guardar cambios')),
@@ -4655,11 +4687,13 @@ function HealthNative(_p) {
   const st = score >= 80 ? ['Excelente', 'var(--good)', 'var(--emerald)'] : score >= 60 ? ['Vas bien', 'var(--good)', 'var(--emerald)'] : score >= 40 ? ['Hay cosas por mejorar', 'var(--warn)', 'var(--mango)'] : ['Necesita atención', 'var(--danger)', 'var(--danger)'];
   const goal = +data.emerGoal || 0;
   const emerPct = goal > 0 ? Math.min(100, Math.round(emerSavedOf(data) / goal * 100)) : 0;
-  const urgent = (data.debts || []).filter(d => { const u = calcUrgency(d); return u.key === 'critical' || u.key === 'danger'; }).length;
+  const urgent = (data.debts || []).filter(d => !paidFor(d, dueMonthOf(d)) && (d.type !== 'plan' || getPlanInfo(d).remaining > 0)).filter(d => { const u = calcUrgency(d); return u.key === 'critical' || u.key === 'danger'; }).length;
   const f = [
     (() => { const mm = monthlyModel(data); return [dp.available >= 0 && mm.surplus >= 0, dp.available < 0 ? 'Esta quincena no te alcanza para tus pagos' : mm.surplus < 0 ? `En un mes normal gastas ${fmt(-mm.surplus)} más de lo que entra` : 'Tus números del mes cierran en verde']; })(),
     [urgent === 0, urgent === 0 ? 'Sin pagos urgentes' : `${urgent} ${urgent === 1 ? 'pago urgente' : 'pagos urgentes'}`],
     [emerPct >= 50, goal > 0 ? `Fondo de emergencia al ${emerPct}%` : 'Todavía no tienes fondo de emergencia'],
+    (() => { const mm = monthlyModel(data); if (!mm.income) return null; const r = Math.round(mm.debts / mm.income * 100); return [r <= 36, r === 0 ? 'Sin pagos de deudas al mes' : `Tus deudas se llevan ${r}% de tu ingreso${r > 36 ? ' (lo sano es menos de 36%)' : ''}`]; })(),
+    (() => { const mm = monthlyModel(data); if (!mm.income) return null; const r = Math.round((mm.savings + Math.max(0, mm.surplus)) / mm.income * 100); return [r >= 10, r > 0 ? `Ahorras cerca del ${r}% de lo que ganas${r < 10 ? ' (la meta es 10% o más)' : ''}` : 'Hoy no te queda para ahorrar: la meta es 10% de lo que ganas']; })(),
     (() => {
       const weekAgo = new Date(Date.now() - 6 * 864e5).toLocalISO().slice(0, 10);
       const n = new Set([...(data.cashTransactions || []), ...(data.cardTransactions || [])].map(t => t.date).filter(d => d && d >= weekAgo)).size;
@@ -4671,7 +4705,7 @@ function HealthNative(_p) {
       e('div', { className: 'l', style: { color: st[1] } }, st[0]),
       e('div', { className: 'b-meter', 'aria-hidden': 'true' }, [20, 40, 60, 80, 100].map(t => e('i', { key: t, style: score >= t - 19 ? { background: st[2] } : null }))),
       e('div', { className: 'b-d' }, 'Tu salud financiera, de 0 a 100'))),
-    e('div', { className: 'b-factors' }, f.map((x, i) => e('div', { key: i, className: 'b-req' + (x[0] ? ' ok' : '') }, e('span', { className: 'b-req-dot' }, x[0] ? '✓' : ''), e('span', { className: 'b-req-l' }, x[1])))));
+    e('div', { className: 'b-factors' }, f.filter(Boolean).map((x, i) => e('div', { key: i, className: 'b-req' + (x[0] ? ' ok' : '') }, e('span', { className: 'b-req-dot' }, x[0] ? '✓' : ''), e('span', { className: 'b-req-l' }, x[1])))));
 }
 function TipsNative(_p) {
   const tips = getSmartSuggestions(_p.data, _p.dp);
@@ -5164,7 +5198,7 @@ function FreshStartSheet(_p) {
     // Tarjetas: lo que debes hoy ya incluye lo que compraste; desde aquí solo se suman compras nuevas
     cards: Object.fromEntries(cards0.map(c => [c.id, {
       balance: String(Math.round(debtBalance(c, cardTx)) || ''), minPayment: String(c.minPayment || ''), cutDay: String(c.cutDay || ''),
-      dueDay: String(c.dueDay || ''), creditLimit: String(c.creditLimit || ''), paid: paidDefault(c.dueDay, paidThisMonth(c)), gone: false
+      dueDay: String(c.dueDay || ''), creditLimit: String(c.creditLimit || ''), pngi: String(c.pngi || ''), paid: paidDefault(c.dueDay, paidThisMonth(c)), gone: false
     }])),
     newCards: [],
     newDebts: [],
@@ -5189,7 +5223,7 @@ function FreshStartSheet(_p) {
     };
     const cards = cards0.filter(c => !f.cards[c.id].gone).map(c => {
       const x = f.cards[c.id];
-      return { ...c, balance: +x.balance || 0, minPayment: x.minPayment === '' ? c.minPayment : +x.minPayment, cutDay: x.cutDay || c.cutDay, dueDay: x.dueDay || c.dueDay, creditLimit: x.creditLimit === '' ? c.creditLimit : +x.creditLimit, monthlyPayments: keepPaid(c, x.paid, x.dueDay || c.dueDay) };
+      return { ...c, balance: +x.balance || 0, minPayment: x.minPayment === '' ? c.minPayment : +x.minPayment, pngi: x.pngi === '' || x.pngi == null ? '' : +x.pngi, cutDay: x.cutDay || c.cutDay, dueDay: x.dueDay || c.dueDay, creditLimit: x.creditLimit === '' ? c.creditLimit : +x.creditLimit, monthlyPayments: keepPaid(c, x.paid, x.dueDay || c.dueDay) };
     });
     const added = f.newCards.filter(c => c.name.trim()).map((c, i) => { const nc = { ...DEBT_BLANK, id: 'n' + ts + i, type: 'tarjeta', name: c.name.trim(), balance: +c.balance || 0, minPayment: +c.minPayment || '', cutDay: c.cutDay, dueDay: c.dueDay, creditLimit: +c.creditLimit || '', monthlyPayments: [] }; nc.monthlyPayments = keepPaid(nc, !!c.paid, c.dueDay); return nc; });
     const others = others0.filter(d => !f.debts[d.id].gone).map(d => {
@@ -5266,6 +5300,7 @@ function FreshStartSheet(_p) {
     !x.gone && e(React.Fragment, null,
       e('div', { className: 'b-cardedit-row' }, e('span', null, 'Debes hoy en total', e('small', null, 'Saldo actual en la app de tu banco, con compras recientes')), inline(x.balance, v => up({ balance: v }), `Lo que debes en ${name}`)),
       e('div', { className: 'b-cardedit-row' }, e('span', null, 'Pago mínimo del mes'), inline(x.minPayment, v => up({ minPayment: v }), `Pago mínimo de ${name}`)),
+      e('div', { className: 'b-cardedit-row' }, e('span', null, 'Pago para no generar intereses', e('small', null, 'Opcional. Si lo pones, Budgy aparta este en vez del mínimo')), inline(x.pngi || '', v => up({ pngi: v }), `Pago para no generar intereses de ${name}`)),
       e('div', { className: 'b-cardedit-row' }, e('span', null, 'Día de corte', e('small', null, 'Cuando el banco cierra tu mes')), dayIn(x.cutDay, v => up({ cutDay: v }), `Día de corte de ${name}`)),
       e('div', { className: 'b-cardedit-row' }, e('span', null, 'Fecha límite de pago'), dayIn(x.dueDay, v => up({ dueDay: v }), `Día límite de pago de ${name}`)),
       e('div', { className: 'b-cardedit-row' }, e('span', null, 'Límite de crédito'), inline(x.creditLimit, v => up({ creditLimit: v }), `Límite de ${name}`)),
@@ -5513,11 +5548,25 @@ function apartadosThisQuincena(data, now) {
   return (data.apartados || []).reduce((s, a) => s + (a.moves || []).filter(m => m.date && m.date.startsWith(mk) && (+m.date.slice(8, 10) <= 15) === q1).reduce((x, m) => x + (+m.amount || 0), 0), 0);
 }
 
+// Cuánto apartar por quincena para llegar a la meta en la fecha
+function apartadoPlan(a) {
+  const goal = +a.goal || 0, saved = +a.saved || 0;
+  if (!goal) return null;
+  const left = goal - saved;
+  if (left <= 0) return { perQ: 0, done: true, text: '¡Ya juntaste todo! Listo para cuando lo necesites.' };
+  if (!a.when) return null;
+  const days = daysBetween(todayISO(), a.when);
+  if (days <= 0) return { perQ: left, late: true, text: `Ya llegó la fecha y te faltan ${fmt(left)}.` };
+  const q = Math.max(1, Math.ceil(days / 15.2));
+  return { perQ: left / q, text: `Aparta ${fmt(Math.ceil(left / q))} por quincena y llegas al ${fmtDate(a.when)} con ${fmt(goal)}.` };
+}
 function ApartadoSheet(_p) {
   const a = _p.apartado;
   const [mode, setMode] = useState(a ? 'add' : 'new');
-  const [f, setF] = useState({ name: a ? a.name : '', goal: a ? a.goal || '' : '', amount: '' });
+  const [f, setF] = useState({ name: a ? a.name : '', goal: a ? a.goal || '' : '', amount: '', when: a ? a.when || '' : '' });
   const n = +f.amount || 0;
+  const TEMPLATES = ['Predial', 'Tenencia', 'Seguro del auto', 'Navidad y regalos', 'Vacaciones', 'Inscripción escolar'];
+  const plan = apartadoPlan({ goal: +f.goal || 0, saved: (a ? +a.saved || 0 : 0) + (mode === 'new' ? n : 0), when: f.when });
   const move = sign => {
     const amt = sign * n;
     const saved = Math.max(0, (+a.saved || 0) + amt);
@@ -5526,16 +5575,20 @@ function ApartadoSheet(_p) {
   return e(Sheet, { title: a ? a.name : 'Nuevo apartado', label: 'Apartado', onClose: _p.onClose },
     mode === 'new' ? e(React.Fragment, null,
       e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Separa dinero para algo que viene: vacaciones, regalos, el predial, la tenencia. Lo que apartes ya no cuenta como libre para gastar.'),
+      e('div', { className: 'b-chips' }, TEMPLATES.map(t => e('button', { key: t, className: 'b-chip' + (f.name === t ? ' on' : ''), onClick: () => setF({ ...f, name: t }) }, t))),
       e(Field, { label: '¿Para qué es?', text: true, value: f.name, ph: 'Ej. Vacaciones de diciembre', onChange: v => setF({ ...f, name: v }) }),
+      e(Field, { label: '¿Para cuándo lo necesitas? (opcional)', type: 'date', value: f.when, onChange: v => setF({ ...f, when: v }) }),
       e(Field, { label: '¿Cuánto necesitas? (opcional)', value: f.goal, ph: '$0', onChange: v => setF({ ...f, goal: v }) }),
       e(Field, { label: '¿Cuánto apartas hoy? (opcional)', value: f.amount, ph: '$0', onChange: v => setF({ ...f, amount: v }) }),
-      e('button', { className: 'b-primary', disabled: !f.name.trim(), onClick: () => _p.onSave({ id: 'a' + uid(), name: f.name.trim(), goal: +f.goal || 0, saved: n, moves: n ? [{ date: todayISO(), amount: n }] : [], createdAt: todayISO() }) }, 'Crear apartado')) :
+      plan && e('p', { className: 'b-note good' }, plan.text),
+      e('button', { className: 'b-primary', disabled: !f.name.trim(), onClick: () => _p.onSave({ id: 'a' + uid(), name: f.name.trim(), goal: +f.goal || 0, saved: n, when: f.when || '', moves: n ? [{ date: todayISO(), amount: n }] : [], createdAt: todayISO() }) }, 'Crear apartado')) :
       e(React.Fragment, null,
         e('div', { className: 'b-seg', role: 'group' }, [['add', 'Apartar más'], ['out', 'Sacar dinero'], ['edit', 'Editar']].map(o => e('button', { key: o[0], className: mode === o[0] ? 'on' : '', onClick: () => setMode(o[0]) }, o[1]))),
         mode === 'edit' ? e(React.Fragment, null,
           e(Field, { label: 'Nombre', text: true, value: f.name, onChange: v => setF({ ...f, name: v }) }),
           e(Field, { label: 'Meta', value: f.goal, ph: '$0', onChange: v => setF({ ...f, goal: v }) }),
-          e('button', { className: 'b-primary', disabled: !f.name.trim(), onClick: () => _p.onSave({ ...a, name: f.name.trim(), goal: +f.goal || 0 }) }, 'Guardar'),
+          e(Field, { label: '¿Para cuándo?', type: 'date', value: f.when, onChange: v => setF({ ...f, when: v }) }),
+          e('button', { className: 'b-primary', disabled: !f.name.trim(), onClick: () => _p.onSave({ ...a, name: f.name.trim(), goal: +f.goal || 0, when: f.when || '' }) }, 'Guardar'),
           e('div', { style: { marginTop: 12 } }, e(ConfirmDelete, { label: 'Borrar este apartado', question: `El dinero (${fmt(a.saved)}) vuelve a contar como libre.`, onYes: _p.onDelete }))) :
           e(React.Fragment, null,
             e('p', { className: 'b-note', style: { marginTop: 0 } }, mode === 'add' ? `Llevas ${fmt(a.saved)}${a.goal ? ` de ${fmt(a.goal)}` : ''}. Lo que apartes se resta de tu dinero libre.` : `Tienes ${fmt(a.saved)} apartados. Lo que saques vuelve a tu dinero libre; si lo gastas, anótalo como siempre.`),
@@ -5553,13 +5606,13 @@ function ApartadosSection(_p) {
   const cur = open && open !== 'new' ? list.find(x => x.id === open) : null;
   return e('section', null,
     e('div', { className: 'b-sh' }, e('h2', null, 'Apartados'), list.length > 0 && e('span', { className: 'b-d' }, fmt(apartadosTotal(data)), ' en total')),
-    list.length === 0 && e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Separa dinero para algo que viene (vacaciones, regalos, el predial) y deja de contarlo como libre. Así no te lo gastas sin darte cuenta.'),
+    list.length === 0 && e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Separa dinero para lo que sabes que viene: predial, tenencia, seguro del auto, Navidad, vacaciones. Pon la fecha y Budgy te dice cuánto apartar cada quincena para no llegar con prisas.'),
     list.length > 0 && e('div', { className: 'b-rows' }, list.map(a => {
       const pctA = a.goal > 0 ? Math.min(100, Math.round((+a.saved || 0) / a.goal * 100)) : null;
       return e('button', { key: a.id, onClick: () => setOpen(a.id) },
         e(CatIcon, { c: { fg: '#0E9F6E', bg: 'rgba(16,185,129,.14)', p: '<path d="M4 9.5h16v10a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19.5zM3 6.5h18v3H3zM12 6.5v14.5M12 6.5C10 3 7 3.5 7 5.2S9.5 6.5 12 6.5c2.5 0 5 .4 5-1.3S14 3 12 6.5z"/>' } }),
         e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, a.name),
-          e('div', { className: 'b-d' }, a.goal > 0 ? `${pctA}% de ${fmt(a.goal)}` : 'Sin meta'),
+          e('div', { className: 'b-d' }, a.goal > 0 ? (apartadoPlan(a) && !apartadoPlan(a).done ? `${pctA}% · ${apartadoPlan(a).late ? 'ya llegó la fecha' : `aparta ${fmt(Math.ceil(apartadoPlan(a).perQ))} por quincena`}` : `${pctA}% de ${fmt(a.goal)}`) : 'Sin meta'),
           pctA != null && e('span', { className: 'b-track sm', style: { marginTop: 6 } }, e('i', { style: { width: pctA + '%', background: 'var(--emerald)' } }))),
         e('span', { className: 'b-n b-num' }, fmt(a.saved)));
     })),
@@ -5924,7 +5977,8 @@ function PrivacySection() {
     ['Tus datos viven en tu teléfono', 'Lo que anotas se guarda solo aquí. No hay cuentas ni base de datos central: nadie más lo puede ver, ni quien hizo Budgy.'],
     ['PIN protegido', 'Tu PIN se guarda cifrado, se bloquea tras 5 intentos y Budgy se cierra sola si la dejas más de 2 minutos.'],
     ['Avisos (opcional)', 'Si los activas, el servidor de avisos recibe solo lo necesario para mandarlos: nombre, día y monto de tus pagos y un resumen de la semana. Al apagarlos se borra.'],
-    ['Respaldos', 'Los guardas tú. Protégelos con contraseña antes de mandarlos por WhatsApp o subirlos a la nube.']
+    ['Respaldos', 'Los guardas tú. Protégelos con contraseña antes de mandarlos por WhatsApp o subirlos a la nube.'],
+    ['Instálala', 'En iPhone, si usas Budgy desde Safari sin instalarla y pasas semanas sin abrirla, el teléfono puede borrar sus datos. Instalada en tu pantalla de inicio no pasa.']
   ];
   return e('section', null,
     e('div', { className: 'b-sh' }, e('h2', null, 'Tu privacidad')),
@@ -5957,6 +6011,7 @@ function CardPaySheet(_p) {
       e('button', { className: kind === 'extra' ? 'on' : '', onClick: () => setKind('extra') }, 'Es un abono extra')),
     e(Field, { label: isExtra ? '¿Cuánto abonaste?' : '¿Cuánto pagaste?', value: amt, ph: '$0', onChange: setAmt }),
     e('div', { className: 'b-chips', style: { marginTop: 8 } },
+      !isExtra && +c.pngi > 0 && e('button', { className: 'b-chip', onClick: () => setAmt(String(+c.pngi)) }, `Sin intereses ${fmt(c.pngi)}`),
       !isExtra && +c.minPayment > 0 && e('button', { className: 'b-chip', onClick: () => setAmt(String(+c.minPayment)) }, `Mínimo ${fmt(c.minPayment)}`),
       owed > 0 && e('button', { className: 'b-chip', onClick: () => setAmt(String(Math.round(owed))) }, `Todo ${fmt(owed)}`)),
     e('p', { className: 'b-note' }, isExtra ? 'Abono: se resta de tu débito, baja lo que debes y libera crédito. Tu siguiente fecha de pago no cambia.' : 'Pago del mes: quedas al corriente con este corte. Se resta de tu débito y baja lo que debes.'),
@@ -6010,6 +6065,16 @@ function invTotals(data) {
 // Fondo de emergencia conectado a una inversión disponible diario: su valor es lo que llevas
 const emerInv = data => data.emerInvId ? (data.investments || []).find(i => i.id === data.emerInvId && i.kind === 'liquida' && i.status !== 'cobrada') || null : null;
 const emerSavedOf = data => { const i = emerInv(data); return i ? invValue(i).value : +data.emerSaved || 0; };
+// Gastos hormiga: café, plataformas y compras chicas que se acumulan sin sentirse
+const HORMIGA_MAX = 150;
+function hormigaMonth(data) {
+  const now = new Date(), mk = now.toLocalISO().slice(0, 7);
+  const tx = spendTx(data).filter(t => t.date && t.date.startsWith(mk) && !t.fixedRef && (['cafe', 'subs'].includes(t.cat) || +t.amount <= HORMIGA_MAX && !['v1', 'gas', 'casa', 'salud'].includes(t.cat)));
+  const total = tx.reduce((s, t) => s + (+t.amount || 0), 0);
+  const by = {};
+  tx.forEach(t => { const n = (quickCat(t.cat) || { n: 'Otro' }).n; by[n] = (by[n] || 0) + (+t.amount || 0); });
+  return { total, count: tx.length, year: total / Math.max(1, now.getDate()) * 365, top: Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 3) };
+}
 const invMatured = data => (data.investments || []).filter(i => i.kind === 'plazo' && i.status !== 'cobrada' && i.maturity && i.maturity <= todayISO());
 const INV_BLANK = { kind: 'liquida', name: '', amount: '', rate: '', start: '', termDays: 28, maturity: '', value: '', from: 'cuenta' };
 
@@ -6737,6 +6802,18 @@ function MainApp(_ref22) {
       catsV2: true
     });
   }, [data.cafeMigrated, data.catsV2]);
+  // Guarda tu patrimonio de cada mes para ver si va subiendo
+  useEffect(() => {
+    const mk = new Date().toLocalISO().slice(0, 7);
+    const nw = Math.round(getWealth(data).netWorth);
+    if ((data.nwHistory || {})[mk] === nw) return;
+    update({
+      nwHistory: {
+        ...(data.nwHistory || {}),
+        [mk]: nw
+      }
+    });
+  }, [data]);
   // Racha = días seguidos anotando gastos (o "hoy no gasté")
   useEffect(() => {
     const st = logStreak(data);
