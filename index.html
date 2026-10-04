@@ -859,6 +859,12 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-goal-btns .b-goal-btn{margin-top:0}
 .b-goal-btn.ghost{background:transparent;box-shadow:inset 0 0 0 2px rgba(11,42,32,.25)}
 .b-rows>button.b-sel{box-shadow:inset 0 0 0 2px var(--emerald);border-radius:var(--r-c)}
+.b-503020{display:flex;flex-direction:column;gap:14px}
+.b-r5-h{display:flex;align-items:baseline;gap:8px}
+.b-r5-h b{flex:1;font-size:.95rem}
+.b-r5-h .b-num{font-weight:800;font-size:1.05rem}
+.b-r5-t{position:relative;display:block;margin:6px 0 4px}
+.b-r5-t em{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--text);opacity:.55;border-radius:2px}
 </style>
 </head>
 <body>
@@ -3614,7 +3620,9 @@ function PresupuestoScreen(_p) {
     }, `Este mes: ${fmt(hm.total)} en ${hm.count} compras chicas (café, plataformas, antojos de menos de ${fmt(HORMIGA_MAX)}). A este ritmo son unos `, h('b', null, fmt(hm.year)), ' al año.'), hm.top.length > 0 && h('p', {
       className: 'b-note'
     }, 'Lo que más pesa: ', hm.top.map(t => `${t[0]} ${fmt(t[1])}`).join(' · ')));
-  })(), h(HealthNative, {
+  })(), h(Rule503020, {
+    data: data
+  }), h(HealthNative, {
     data: data,
     dp: dp,
     game: _p.game
@@ -5836,6 +5844,59 @@ function TourSheet(_p) {
    tus ingresos, tus pagos fijos, tus deudas y tu ritmo REAL de gasto del día a día. */
 const DAYS_MONTH = 30.4;
 // Ritmo real de gasto del día a día en los últimos 60 días (sin pagos fijos que anotaste como gasto)
+/* ── Regla 50/30/20: necesidades, gustos y ahorro en un mes normal ── */
+const NEED_CATS = ['v1', 'v2', 'gas', 'casa', 'salud', 'mascota'];
+const WANT_FIXED = [5, 8]; // pagos fijos de entretenimiento y ropa cuentan como gustos
+function rule503020(data) {
+  const m = monthlyModel(data);
+  if (!m.income) return null;
+  // Gasto del día a día por categoría: lo real de los últimos 60 días o, si no hay, tus límites
+  const today = todayISO(), since = shiftDay(today, -60);
+  const fixedNames = (data.exps || []).map(x => String(x.name || '').toLowerCase().trim()).filter(n => n.length >= 3);
+  const isFixed = t => { const d = String(t.desc || '').toLowerCase(); return fixedNames.some(n => d.includes(n)); };
+  const all = spendTx(data).filter(t => t.date && t.date > since && t.date <= today && !t.fixedRef && !isFixed(t));
+  let byCat = {}, src = 'real';
+  if (m.source === 'real' || m.source === 'short') {
+    const first = all.reduce((a, t) => t.date < a ? t.date : a, today);
+    const days = Math.max(1, daysBetween(first, today) + 1);
+    all.forEach(t => { const k = t.cat || 'v6'; byCat[k] = (byCat[k] || 0) + (+t.amount || 0) / days * DAYS_MONTH; });
+  } else { src = 'limits'; (data.varExps || []).forEach(v => { byCat[v.catId] = (byCat[v.catId] || 0) + (+v.amount || 0); }); }
+  const varNeeds = Object.keys(byCat).filter(k => NEED_CATS.includes(k)).reduce((s, k) => s + byCat[k], 0);
+  const varWants = Object.keys(byCat).filter(k => !NEED_CATS.includes(k)).reduce((s, k) => s + byCat[k], 0);
+  const fixedNeeds = (data.exps || []).filter(x => !x.saving && !WANT_FIXED.includes(+x.catId)).reduce((s, x) => s + (+x.amount || 0), 0);
+  const fixedWants = (data.exps || []).filter(x => !x.saving && WANT_FIXED.includes(+x.catId)).reduce((s, x) => s + (+x.amount || 0), 0);
+  const needs = fixedNeeds + m.debts + varNeeds, wants = fixedWants + varWants;
+  const savings = m.income - needs - wants; // lo que queda (incluye tu ahorro programado)
+  const pct = v => Math.round(v / m.income * 100);
+  const topWants = Object.keys(byCat).filter(k => !NEED_CATS.includes(k) && quickCat(k)).sort((a, b) => byCat[b] - byCat[a]).slice(0, 3).map(k => [quickCat(k).n, byCat[k]]);
+  return { income: m.income, needs, wants, savings, pn: pct(needs), pw: pct(wants), ps: pct(savings), src, topWants, debts: m.debts, programmed: m.savings };
+}
+function Rule503020(_p) {
+  const r = rule503020(_p.data);
+  if (!r) return null;
+  const rows = [
+    ['Necesidades', r.needs, r.pn, 50, 'var(--indigo)', 'Renta, súper, transporte, salud, servicios y pagos de deudas'],
+    ['Gustos', r.wants, r.pw, 30, 'var(--mango)', 'Comer fuera, café, salidas, plataformas, compras'],
+    ['Ahorro', Math.max(0, r.savings), Math.max(0, r.ps), 20, 'var(--emerald)', 'Lo que te queda: ahorro, inversión o abonos extra a deudas']
+  ];
+  // El consejo más útil según dónde está el desbalance
+  const tips = [];
+  if (r.savings < 0) tips.push(`En un mes normal gastas ${fmt(-r.savings)} más de lo que ganas. Empieza por recortar gustos.`);
+  else if (r.ps < 20) {
+    if (r.pw > 30) tips.push(`Tus gustos se llevan ${r.pw}%. Bajarlos a 30% libera ${fmt(r.wants - r.income * 0.3)} al mes para ahorrar${r.topWants.length ? ` (lo que más pesa: ${r.topWants.map(t => t[0]).join(', ')})` : ''}.`);
+    if (r.pn > 50) tips.push(`Tus necesidades se llevan ${r.pn}%${r.debts > r.income * 0.15 ? ': buena parte son deudas, liquidarlas es lo que más te libera' : '. Revisa pagos fijos que se puedan renegociar o cambiar'}.`);
+    tips.push(`Para llegar a 20% de ahorro te faltan ${fmt(r.income * 0.2 - Math.max(0, r.savings))} al mes.`);
+  } else tips.push(`¡Muy bien! Ahorras ${r.ps}% de lo que ganas. Lo ideal es que ese dinero trabaje: fondo de emergencia primero, luego inversiones.`);
+  return e('section', null,
+    e('div', { className: 'b-sh' }, e('h2', null, 'Tu reparto ideal: 50 / 30 / 20')),
+    e('div', { className: 'b-503020' }, rows.map(x => e('div', { key: x[0], className: 'b-r5' },
+      e('div', { className: 'b-r5-h' }, e('b', null, x[0]), e('span', { className: 'b-num' + (x[0] === 'Ahorro' ? (x[2] >= x[3] ? ' b-ok' : ' b-warn-t') : (x[2] > x[3] ? ' b-warn-t' : ' b-ok')) }, `${x[2]}%`), e('span', { className: 'b-d' }, `meta ${x[3]}%`)),
+      e('span', { className: 'b-track sm b-r5-t' }, e('i', { style: { width: Math.min(100, x[2]) + '%', background: x[4] } }), e('em', { style: { left: x[3] + '%' }, 'aria-hidden': 'true' })),
+      e('div', { className: 'b-d' }, `${fmt(x[1])} al mes · ${x[5]}`)))),
+    tips.map((t, i) => e('p', { key: i, className: 'b-note' + (i === 0 && (r.savings < 0) ? ' warn' : '') }, t)),
+    e(More, { title: '¿Qué es la regla 50/30/20?' }, e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Una guía sencilla para repartir lo que ganas: la mitad para lo indispensable, hasta 30% para lo que disfrutas y al menos 20% para tu futuro (ahorro, inversión o pagar deudas antes). No es ley: si tienes deudas caras, conviene mover parte de los gustos a pagarlas.'),
+      e('p', { className: 'b-note' }, r.src === 'real' ? 'Budgy usa tus pagos fijos, tus deudas y lo que de verdad gastas por categoría.' : 'Budgy usa tus pagos fijos, tus deudas y tus límites por categoría. Cuando anotes más, usará lo que de verdad gastas.')));
+}
 function spendingPace(data, opts) {
   opts = opts || {};
   const today = todayISO();
