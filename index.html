@@ -849,6 +849,10 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 
 .b-privacy .b-check{flex:none}
 .b-privacy>div{align-items:flex-start}
+
+.b-kindrow{display:flex;gap:12px;align-items:center;text-align:left;width:100%;background:none;border:0;padding:10px 6px;border-radius:var(--r-c);font:inherit;color:inherit}
+.b-kindrow.on{background:var(--as);box-shadow:inset 0 0 0 2px var(--indigo)}
+.b-tag2{display:inline-block;font-size:.78rem;font-weight:700;padding:4px 10px;border-radius:99px}
 </style>
 </head>
 <body>
@@ -1397,9 +1401,10 @@ const ASSET_TYPES = [{
 }];
 function getWealth(data) {
   const assets = data.assets || [];
-  const assetsTotal = assets.reduce((s, a) => s + (+a.value || 0), 0);
-  const invested = assets.filter(a => a.type === 'inversion').reduce((s, a) => s + (+a.value || 0), 0);
-  const passive = assets.reduce((s, a) => s + (+a.monthlyIncome || 0), 0);
+  const inv = invTotals(data);
+  const assetsTotal = assets.reduce((s, a) => s + (+a.value || 0), 0) + inv.total;
+  const invested = assets.filter(a => a.type === 'inversion').reduce((s, a) => s + (+a.value || 0), 0) + inv.total;
+  const passive = assets.reduce((s, a) => s + (+a.monthlyIncome || 0), 0) + inv.monthly;
   const emer = +data.emerSaved || 0;
   const debt = getTotalDebt(data);
   const monthlyExp = (data.exps || []).reduce((s, e) => s + (+e.amount || 0), 0) + (data.varExps || []).reduce((s, e) => s + (+e.amount || 0), 0);
@@ -1610,7 +1615,7 @@ function WealthSection(_p) {
   const save = () => {
     if (!form.name || !(+form.value >= 0)) return;
     const next = form.id ? assets.map(a => a.id === form.id ? { ...form, value: +form.value || 0, monthlyIncome: +form.monthlyIncome || 0 } : a)
-      : [...assets, { ...form, id: 'a' + Date.now(), value: +form.value || 0, monthlyIncome: +form.monthlyIncome || 0 }];
+      : [...assets, { ...form, id: 'a' + uid(), value: +form.value || 0, monthlyIncome: +form.monthlyIncome || 0 }];
     _p.onChange({ assets: next });
     setForm(null);
   };
@@ -2330,7 +2335,9 @@ function calcDP(data) {
     const paidOut = (data.debts || []).reduce((s, d) => s + (d.monthlyPayments || []).filter(p => +p.amount > 0 && afterBaseline(data, p.paidAt, p.ts)).reduce((x, p) => x + +p.amount, 0), 0) +
       (data.expPayLog || []).filter(p => p.method !== 'cash' && afterBaseline(data, p.date, p.ts)).reduce((x, p) => x + (+p.amount || 0), 0);
     const paidCash = (data.expPayLog || []).filter(p => p.method === 'cash' && afterBaseline(data, p.date, p.ts)).reduce((x, p) => x + (+p.amount || 0), 0);
-    currentDebit = saldoD + totalPaydays - spentDebit - paidOut;
+    // Lo que metiste a inversiones sale de tu cuenta; lo que te regresó, entra
+    const invOut = (data.invMoves || []).filter(m => afterBaseline(data, m.date, m.ts)).reduce((x, m) => x + (+m.amount || 0), 0);
+    currentDebit = saldoD + totalPaydays - spentDebit - paidOut - invOut;
     currentEfectivo = saldoE - spentCash - paidCash;
     const fixedPend = data.exps.filter(e => !expCard(e, data)).filter(e => e.day && +e.day >= day && (isQ1 ? +e.day <= 15 : +e.day >= 16)).filter(e => !(data.paidExps || {})[`${e.id}_${curMonth}`]);
     pendingFixed = fixedPend.reduce((s, e) => s + (+e.amount || 0), 0);
@@ -3139,7 +3146,10 @@ function HomeScreen(_p) {
     (data.exps || []).filter(x => hits(x.day) && !(data.paidExps || {})[`${x.id}_${M}`] && !od[`${x.id}|${M}`] && +x.amount > 0).forEach(x => askRows.push({ kind: 'exp', id: 'a' + x.id + M, x, name: x.name, pay: +x.amount, days: -10 - k, month: M, ask: true, when }));
     (data.debts || []).filter(d => !isDeadlineDebt(d) && hits(d.dueDay) && debtMonthPay(d) > 0 && !paidFor(d, M) && !od[`${d.id}|${M}`] && (d.type !== 'plan' || getPlanInfo(d).remaining > 0)).forEach(d => askRows.push({ kind: 'debt', id: 'a' + d.id + M, d, name: d.name, pay: debtMonthPay(d), days: -10 - k, month: M, ask: true, when }));
   }
-  const attention = [...askRows, ...overdueRows, ..._p.upcoming.filter(d => !overdueRows.some(o => o.kind === 'debt' && o.key.split('|')[0] === String(d.id)) && !askRows.some(o => o.kind === 'debt' && o.d.id === d.id)).map(d => ({
+  const invRows = invMatured(data).map(i => ({
+    kind: 'inv', id: 'inv' + i.id, inv: i, name: i.name, pay: invValue(i).atEnd, days: -20
+  }));
+  const attention = [...invRows, ...askRows, ...overdueRows, ..._p.upcoming.filter(d => !overdueRows.some(o => o.kind === 'debt' && o.key.split('|')[0] === String(d.id)) && !askRows.some(o => o.kind === 'debt' && o.d.id === d.id)).map(d => ({
     kind: 'debt', id: d.id, d, name: d.name, pay: isDeadlineDebt(d) ? +d.balance || 0 : debtPay(d), days: d.urg.daysLeft ?? 99,
     note: isDeadlineDebt(d) && deadlineOf(d) ? (d.urg.daysLeft === 0 ? 'Quedaste de pagarle hoy' : `Quedaste de pagarle el ${fmtDate(deadlineOf(d))}`) : null
   })), ...fixedDue].sort((a, b) => a.days - b.days).slice(0, simple ? Math.max(1, askRows.length) : Math.max(3, askRows.length));
@@ -3299,7 +3309,11 @@ function HomeScreen(_p) {
     return h('div', {
       key: it.id
     }, h(CatIcon, {
-      c: it.kind === 'exp' ? quickCat(FIXED_CAT_IC[+it.x.catId] || 'v6') : {
+      c: it.kind === 'inv' ? {
+        fg: '#0E9F6E',
+        bg: 'rgba(16,185,129,.14)',
+        p: INV_IC
+      } : it.kind === 'exp' ? quickCat(FIXED_CAT_IC[+it.x.catId] || 'v6') : {
         fg: 'var(--dim)',
         bg: 'var(--surface)',
         p: IC.card
@@ -3308,9 +3322,17 @@ function HomeScreen(_p) {
       className: 'b-m'
     }, h('div', {
       className: 'b-n'
-    }, it.ask ? `¿Ya pagaste ${it.name}${pay > 0 ? ` (${fmt(pay)})` : ''}?` : it.kind === 'exp' ? `${it.x && it.x.saving ? 'Ahorro' : 'Pagar'} ${it.name}${pay > 0 ? ` (${fmt(pay)})` : ''}${it.x && expCard(it.x, data) ? ` · con ${expCard(it.x, data).name}` : ''}` : pay > 0 ? `Pagar ${fmt(pay)} a ${it.name}` : `Pagar a ${it.name}`), h('div', {
+    }, it.kind === 'inv' ? `Venció tu inversión ${it.name}` : it.ask ? `¿Ya pagaste ${it.name}${pay > 0 ? ` (${fmt(pay)})` : ''}?` : it.kind === 'exp' ? `${it.x && it.x.saving ? 'Ahorro' : 'Pagar'} ${it.name}${pay > 0 ? ` (${fmt(pay)})` : ''}${it.x && expCard(it.x, data) ? ` · con ${expCard(it.x, data).name}` : ''}` : pay > 0 ? `Pagar ${fmt(pay)} a ${it.name}` : `Pagar a ${it.name}`), h('div', {
       className: 'b-d'
-    }, it.ask ? `${it.when}${it.kind === 'exp' && expCard(it.x, data) ? ` · con ${expCard(it.x, data).name}` : ''}` : it.overdue ? `Venció el ${it.day} de ${MES_CORTO[+it.month.slice(5, 7) - 1]} · no lo has pagado` : it.note || dueLabel(it.days))), it.ask ? h('div', {
+    }, it.kind === 'inv' ? `Te llegan unos ${fmt(pay)} · ¿qué hiciste con ellos?` : it.ask ? `${it.when}${it.kind === 'exp' && expCard(it.x, data) ? ` · con ${expCard(it.x, data).name}` : ''}` : it.overdue ? `Venció el ${it.day} de ${MES_CORTO[+it.month.slice(5, 7) - 1]} · no lo has pagado` : it.note || dueLabel(it.days))), it.kind === 'inv' ? h('div', {
+      className: 'b-askbtns'
+    }, h('button', {
+      className: 'b-secondary',
+      onClick: () => _p.invProps.onCollect(it.inv)
+    }, 'Me llegó'), h('button', {
+      className: 'b-textbtn b-quiet',
+      onClick: () => _p.invProps.onRollover(it.inv)
+    }, 'Reinvertí')) : it.ask ? h('div', {
       className: 'b-askbtns'
     }, h('button', {
       className: 'b-secondary',
@@ -3636,6 +3658,9 @@ function MetasScreen(_p) {
   }, 'Crear mi meta')), h(ApartadosSection, {
     data: data,
     onUpdate: _p.onUpdate
+  }), h(InvestmentsSection, {
+    data: data,
+    ..._p.invProps
   }), h(WealthSection, {
     data: data,
     onChange: _p.onUpdate
@@ -4944,7 +4969,10 @@ function pushPayments(data) {
   const month = new Date().toLocalISO().slice(0, 7);
   const debts = (data.debts || []).filter(d => d.dueDay).map(d => ({ name: d.name, day: +d.dueDay, amount: debtPay(d), paid: paidFor(d, dueMonthOf(d)) }));
   const fixed = (data.exps || []).filter(x => x.day).map(x => ({ name: x.name, day: +x.day, amount: +x.amount || 0, paid: !!(data.paidExps || {})[`${x.id}_${month}`] }));
-  return [...debts, ...fixed];
+  const today = new Date().toLocalISO().slice(0, 10);
+  const inv = (data.investments || []).filter(i => i.kind === 'plazo' && i.status !== 'cobrada' && i.maturity > today && daysBetween(today, i.maturity) <= 2)
+    .map(i => ({ name: 'tu inversión ' + i.name, day: +i.maturity.slice(8), amount: Math.round(invValue(i).atEnd || 0), paid: false }));
+  return [...debts, ...fixed, ...inv];
 }
 function pushLastLog(data) {
   const today = new Date().toLocalISO().slice(0, 10);
@@ -5458,7 +5486,7 @@ function ApartadoSheet(_p) {
       e(Field, { label: '¿Para qué es?', text: true, value: f.name, ph: 'Ej. Vacaciones de diciembre', onChange: v => setF({ ...f, name: v }) }),
       e(Field, { label: '¿Cuánto necesitas? (opcional)', value: f.goal, ph: '$0', onChange: v => setF({ ...f, goal: v }) }),
       e(Field, { label: '¿Cuánto apartas hoy? (opcional)', value: f.amount, ph: '$0', onChange: v => setF({ ...f, amount: v }) }),
-      e('button', { className: 'b-primary', disabled: !f.name.trim(), onClick: () => _p.onSave({ id: 'a' + Date.now(), name: f.name.trim(), goal: +f.goal || 0, saved: n, moves: n ? [{ date: todayISO(), amount: n }] : [], createdAt: todayISO() }) }, 'Crear apartado')) :
+      e('button', { className: 'b-primary', disabled: !f.name.trim(), onClick: () => _p.onSave({ id: 'a' + uid(), name: f.name.trim(), goal: +f.goal || 0, saved: n, moves: n ? [{ date: todayISO(), amount: n }] : [], createdAt: todayISO() }) }, 'Crear apartado')) :
       e(React.Fragment, null,
         e('div', { className: 'b-seg', role: 'group' }, [['add', 'Apartar más'], ['out', 'Sacar dinero'], ['edit', 'Editar']].map(o => e('button', { key: o[0], className: mode === o[0] ? 'on' : '', onClick: () => setMode(o[0]) }, o[1]))),
         mode === 'edit' ? e(React.Fragment, null,
@@ -5621,6 +5649,7 @@ function buildAIReport(data, months) {
   L.push(`- Días que faltan de la quincena: ${dp.daysLeft}`);
   L.push(`- Fondo de emergencia: $${m(data.emerSaved)} de meta $${m(data.emerGoal)}`);
   (data.apartados || []).forEach(a => L.push(`- Apartado "${a.name}": $${m(a.saved)}${a.goal ? ` de meta $${m(a.goal)}` : ''}`));
+  (data.investments || []).filter(i => i.status !== 'cobrada').forEach(i => { const v = invValue(i); L.push(`- Inversión "${i.name}" (${invKind(i.kind).t}${+i.rate ? `, ${i.rate}% anual` : ''}${i.kind === 'plazo' ? `, vence ${i.maturity}` : ''}): invertí $${m(i.amount)}, vale hoy ~$${m(v.value)}`); });
   if ((data.exps || []).length) {
     L.push('');
     L.push('## Pagos fijos al mes');
@@ -5891,6 +5920,152 @@ function CardPaySheet(_p) {
     e('button', { className: 'b-primary', disabled: !(n > 0), onClick: () => _p.onPay(c, n, isExtra) }, n > 0 ? `${isExtra ? 'Registrar abono' : 'Registrar pago'} de ${fmt(n)}` : 'Registrar'));
 }
 
+/* ════ INVERSIONES ════
+   Tres tipos, porque no todo lo invertido se puede usar:
+   · liquida: disponible cuando quieras (cajitas, BONDDIA). Interés compuesto diario.
+   · plazo:   bloqueado hasta su vencimiento (CETES, pagarés). Interés al vencimiento, base 360.
+   · variable: su valor sube y baja (fondos, acciones, cripto, PPR). Tú actualizas el valor. */
+const INFLACION = 4; // % anual de referencia (Banxico: meta 3% ± 1)
+const INV_KINDS = [
+  { key: 'liquida', t: 'Disponible diario', s: 'Cajitas Nu, Mercado Pago, Klar, Didi, BONDDIA. Lo sacas cuando quieras.', tag: 'Disponible', fg: '#0E9F6E', bg: 'rgba(16,185,129,.14)' },
+  { key: 'plazo', t: 'A plazo', s: 'CETES, pagarés, Nu a plazo, Supertasas. No lo puedes usar hasta que vence.', tag: 'Bloqueado', fg: '#4F46E5', bg: 'rgba(79,70,229,.13)' },
+  { key: 'variable', t: 'Variable', s: 'Fondos, GBM, acciones, cripto, PPR. Su valor sube y baja.', tag: 'Varía', fg: '#B45309', bg: 'rgba(251,191,36,.2)' }
+];
+const invKind = k => INV_KINDS.find(x => x.key === k) || INV_KINDS[0];
+const INV_IC = '<path d="M3.5 20.5h17M5.5 17v-4M10 17V9M14.5 17v-6M19 17V5.5M16.5 7l2.5-2.5L21.5 7"/>';
+const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 864e5);
+const addDaysISO = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toLocalISO().slice(0, 10); };
+// Cuánto vale hoy y cuánto ha ganado (estimado, antes de impuestos)
+function invValue(inv, today) {
+  today = today || todayISO();
+  const P = +inv.amount || 0, r = (+inv.rate || 0) / 100;
+  if (inv.kind === 'variable') { const v = inv.value != null && inv.value !== '' ? +inv.value : P; return { value: v, gain: v - P, available: true }; }
+  if (inv.kind === 'plazo') {
+    const days = Math.max(0, Math.min(daysBetween(inv.start, today), daysBetween(inv.start, inv.maturity)));
+    const total = daysBetween(inv.start, inv.maturity);
+    const atEnd = P * r * total / 360;
+    return { value: P + P * r * days / 360, gain: P * r * days / 360, atEnd: P + atEnd, gainEnd: atEnd, matured: today >= inv.maturity, daysLeft: Math.max(0, daysBetween(today, inv.maturity)), available: today >= inv.maturity };
+  }
+  const days = Math.max(0, daysBetween(inv.start, today));
+  const v = P * Math.pow(1 + r / 365, days);
+  return { value: v, gain: v - P, available: true };
+}
+// Si lo dejas N meses más, con interés compuesto
+const invProject = (value, rate, months) => value * Math.pow(1 + (+rate || 0) / 100 / 12, months);
+function invTotals(data) {
+  const list = (data.investments || []).filter(i => i.status !== 'cobrada');
+  const t = { total: 0, liquid: 0, locked: 0, gain: 0, monthly: 0, next: null };
+  list.forEach(i => {
+    const v = invValue(i);
+    t.total += v.value; t.gain += v.gain;
+    if (i.kind === 'plazo' && !v.matured) { t.locked += v.value; if (!t.next || i.maturity < t.next.maturity) t.next = i; } else t.liquid += v.value;
+    if (i.kind !== 'variable' && !v.matured) t.monthly += v.value * (+i.rate || 0) / 100 / 12;
+  });
+  return t;
+}
+// Inversiones a plazo que ya vencieron y no has dicho qué pasó con el dinero
+const invMatured = data => (data.investments || []).filter(i => i.kind === 'plazo' && i.status !== 'cobrada' && i.maturity && i.maturity <= todayISO());
+const INV_BLANK = { kind: 'liquida', name: '', amount: '', rate: '', start: '', termDays: 28, maturity: '', value: '', from: 'cuenta' };
+
+function InvestmentSheet(_p) {
+  const inv = _p.inv;
+  const today = todayISO();
+  const [f, setF] = useState(() => inv ? { ...inv, amount: String(inv.amount), rate: String(inv.rate ?? ''), value: inv.value != null ? String(inv.value) : '' } : { ...INV_BLANK, start: today });
+  const [mode, setMode] = useState(inv ? 'ver' : 'new');
+  const [amt, setAmt] = useState('');
+  const set = p => setF(prev => ({ ...prev, ...p }));
+  const k = invKind(f.kind);
+  const maturity = f.kind === 'plazo' ? (f.termDays ? addDaysISO(f.start || today, +f.termDays) : f.maturity) : '';
+  const draft = { ...f, amount: +f.amount || 0, rate: +f.rate || 0, maturity };
+  const v = invValue(draft);
+  const real = (+f.rate || 0) - INFLACION;
+  const save = () => _p.onSave({ ...draft, id: inv ? inv.id : 'i' + uid(), status: inv ? inv.status || 'activa' : 'activa', value: f.kind === 'variable' && f.value !== '' ? +f.value : null }, !inv && f.from === 'cuenta' ? +f.amount || 0 : 0);
+  const kv = (l, val, strong) => e('div', { className: 'b-kv' + (strong ? ' strong' : '') }, e('span', null, l), e('span', { className: 'b-num' }, val));
+  const preview = +f.amount > 0 && e('div', { className: 'b-breakdown' },
+    f.kind === 'plazo' ? e(React.Fragment, null, kv(`Al vencer (${fmtDate(maturity)})`, fmt(v.atEnd), true), kv('Ganas', '+' + fmt(v.gainEnd))) :
+      f.kind === 'liquida' ? e(React.Fragment, null, kv('Hoy vale', fmt(v.value), true), kv('En 1 año, si lo dejas', fmt(invProject(v.value, f.rate, 12))), kv('En 5 años', fmt(invProject(v.value, f.rate, 60)))) :
+        e(React.Fragment, null, kv('Vale hoy', fmt(v.value), true), kv(v.gain >= 0 ? 'Vas ganando' : 'Vas perdiendo', (v.gain >= 0 ? '+' : '−') + fmt(Math.abs(v.gain)))),
+    +f.rate > 0 && f.kind !== 'variable' && e('p', { className: 'b-note' + (real > 0 ? ' good' : ' warn') }, real > 0 ? `Le ganas a la inflación por ${real.toFixed(1)} puntos: tu dinero sí crece de verdad.` : `Con ${f.rate}% no le ganas a la inflación (~${INFLACION}%): tu dinero pierde valor aunque genere intereses.`));
+  if (mode === 'ver') {
+    const cur = invValue(inv);
+    return e(Sheet, { title: inv.name, label: inv.name, onClose: _p.onClose },
+      e('div', null, e('span', { className: 'b-tag2', style: { background: k.bg, color: k.fg } }, inv.kind === 'plazo' ? (cur.matured ? 'Ya venció' : `Bloqueado hasta ${fmtDate(inv.maturity)}`) : k.tag),
+        e('div', { className: 'b-amount sm', style: { marginTop: 8 } }, e(Money, { n: cur.value })), e('div', { className: 'b-cap' }, inv.kind === 'variable' ? 'valor que registraste' : 'vale hoy (estimado, antes de impuestos)')),
+      e('div', { className: 'b-breakdown' },
+        kv('Invertiste', fmt(inv.amount)),
+        kv(cur.gain >= 0 ? 'Has ganado' : 'Has perdido', (cur.gain >= 0 ? '+' : '−') + fmt(Math.abs(cur.gain))),
+        inv.kind === 'plazo' && kv(`Te llega el ${fmtDate(inv.maturity)}`, fmt(cur.atEnd)),
+        inv.kind === 'liquida' && +inv.rate > 0 && kv('En 1 año, si lo dejas', fmt(invProject(cur.value, inv.rate, 12))),
+        +inv.rate > 0 && kv('Tasa anual', inv.rate + '%')),
+      inv.kind === 'plazo' && cur.matured && e('div', { className: 'b-notice-btns' },
+        e('button', { className: 'b-primary sm', onClick: () => _p.onCollect(inv) }, 'Ya me llegó a mi cuenta'),
+        e('button', { className: 'b-secondary', onClick: () => _p.onRollover(inv) }, 'La reinvertí')),
+      inv.kind !== 'plazo' && e(React.Fragment, null,
+        e('div', { className: 'b-seg3 b-two', role: 'group' },
+          e('button', { onClick: () => setMode('mover') }, 'Meter o sacar dinero'),
+          e('button', { onClick: () => setMode('edit') }, inv.kind === 'variable' ? 'Actualizar valor' : 'Editar'))),
+      inv.kind === 'plazo' && !cur.matured && e('button', { className: 'b-secondary wide', onClick: () => setMode('edit') }, 'Editar'),
+      e('div', { style: { marginTop: 8 } }, e(ConfirmDelete, { label: 'Quitar esta inversión', question: 'Se quita de tu lista. Tu saldo no cambia.', onYes: () => _p.onDelete(inv) })));
+  }
+  if (mode === 'mover') {
+    const n = +amt || 0;
+    return e(Sheet, { title: inv.name, label: inv.name, onClose: _p.onClose },
+      e(Field, { label: '¿Cuánto?', value: amt, ph: '$0', onChange: setAmt }),
+      e('div', { className: 'b-notice-btns' },
+        e('button', { className: 'b-primary sm', disabled: !n, onClick: () => _p.onMove(inv, n) }, `Metí ${n ? fmt(n) : ''}`),
+        e('button', { className: 'b-secondary', disabled: !n || n > invValue(inv).value + 1, onClick: () => _p.onMove(inv, -n) }, `Saqué ${n ? fmt(n) : ''}`)),
+      e('p', { className: 'b-note' }, 'Lo que metes sale de tu cuenta de débito y lo que sacas regresa a ella.'));
+  }
+  return e(Sheet, { title: inv ? 'Editar inversión' : 'Nueva inversión', label: 'Inversión', onClose: _p.onClose },
+    !inv && e('div', { className: 'b-rows' }, INV_KINDS.map(x => e('button', { key: x.key, className: 'b-kindrow' + (f.kind === x.key ? ' on' : ''), onClick: () => set({ kind: x.key }) },
+      e(CatIcon, { c: { fg: x.fg, bg: x.bg, p: INV_IC } }), e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, x.t), e('div', { className: 'b-d' }, x.s))))),
+    e(Field, { label: '¿Dónde o qué es?', text: true, value: f.name, ph: f.kind === 'plazo' ? 'Ej. CETES 28 días' : f.kind === 'liquida' ? 'Ej. Cajita Nu' : 'Ej. Fondo GBM', onChange: v => set({ name: v }) }),
+    e(Field, { label: inv ? 'Cuánto invertiste' : '¿Cuánto inviertes?', value: f.amount, ph: '$0', onChange: v => set({ amount: v }) }),
+    f.kind !== 'variable' && e(Field, { label: 'Tasa anual (%)', value: f.rate, ph: f.kind === 'plazo' ? 'Ej. 10.5' : 'Ej. 9', help: 'Búscala como "tasa" o "GAT nominal" en tu app.', onChange: v => set({ rate: v }) }),
+    f.kind === 'variable' && e(Field, { label: 'Vale hoy (opcional)', value: f.value, ph: f.amount ? String(f.amount) : '$0', help: 'Actualízalo cuando revises tu app de inversiones.', onChange: v => set({ value: v }) }),
+    e(Field, { label: 'Fecha en que la hiciste', type: 'date', value: f.start, onChange: v => set({ start: v || today }) }),
+    f.kind === 'plazo' && e('div', { className: 'b-field' }, '¿A qué plazo?', e('div', { className: 'b-chips' }, [[28, '28 días'], [91, '91 días'], [182, '6 meses'], [364, '1 año']].map(o => e('button', { key: o[0], className: 'b-chip' + (+f.termDays === o[0] ? ' on' : ''), onClick: () => set({ termDays: o[0] }) }, o[1])),
+      e('button', { className: 'b-chip' + (!f.termDays ? ' on' : ''), onClick: () => set({ termDays: 0, maturity: f.maturity || addDaysISO(f.start || today, 30) }) }, 'Otra fecha'))),
+    f.kind === 'plazo' && !f.termDays && e(Field, { label: 'Fecha de vencimiento', type: 'date', value: f.maturity, onChange: v => set({ maturity: v }) }),
+    !inv && e('div', { className: 'b-field' }, '¿De dónde salió el dinero?', e('div', { className: 'b-chips' },
+      e('button', { className: 'b-chip' + (f.from === 'cuenta' ? ' on' : ''), onClick: () => set({ from: 'cuenta' }) }, 'De mi cuenta hoy'),
+      e('button', { className: 'b-chip' + (f.from === 'ya' ? ' on' : ''), onClick: () => set({ from: 'ya' }) }, 'Ya estaba invertido'))),
+    !inv && e('p', { className: 'b-note' }, f.from === 'cuenta' ? 'Se resta de tu débito: deja de contar como dinero libre.' : 'No toca tu saldo: solo lo registras para darle seguimiento.'),
+    preview,
+    e('button', { className: 'b-primary', disabled: !f.name.trim() || !(+f.amount > 0) || f.kind === 'plazo' && !maturity, onClick: save }, inv ? 'Guardar' : 'Agregar inversión'));
+}
+
+function InvestmentsSection(_p) {
+  const data = _p.data, list = (data.investments || []).filter(i => i.status !== 'cobrada');
+  const [open, setOpen] = useState(null); // 'new' | id
+  const t = invTotals(data);
+  const cur = open && open !== 'new' ? list.find(i => i.id === open) : null;
+  return e('section', null,
+    e('div', { className: 'b-sh' }, e('h2', null, 'Inversiones')),
+    list.length === 0 ? e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Registra tus cajitas, CETES, pagarés o fondos. Budgy calcula cuánto llevas ganado, te avisa cuando vence un plazo y separa lo que puedes usar de lo que está bloqueado.') :
+      e(React.Fragment, null,
+        e('div', { className: 'b-strip' },
+          e('div', null, e('div', { className: 'k' }, 'Invertido'), e('div', { className: 'v' }, moneyShort(t.total)), e('div', { className: 's' }, `+${fmt(t.gain)} ganado`)),
+          e('div', null, e('div', { className: 'k' }, 'Disponible'), e('div', { className: 'v' }, moneyShort(t.liquid)), e('div', { className: 's' }, 'lo puedes sacar')),
+          e('div', null, e('div', { className: 'k' }, 'Bloqueado'), e('div', { className: 'v' }, moneyShort(t.locked)), t.next && e('div', { className: 's' }, 'hasta ' + fmtDate(t.next.maturity)))),
+        t.monthly > 0 && e('p', { className: 'b-note good' }, `Tus inversiones te generan unos ${fmt(t.monthly)} al mes.`),
+        e('div', { className: 'b-rows' }, list.map(i => {
+          const v = invValue(i), k = invKind(i.kind);
+          return e('button', { key: i.id, onClick: () => setOpen(i.id) },
+            e(CatIcon, { c: { fg: k.fg, bg: k.bg, p: INV_IC } }),
+            e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, i.name),
+              e('div', { className: 'b-d' }, i.kind === 'plazo' ? (v.matured ? 'Ya venció · dinos qué pasó' : `Bloqueado · vence ${fmtDate(i.maturity)}`) : k.tag + (+i.rate ? ` · ${i.rate}% anual` : ''))),
+            e('div', { className: 'b-cf-end' }, e('span', { className: 'b-n b-num' }, fmt(v.value)), e('span', { className: 'b-d' + (v.gain >= 0 ? ' b-ok' : '') }, (v.gain >= 0 ? '+' : '−') + fmt(Math.abs(v.gain)))));
+        }))),
+    e('button', { className: 'b-primary ghost', onClick: () => setOpen('new') }, 'Agregar inversión'),
+    open && e(InvestmentSheet, { inv: cur, onClose: () => setOpen(null),
+      onSave: (inv, fromCash) => { _p.onSave(inv, fromCash); setOpen(null); },
+      onDelete: inv => { _p.onDelete(inv); setOpen(null); },
+      onMove: (inv, n) => { _p.onMove(inv, n); setOpen(null); },
+      onCollect: inv => { _p.onCollect(inv); setOpen(null); },
+      onRollover: inv => { _p.onRollover(inv); setOpen(null); } }));
+}
+
 function MainApp(_ref22) {
   let onLock = _ref22.onLock;
   const todayStr = new Date().toLocalISO().slice(0, 10);
@@ -5936,6 +6111,73 @@ function MainApp(_ref22) {
   const [closeQ, setCloseQ] = useState(null);
   const [cardPayOpen, setCardPayOpen] = useState(false);
   const [balOpen, setBalOpen] = useState(false);
+  // Inversiones: registrar, mover dinero, cobrar al vencer o reinvertir
+  const invMove = n => ({
+    date: new Date().toLocalISO().slice(0, 10),
+    ts: Date.now(),
+    amount: Math.round(n * 100) / 100
+  });
+  const invProps = {
+    onSave: (inv, fromCash) => update({
+      investments: (data.investments || []).some(i => i.id === inv.id) ? data.investments.map(i => i.id === inv.id ? inv : i) : [...(data.investments || []), inv],
+      invMoves: fromCash > 0 ? [...(data.invMoves || []), invMove(fromCash)] : data.invMoves || []
+    }),
+    onDelete: inv => update({
+      investments: (data.investments || []).filter(i => i.id !== inv.id)
+    }),
+    onMove: (inv, n) => {
+      const cur = invValue(inv);
+      const today = new Date().toLocalISO().slice(0, 10);
+      // Se capitaliza: lo que ya vale + lo que metes/sacas pasa a ser el nuevo capital desde hoy
+      const next = inv.kind === 'variable' ? {
+        ...inv,
+        amount: Math.max(0, (+inv.amount || 0) + n),
+        value: Math.max(0, cur.value + n)
+      } : {
+        ...inv,
+        amount: Math.max(0, cur.value + n),
+        start: today
+      };
+      update({
+        investments: data.investments.map(i => i.id === inv.id ? next : i),
+        invMoves: [...(data.invMoves || []), invMove(n)]
+      });
+      setToast({
+        text: n > 0 ? `Metiste ${fmt(n)} a ${inv.name}` : `Sacaste ${fmt(-n)} de ${inv.name}: ya está en tu cuenta`
+      });
+    },
+    onCollect: inv => {
+      const got = invValue(inv).atEnd || +inv.amount || 0;
+      update({
+        investments: data.investments.map(i => i.id === inv.id ? {
+          ...i,
+          status: 'cobrada',
+          collected: Math.round(got),
+          collectedAt: new Date().toLocalISO().slice(0, 10)
+        } : i),
+        invMoves: [...(data.invMoves || []), invMove(-got)]
+      });
+      setToast({
+        text: `Listo: ${fmt(got)} de ${inv.name} ya cuentan en tu dinero`
+      });
+    },
+    onRollover: inv => {
+      const got = invValue(inv).atEnd || +inv.amount || 0;
+      const term = +inv.termDays || daysBetween(inv.start, inv.maturity) || 28;
+      update({
+        investments: data.investments.map(i => i.id === inv.id ? {
+          ...i,
+          amount: Math.round(got * 100) / 100,
+          start: inv.maturity,
+          maturity: addDaysISO(inv.maturity, term),
+          termDays: term
+        } : i)
+      });
+      setToast({
+        text: `Reinvertiste ${fmt(got)} en ${inv.name}: vence el ${fmtDate(addDaysISO(inv.maturity, term))}`
+      });
+    }
+  };
   const lastTabRef = useRef('inicio');
   const [quickAmount, setQuickAmount] = useState(() => (_qs.get('monto') || '').replace(/[^0-9.]/g, ''));
   const [toast, setToast] = useState(null);
@@ -6694,6 +6936,7 @@ function MainApp(_ref22) {
       return g;
     }),
     onTab: goTab,
+    invProps,
     onAdd: () => setQuickOpen(true),
     onCloseQ: q => setCloseQ(q)
   };
