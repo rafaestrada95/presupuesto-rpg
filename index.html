@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https://presupuesto-rpg-production.up.railway.app; worker-src 'self'; manifest-src 'self'; media-src 'self' blob: data:; object-src 'none'; base-uri 'none'; form-action 'none'"/>
+<meta name="referrer" content="no-referrer"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="theme-color" content="#F7F7F5"/>
 <meta name="apple-mobile-web-app-title" content="Budgy"/>
@@ -844,6 +846,9 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-heroline{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:4px 12px;margin-top:8px;font-size:.88rem;color:var(--dim)}
 .b-heroline b{color:var(--text)}
 .b-heroline .b-textbtn{font-size:.85rem;min-height:36px;padding:0}
+
+.b-privacy .b-check{flex:none}
+.b-privacy>div{align-items:flex-start}
 </style>
 </head>
 <body>
@@ -869,17 +874,36 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 </div>
 <div id="root" style="display:none"></div>
 <script>
-var PK='mipres-pin',NK='mipres-name';
-var pv='',pf='',pstep='create';
+var PK='mipres-pin',NK='mipres-name',FK='budgy-pin-fail';
+var pv='',pf='',pstep='create',busy=false;
 function ls(k){try{var r=localStorage.getItem(k);return r?JSON.parse(r):null;}catch(e){return null;}}
 function ss(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+// El PIN se guarda como huella SHA-256 (no se puede leer de vuelta)
+function sha(t){try{if(window.crypto&&crypto.subtle&&window.TextEncoder){return crypto.subtle.digest('SHA-256',new TextEncoder().encode('budgy-pin:'+t)).then(function(b){return Array.prototype.map.call(new Uint8Array(b),function(x){return('0'+x.toString(16)).slice(-2);}).join('');});}}catch(e){}return Promise.resolve(null);}
+function storePin(v){return sha(v).then(function(h){ss(PK,h?{h:h}:v);});}
+function pinMatches(v){var st=ls(PK);if(st&&typeof st==='object'&&st.h)return sha(v).then(function(h){return h===st.h;});var ok=String(st)===v;if(ok)storePin(v);return Promise.resolve(ok);}
+function failState(){return ls(FK)||{n:0,until:0};}
+function lockedFor(){var f=failState();return Math.max(0,Math.ceil((f.until-Date.now())/1000));}
 function pinInit(){var h=!!ls(PK),n=ls(NK);if(h){pstep='enter';document.getElementById('pi').textContent='b';document.getElementById('pt').textContent='Hola'+(n?', '+n:'')+'! 👋';document.getElementById('ps2').textContent='Ingresa tu PIN para continuar';document.getElementById('pn').style.display='none';}}
 function pinDots(err){for(var i=0;i<4;i++){var d=document.getElementById('d'+i);d.className='pd'+(i<pv.length?(err?' er':' on'):'');}}
-function pinPress(d){if(pv.length>=4)return;pv+=d;document.getElementById('pe').textContent='';pinDots(false);if(pv.length===4)setTimeout(pinCheck,150);}
+function pinPress(d){if(busy||pv.length>=4)return;var w=pstep==='enter'?lockedFor():0;if(w){document.getElementById('pe').textContent='Demasiados intentos. Espera '+w+' s.';return;}pv+=d;document.getElementById('pe').textContent='';pinDots(false);if(pv.length===4)setTimeout(pinCheck,150);}
 function pinClear(){pv=pv.slice(0,-1);pinDots(false);}
-function pinCheck(){var stored=ls(PK);if(pstep==='enter'){if(pv===stored){pinUnlock();}else{document.getElementById('pe').textContent='PIN incorrecto.';pinDots(true);setTimeout(function(){pv='';pinDots(false);document.getElementById('pe').textContent='';},700);}}else if(pstep==='create'){pf=pv;pv='';pinDots(false);pstep='confirm';document.getElementById('pt').textContent='Confirma tu PIN';document.getElementById('ps2').textContent='Repite el PIN para confirmarlo';}else if(pstep==='confirm'){if(pv===pf){ss(PK,pv);var n=document.getElementById('pn').value.trim();if(n)ss(NK,n);pinUnlock();}else{document.getElementById('pe').textContent='No coinciden.';pinDots(true);setTimeout(function(){pv='';pf='';pstep='create';pinDots(false);document.getElementById('pe').textContent='';document.getElementById('pt').textContent='¡Bienvenido!';document.getElementById('ps2').textContent='Tu asistente de presupuesto personal.';},800);}}}
+function pinWrong(msg){document.getElementById('pe').textContent=msg;pinDots(true);setTimeout(function(){pv='';pinDots(false);},700);}
+function pinCheck(){
+  if(pstep==='enter'){busy=true;pinMatches(pv).then(function(ok){busy=false;
+    if(ok){ss(FK,{n:0,until:0});pinUnlock();return;}
+    var f=failState();f.n=(f.n||0)+1;
+    if(f.n>=5){f={n:0,until:Date.now()+30000};ss(FK,f);pinWrong('Demasiados intentos. Espera 30 s.');}
+    else{ss(FK,f);pinWrong('PIN incorrecto. Te quedan '+(5-f.n)+' intentos.');setTimeout(function(){document.getElementById('pe').textContent='';},1500);}
+  });}
+  else if(pstep==='create'){pf=pv;pv='';pinDots(false);pstep='confirm';document.getElementById('pt').textContent='Confirma tu PIN';document.getElementById('ps2').textContent='Repite el PIN para confirmarlo';}
+  else if(pstep==='confirm'){if(pv===pf){busy=true;storePin(pv).then(function(){busy=false;var n=document.getElementById('pn').value.trim();if(n)ss(NK,n);pinUnlock();});}else{document.getElementById('pe').textContent='No coinciden.';pinDots(true);setTimeout(function(){pv='';pf='';pstep='create';pinDots(false);document.getElementById('pe').textContent='';document.getElementById('pt').textContent='¡Bienvenido!';document.getElementById('ps2').textContent='Tu asistente de presupuesto personal.';},800);}}
+}
 function pinUnlock(){document.getElementById('ps').style.display='none';document.getElementById('root').style.display='block';mountApp();}
 window.pinReset=function(){pv='';pf='';document.getElementById('root').style.display='none';document.getElementById('ps').style.display='flex';pinInit();pinDots(false);document.getElementById('pe').textContent='';}
+// Se bloquea sola si sales de Budgy más de 2 minutos
+var hiddenAt=0;
+document.addEventListener('visibilitychange',function(){if(document.hidden){hiddenAt=Date.now();return;}if(hiddenAt&&Date.now()-hiddenAt>120000&&ls(PK)&&document.getElementById('root').style.display!=='none')window.pinReset();hiddenAt=0;});
 function attachBtn(id,fn){var el=document.getElementById(id);if(!el)return;var touched=false;el.addEventListener('touchend',function(e){e.preventDefault();touched=true;fn();setTimeout(function(){touched=false;},500);},{passive:false});el.addEventListener('click',function(){if(!touched)fn();});}
 ['1','2','3','4','5','6','7','8','9','0'].forEach(function(n){attachBtn('b'+n,function(){pinPress(n);});});
 attachBtn('bc',pinClear);
@@ -3709,7 +3733,7 @@ function PerfilScreen(_p) {
     prefs: _p.prefs,
     setPrefs: _p.setPrefs,
     data: _p.data
-  }), h(MyInfo, _p.infoProps), h('section', {
+  }), h(MyInfo, _p.infoProps), h(PrivacySection, null), h('section', {
     className: 'b-rows'
   }, h('button', {
     onClick: _p.onFresh
@@ -4491,15 +4515,23 @@ function MyInfo(_p) {
   const [importing, setImporting] = useState(false);
   const [importText, setImportText] = useState('');
   const income = (+data.q1 || 0) + (+data.q2 || 0);
-  const backup = () => budgyBackup().then(ok => ok && setMsg('Listo: tu respaldo está hecho. Guárdalo en tu nube o mándatelo por WhatsApp.'));
+  const [pass, setPass] = useState('');
+  const [locked, setLocked] = useState(null); // respaldo cifrado esperando su contraseña
+  const [openPass, setOpenPass] = useState('');
+  const backup = () => budgyBackup(pass).then(ok => ok && setMsg(pass ? 'Listo: tu respaldo está protegido. Sin esa contraseña nadie lo puede abrir, ni tú: guárdala bien.' : 'Listo: tu respaldo está hecho. Guárdalo en tu nube o mándatelo por WhatsApp.'));
+  const apply = obj => {
+    if (!obj['mipres-data-v6']) throw new Error();
+    Object.keys(obj).forEach(k => localStorage.setItem(k, obj[k]));
+    window.location.reload();
+  };
   const restore = txt => {
     try {
       const obj = JSON.parse(txt);
-      if (!obj['mipres-data-v6']) throw new Error();
-      Object.keys(obj).forEach(k => localStorage.setItem(k, obj[k]));
-      window.location.reload();
+      if (obj.budgy === 'respaldo-cifrado') { setLocked(obj); setMsg('Este respaldo está protegido. Escribe su contraseña.'); return; }
+      apply(obj);
     } catch (err) { setMsg('Ese archivo no es un respaldo de Budgy. Revisa que sea el correcto.'); }
   };
+  const unlockBackup = () => decryptBackup(locked, openPass).then(t => apply(JSON.parse(t))).catch(() => setMsg('Esa contraseña no abre este respaldo.'));
   const lastBackup = loadLS('budgy-last-backup');
   return e(React.Fragment, null,
     e('section', null, e('div', { className: 'b-sh' }, e('h2', null, 'Lo que ganas')),
@@ -4533,7 +4565,11 @@ function MyInfo(_p) {
         e(Field, { label: 'Lo que llevas', value: data.emerSaved, ph: '$0', onChange: v => set({ emerSaved: v }) }))),
     e('section', null, e('div', { className: 'b-sh' }, e('h2', null, 'Respaldo de tus datos')),
       e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Tus datos viven en este teléfono. Haz un respaldo para no perderlos si cambias de cel.', lastBackup ? ` Último respaldo: ${fmtDate(lastBackup)}.` : ''),
-      e('button', { className: 'b-primary', style: { marginTop: 12 }, onClick: backup }, 'Descargar respaldo'),
+      e(Field, { label: 'Contraseña para protegerlo (recomendado)', text: true, type: 'password', value: pass, ph: 'Mínimo 6 caracteres', help: 'Si lo mandas por WhatsApp o lo subes a la nube, nadie más podrá abrirlo.', onChange: setPass }),
+      e('button', { className: 'b-primary', style: { marginTop: 12 }, disabled: pass !== '' && pass.length < 6, onClick: backup }, pass ? 'Descargar respaldo protegido' : 'Descargar respaldo'),
+      locked && e('div', { className: 'b-form' },
+        e(Field, { label: 'Contraseña del respaldo', text: true, type: 'password', value: openPass, onChange: setOpenPass }),
+        e('button', { className: 'b-primary sm', disabled: !openPass, onClick: unlockBackup }, 'Abrir respaldo')),
       importing ? e('div', { className: 'b-form' },
         e('label', { className: 'b-field' }, 'Elige tu archivo de respaldo', e('input', { type: 'file', accept: '.json,application/json,text/plain', onChange: ev => { const file = ev.target.files[0]; if (!file) return; const r = new FileReader(); r.onload = () => restore(String(r.result)); r.readAsText(file); } })),
         e('label', { className: 'b-field' }, 'O pega el texto del respaldo', e('textarea', { className: 'b-textarea', value: importText, onChange: ev => setImportText(ev.target.value) })),
@@ -5299,7 +5335,23 @@ function logStreak(data, today) {
 }
 
 /* ── Respaldo ── */
-const BACKUP_KEYS = ['mipres-pin', 'mipres-name', 'mipres-data-v6', 'mipres-game-v5', 'budgy-prefs'];
+// El PIN no viaja en el respaldo: en el teléfono nuevo creas uno
+const BACKUP_KEYS = ['mipres-name', 'mipres-data-v6', 'mipres-game-v5', 'budgy-prefs'];
+const u8b64 = u8 => { let t = ''; for (let i = 0; i < u8.length; i += 0x8000) t += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(t); };
+const b64u8 = t => Uint8Array.from(atob(t), c => c.charCodeAt(0));
+async function backupKey(pass, salt) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 150000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function encryptBackup(txt, pass) {
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await backupKey(pass, salt), new TextEncoder().encode(txt));
+  return JSON.stringify({ budgy: 'respaldo-cifrado', v: 1, salt: u8b64(salt), iv: u8b64(iv), data: u8b64(new Uint8Array(ct)) });
+}
+async function decryptBackup(obj, pass) {
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64u8(obj.iv) }, await backupKey(pass, b64u8(obj.salt)), b64u8(obj.data));
+  return new TextDecoder().decode(pt);
+}
 function downloadText(name, txt, type) {
   const link = document.createElement('a');
   link.href = URL.createObjectURL(new Blob([txt], { type }));
@@ -5308,10 +5360,11 @@ function downloadText(name, txt, type) {
   setTimeout(() => URL.revokeObjectURL(link.href), 4000);
 }
 // En el cel abre "Compartir" (guardar en Archivos, Drive o WhatsApp); en compu lo descarga
-async function budgyBackup() {
+async function budgyBackup(pass) {
   const obj = {};
   BACKUP_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v) obj[k] = v; });
-  const name = `budgy-respaldo-${todayISO()}.json`, txt = JSON.stringify(obj);
+  const name = `budgy-respaldo-${todayISO()}.json`;
+  const txt = pass ? await encryptBackup(JSON.stringify(obj), pass) : JSON.stringify(obj);
   const mobile = isIOS() || /Android/i.test(navigator.userAgent);
   let shared = false;
   if (mobile && navigator.canShare && window.File) {
@@ -5779,6 +5832,34 @@ function BalanceSheet(_p) {
     e(Field, { label: 'En tu cuenta (débito)', value: deb, ph: String(Math.round(dp.currentDebit)), onChange: setDeb }),
     e(Field, { label: 'En efectivo', value: cash, ph: String(Math.max(0, Math.round(dp.currentEfectivo))), onChange: setCash }),
     e('button', { className: 'b-primary', disabled: deb === '' && cash === '', onClick: () => _p.onSave(deb === '' ? Math.round(dp.currentDebit) : +deb, cash === '' ? Math.max(0, Math.round(dp.currentEfectivo)) : +cash) }, 'Guardar mi saldo'));
+}
+/* ── Tu privacidad: qué guarda Budgy, dónde y cómo borrarlo ── */
+async function wipeBudgy() {
+  try {
+    if (pushSupported()) {
+      const reg = await Promise.race([navigator.serviceWorker.ready, new Promise(r => setTimeout(() => r(null), 3000))]);
+      const sub = reg && await reg.pushManager.getSubscription();
+      if (sub) { await pushPost('unsubscribe', { endpoint: sub.endpoint }).catch(() => {}); await sub.unsubscribe(); }
+    }
+  } catch (err) { /* sin avisos activos */ }
+  Object.keys(localStorage).filter(k => /^(mipres-|budgy-)/.test(k)).forEach(k => localStorage.removeItem(k));
+  try { sessionStorage.clear(); } catch (err) { /* nada */ }
+  window.location.reload();
+}
+function PrivacySection() {
+  const items = [
+    ['Sin conexión a tu banco', 'Budgy nunca te pide contraseñas de banco, números de tarjeta ni datos de acceso.'],
+    ['Tus datos viven en tu teléfono', 'Lo que anotas se guarda solo aquí. No hay cuentas ni base de datos central: nadie más lo puede ver, ni quien hizo Budgy.'],
+    ['PIN protegido', 'Tu PIN se guarda cifrado, se bloquea tras 5 intentos y Budgy se cierra sola si la dejas más de 2 minutos.'],
+    ['Avisos (opcional)', 'Si los activas, el servidor de avisos recibe solo lo necesario para mandarlos: nombre, día y monto de tus pagos y un resumen de la semana. Al apagarlos se borra.'],
+    ['Respaldos', 'Los guardas tú. Protégelos con contraseña antes de mandarlos por WhatsApp o subirlos a la nube.']
+  ];
+  return e('section', null,
+    e('div', { className: 'b-sh' }, e('h2', null, 'Tu privacidad')),
+    e('div', { className: 'b-rows b-privacy' }, items.map(x => e('div', { key: x[0] },
+      e('span', { className: 'b-check on', 'aria-hidden': 'true' }, '✓'),
+      e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, x[0]), e('div', { className: 'b-d' }, x[1]))))),
+    e('div', { style: { marginTop: 12 } }, e(ConfirmDelete, { label: 'Borrar todos mis datos de este teléfono', question: 'Se borra todo lo que has anotado aquí y se apagan tus avisos. Sin respaldo no se puede recuperar.', onYes: wipeBudgy })));
 }
 /* ── Registrar pago a tarjeta (el monto que sea: mínimo, total o un abono) ── */
 function CardPaySheet(_p) {
@@ -6850,7 +6931,10 @@ function MainApp(_ref22) {
 
 /* ════════ PIN ════════ */
 function mountApp() {
-  ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(MainApp, {
+  // Al desbloquear de nuevo se reusa la misma app (no se crea otra encima)
+  if (window.__budgyRoot) return;
+  window.__budgyRoot = ReactDOM.createRoot(document.getElementById('root'));
+  window.__budgyRoot.render(React.createElement(MainApp, {
     onLock: window.pinReset
   }));
 }
