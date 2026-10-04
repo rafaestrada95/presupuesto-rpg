@@ -790,13 +790,6 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-close-h .b-amount{margin:4px 0}
 .b-insight-box p{margin:6px 0 0;font-size:.92rem}
 
-.b-tour{text-align:center;padding:8px 4px 4px}
-.b-tour-ic{width:72px;height:72px;border-radius:20px;display:inline-flex;align-items:center;justify-content:center;margin:6px 0 14px}
-.b-tour-ic .b-i{width:34px;height:34px}
-.b-tour-d{font-size:1.05rem;line-height:1.5;color:var(--dim);margin:8px 0 0}
-.b-tour-dots{display:flex;justify-content:center;gap:6px;margin-top:18px}
-.b-tour-dots i{width:8px;height:8px;border-radius:99px;background:var(--border)}
-.b-tour-dots i.on{width:22px;background:var(--indigo)}
 .b-cardedit .b-chips{margin-top:2px}
 
 .b-paystate{display:flex;flex-direction:column;gap:6px;padding:10px 0 4px;font-size:.88rem}
@@ -865,6 +858,29 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-r5-h .b-num{font-weight:800;font-size:1.05rem}
 .b-r5-t{position:relative;display:block;margin:6px 0 4px}
 .b-r5-t em{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--text);opacity:.55;border-radius:2px}
+
+.b-top-r{display:flex;align-items:center;gap:10px}
+.b-help{display:inline-flex;align-items:center;gap:7px;min-height:44px;padding:0 14px 0 8px;border-radius:99px;background:var(--surface);color:var(--text);font-weight:700;font-size:.95rem;white-space:nowrap}
+.b-help-q{width:28px;height:28px;border-radius:50%;background:var(--indigo);color:#fff;display:grid;place-items:center;font-weight:800;font-size:1rem;flex:none}
+.b-help-q.big{width:44px;height:44px;font-size:1.4rem}
+.b-gt{position:fixed;inset:0;z-index:9500;font-family:var(--font);color:var(--text);opacity:0;transition:opacity .15s}
+.b-gt.on{opacity:1}
+.b-gt-dim{position:absolute;inset:0;background:rgba(10,12,20,.62)}
+.b-gt-hole{position:fixed;border-radius:18px;box-shadow:0 0 0 3px var(--indigo),0 0 0 9999px rgba(10,12,20,.62);pointer-events:none;transition:all .2s}
+.b-gt-card{position:fixed;left:0;right:0;margin:0 auto;width:min(420px,calc(100vw - 32px));box-sizing:border-box;background:var(--bg);border-radius:20px;padding:16px 18px 18px;box-shadow:0 16px 40px rgba(0,0,0,.3)}
+.b-gt-top{display:flex;justify-content:space-between;align-items:center}
+.b-gt-step{font-size:.9rem;font-weight:700;color:var(--dim)}
+.b-gt-x{min-height:44px;padding:0 6px;font-weight:700;font-size:.95rem;color:var(--accent);background:none;border:0}
+.b-gt-prog{height:5px;border-radius:99px;background:var(--surface);overflow:hidden;margin:2px 0 12px}
+.b-gt-prog i{display:block;height:100%;background:var(--indigo);border-radius:99px;transition:width .2s}
+.b-gt-tag{display:inline-block;font-size:.8rem;font-weight:700;padding:4px 10px;border-radius:99px;background:rgba(251,191,36,.2);color:var(--text);margin-bottom:8px}
+.b-gt-t{font-size:1.3rem;font-weight:800;margin:0 0 6px;line-height:1.25}
+.b-gt-d{font-size:1.1rem;line-height:1.5;margin:0;color:var(--text)}
+.b-gt-btns{display:flex;gap:10px;margin-top:16px}
+.b-gt-back{flex:1;min-height:56px;border-radius:var(--r-b);background:var(--surface);color:var(--text);font-weight:700;font-size:1.05rem;border:0}
+.b-gt-next{flex:2;min-height:56px;border-radius:var(--r-b);background:var(--indigo);color:#fff;font-weight:800;font-size:1.1rem;border:0}
+.b-gt-all{display:block;width:100%;min-height:44px;margin-top:6px;color:var(--accent);font-weight:700;background:none;border:0;font-size:.98rem}
+.b-tourcard{align-items:center}
 </style>
 </head>
 <body>
@@ -3018,7 +3034,8 @@ function Money(_p) {
 function More(_p) {
   return h('details', {
     className: 'b-more',
-    open: _p.open
+    open: _p.open,
+    'data-tour': _p.tour
   }, h('summary', null, _p.title), h('div', {
     className: 'b-more-body'
   }, _p.children));
@@ -3075,6 +3092,7 @@ function BottomNav(_p) {
   }, item('inicio', 'home', 'Inicio'), item('movs', 'list', 'Movimientos'), h('button', {
     key: 'add',
     className: 'b-fab',
+    'data-tour': 'anotar',
     onClick: _p.onAdd
   }, h('span', {
     className: 'b-fab-b'
@@ -3199,7 +3217,8 @@ function HomeScreen(_p) {
   const showClose = dayInQ <= 5 && prefs.lastCloseSeen !== closeQ.key && spendTx(data).some(t => t.date >= closeQ.start && t.date <= closeQ.end);
   const nearLimits = limitsNear(data);
   // Un solo aviso a la vez para no saturar Inicio
-  const promo = !real && income > 0 && !prefs.freshDismissed ? 'fresh' : backupDue(data, prefs) ? 'backup' : gameOn && (game.xp || 0) >= 100 && !game.levelsNoticeSeen ? 'levels' : !prefs.installDismissed && !isStandalone() ? 'install' : null;
+  const tourCard = !prefs.tourSeen;
+  const promo = tourCard ? null : !real && income > 0 && !prefs.freshDismissed ? 'fresh' : backupDue(data, prefs) ? 'backup' : gameOn && (game.xp || 0) >= 100 && !game.levelsNoticeSeen ? 'levels' : !prefs.installDismissed && !isStandalone() ? 'install' : null;
   const missions = getDailyMissions(todayStr);
   const missionsDone = missions.filter(m => (game.completedMissions || {})[`${todayStr}-${m.id}`]).length;
   const cards = data.debts.filter(d => d.type === 'tarjeta');
@@ -3208,10 +3227,14 @@ function HomeScreen(_p) {
   return h(React.Fragment, null, h(ScreenHead, {
     eyebrow: greeting() + ' 👋',
     title: _p.userName || 'Hola',
-    right: h(Avatar, {
+    right: h('div', {
+      className: 'b-top-r'
+    }, h(HelpBtn, {
+      onClick: _p.onHelp
+    }), h(Avatar, {
       name: _p.userName,
       onClick: () => _p.onTab('perfil')
-    })
+    }))
   }), _p.paydayBanner && h('section', {
     className: 'b-event'
   }, h('div', null, h('b', null, '🎉 Ya cayó tu quincena'), h('div', null, fmt(_p.paydayBanner.amount), ' sumados a tu saldo')), h('button', {
@@ -3224,6 +3247,7 @@ function HomeScreen(_p) {
     onClick: () => _p.onCloseQ(closeQ)
   }, 'Ver')), income > 0 || real ? h('section', {
     className: 'b-hero',
+    'data-tour': 'dinero',
     'aria-label': 'Tu dinero'
   }, h('div', {
     className: 'b-amount' + (avail < 0 ? ' neg' : '')
@@ -3270,7 +3294,8 @@ function HomeScreen(_p) {
     className: 'b-textbtn',
     onClick: _p.onFresh
   }, '¿No cuadra? Pon tus cuentas al día'))) : h('section', {
-    className: 'b-hero'
+    className: 'b-hero',
+    'data-tour': 'dinero'
   }, h('div', {
     className: 'b-empty-t'
   }, 'Empecemos por tu quincena'), h('div', {
@@ -3281,7 +3306,24 @@ function HomeScreen(_p) {
       marginTop: 14
     },
     onClick: _p.onFresh
-  }, 'Empezar (3 minutos)')), promo === 'fresh' && h('section', {
+  }, 'Empezar (3 minutos)')), tourCard && h('section', {
+    className: 'b-install b-tourcard'
+  }, h('span', {
+    className: 'b-help-q big',
+    'aria-hidden': 'true'
+  }, '?'), h('div', {
+    className: 'b-m'
+  }, h('b', null, '¿Primera vez? Te enseño en 1 minuto'), h('p', null, 'Pantalla por pantalla, sin prisa. Si se te olvida algo, toca «Ayuda» arriba.'), h('div', {
+    className: 'b-notice-btns'
+  }, h('button', {
+    className: 'b-secondary',
+    onClick: _p.onHelp
+  }, 'Ver cómo funciona'), h('button', {
+    className: 'b-textbtn',
+    onClick: () => _p.setPrefs({
+      tourSeen: true
+    })
+  }, 'Ahora no')))), promo === 'fresh' && h('section', {
     className: 'b-install'
   }, h('div', {
     className: 'b-m'
@@ -3329,7 +3371,9 @@ function HomeScreen(_p) {
     onDismiss: () => _p.onPatchGame({
       levelsNoticeSeen: true
     })
-  }), attention.length + limitRows.length > 0 ? h('section', null, h('div', {
+  }), attention.length + limitRows.length > 0 ? h('section', {
+    'data-tour': 'atencion'
+  }, h('div', {
     className: 'b-sh'
   }, h('h2', null, 'Pon atención'), !simple && h('button', {
     className: 'b-textbtn',
@@ -3390,7 +3434,8 @@ function HomeScreen(_p) {
     className: 'b-secondary',
     onClick: () => _p.onTab('presupuesto')
   }, 'Ver'))))) : (data.debts.length > 0 || (data.exps || []).length > 0) && h('section', {
-    className: 'b-calm'
+    className: 'b-calm',
+    'data-tour': 'atencion'
   }, h(Icon, {
     d: IC.check
   }), 'Estás al corriente con tus pagos de este mes.'), !simple && dp.hasSaldo && h('section', null, h('div', {
@@ -3486,9 +3531,13 @@ function MovsScreen(_p) {
     month: 'long'
   });
   return h(React.Fragment, null, h(ScreenHead, {
-    title: 'Movimientos'
+    title: 'Movimientos',
+    right: h(HelpBtn, {
+      onClick: _p.onHelp
+    })
   }), h('section', {
-    className: 'b-hero'
+    className: 'b-hero',
+    'data-tour': 'gastado'
   }, h('div', {
     className: 'b-amount sm'
   }, h(Money, {
@@ -3542,8 +3591,13 @@ function PresupuestoScreen(_p) {
   const hasCats = catRows.length > 0;
   const pred = getPrediction(dp, data);
   return h(React.Fragment, null, h(ScreenHead, {
-    title: 'Presupuesto'
-  }), qp.income > 0 && h('section', null, h('div', {
+    title: 'Presupuesto',
+    right: h(HelpBtn, {
+      onClick: _p.onHelp
+    })
+  }), qp.income > 0 && h('section', {
+    'data-tour': 'quincena'
+  }, h('div', {
     className: 'b-sh'
   }, h('h2', null, 'Tu quincena de ', fmt(qp.income))), h('div', {
     className: 'b-plan',
@@ -3568,7 +3622,9 @@ function PresupuestoScreen(_p) {
     className: 'b-note'
   }, 'Así se reparte tu quincena completa, contando lo que ya pagaste y tu ritmo normal de gasto. Lo que tienes libre hoy está en Inicio.'), pred && h('p', {
     className: 'b-note' + (pred.type === 'warn' ? ' warn' : '')
-  }, pred.msg)), hasCats && h('section', null, h('div', {
+  }, pred.msg)), hasCats && h('section', {
+    'data-tour': 'categorias'
+  }, h('div', {
     className: 'b-sh'
   }, h('h2', null, '¿En qué se va tu dinero?')), byCat.none > 0 && h('p', {
     className: 'b-note',
@@ -3647,7 +3703,8 @@ function PresupuestoScreen(_p) {
   }, h(CardsNative, {
     data: data
   })), h(More, {
-    title: 'Tus gastos fijos'
+    title: 'Tus gastos fijos',
+    tour: 'fijos'
   }, h(FixedExpenses, {
     data: data,
     actions: _p.actions,
@@ -3670,9 +3727,13 @@ function MetasScreen(_p) {
   const pct = goal > 0 ? Math.min(100, Math.round(saved / goal * 100)) : 0;
   const totalDebt = getTotalDebt(data);
   return h(React.Fragment, null, h(ScreenHead, {
-    title: 'Metas'
+    title: 'Metas',
+    right: h(HelpBtn, {
+      onClick: _p.onHelp
+    })
   }), goal > 0 ? h('section', {
-    className: 'b-goal'
+    className: 'b-goal',
+    'data-tour': 'emergencia'
   }, h('div', {
     className: 'k'
   }, '🎯 Fondo para emergencias'), h('div', {
@@ -3702,7 +3763,8 @@ function MetasScreen(_p) {
     className: 'b-goal-btn ghost',
     onClick: () => _p.onTab('perfil')
   }, 'Actualizar lo que llevo'))) : h('section', {
-    className: 'b-goal empty'
+    className: 'b-goal empty',
+    'data-tour': 'emergencia'
   }, h('div', {
     className: 'k'
   }, '🎯 Tu primera meta'), h('div', {
@@ -3744,7 +3806,9 @@ function MetasScreen(_p) {
   }), h(WealthSection, {
     data: data,
     onChange: _p.onUpdate
-  }), h('section', null, h('div', {
+  }), h('section', {
+    'data-tour': 'deudas'
+  }, h('div', {
     className: 'b-sh'
   }, h('h2', null, 'Salir de deudas')), totalDebt > 0 ? h('div', {
     className: 'b-debt-sum'
@@ -5612,7 +5676,7 @@ function ApartadosSection(_p) {
     setOpen(null);
   };
   const cur = open && open !== 'new' ? list.find(x => x.id === open) : null;
-  return e('section', null,
+  return e('section', { 'data-tour': 'apartados' },
     e('div', { className: 'b-sh' }, e('h2', null, 'Apartados'), list.length > 0 && e('span', { className: 'b-d' }, fmt(apartadosTotal(data)), ' en total')),
     list.length === 0 && e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Separa dinero para lo que sabes que viene: predial, tenencia, seguro del auto, Navidad, vacaciones. Pon la fecha y Budgy te dice cuánto apartar cada quincena para no llegar con prisas.'),
     list.length > 0 && e('div', { className: 'b-rows' }, list.map(a => {
@@ -5818,26 +5882,102 @@ function ExportSection(_p) {
 }
 
 
-/* ── Recorrido de Budgy: 5 pantallas, una idea por pantalla ── */
-const TOUR = [
-  { t: 'Tu número del día', d: 'En Inicio ves cuánto tienes libre hasta tu próxima quincena y cuánto puedes gastar hoy. Tus pagos ya vienen descontados.', p: IC.cal, fg: '#4F46E5', bg: 'rgba(79,70,229,.13)' },
-  { t: 'Anota en segundos', d: 'Toca el botón “+ Anotar”, escribe cuánto y toca en qué fue. También puedes decirlo con tu voz. Lo que repites seguido, Budgy te lo deja a un toque.', p: IC.plus, fg: '#0E9F6E', bg: 'rgba(16,185,129,.14)' },
-  { t: 'Ponle límite a cada cosa', d: 'En Presupuesto decides cuánto quieres gastar al mes en comida, súper o salidas. Budgy te avisa cuando te acerques.', p: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', fg: '#0B8FCC', bg: 'rgba(56,189,248,.16)' },
-  { t: 'Tus metas y deudas', d: 'En Metas armas tu fondo para emergencias, apartas dinero para lo que viene y ves en qué orden pagar tus deudas.', p: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>', fg: '#7C4DEB', bg: 'rgba(139,92,246,.14)' },
-  { t: 'Si algo no cuadra', d: 'En tu perfil (tu inicial, arriba a la derecha) puedes poner Budgy al día, activar avisos, usar el modo sencillo o apagar el modo juego.', p: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20.5a7 7 0 0 1 14 0"/>', fg: '#B98100', bg: 'rgba(251,191,36,.2)' }
+/* ── Recorrido guiado: ilumina cada parte real de la app y la explica en una frase.
+   Si esa parte todavía está vacía, explica qué va ahí y cómo llenarla. ── */
+const TOUR_STEPS = [
+  { k: 'intro', tab: 'inicio', t: 'Te enseño Budgy en 1 minuto', d: 'Vamos pantalla por pantalla. Toca «Siguiente» para avanzar. Puedes salir cuando quieras.' },
+  { k: 'dinero', tab: 'inicio', t: 'Lo que puedes gastar', d: 'Este es tu dinero libre hasta la próxima quincena. Tus pagos ya vienen descontados.',
+    empty: (d, dp) => !(dp.income > 0 || dp.hasSaldo), ed: 'Aquí verás cuánto puedes gastar hasta tu quincena. Toca «Empezar» y dinos cuánto ganas y cuánto tienes.' },
+  { k: 'atencion', tab: 'inicio', t: 'Tus pagos que vienen', d: 'Aquí te avisamos qué pagos se acercan y te preguntamos si ya los pagaste.',
+    empty: d => !(d.debts || []).length && !(d.exps || []).length, ed: 'Aquí aparecerán tus pagos: renta, luz, tarjetas. Agrégalos en Presupuesto (pagos fijos) y en Metas (deudas).' },
+  { k: 'anotar', tab: 'inicio', t: 'Anota cada gasto', d: '¿Gastaste algo? Toca aquí, escribe cuánto y elige en qué fue. Listo.' },
+  { k: 'gastado', tab: 'movs', t: 'Todo lo que has gastado', d: 'Arriba, cuánto llevas este mes. Abajo, cada gasto: tócalo para corregirlo o borrarlo.',
+    empty: d => !spendTx(d).length, ed: 'Aquí verás cuánto llevas gastado y cada gasto, del más nuevo al más viejo. Se llena cuando usas «Anotar».' },
+  { k: 'quincena', tab: 'presupuesto', t: 'Cómo se reparte tu quincena', d: 'Cuánto se va en pagos fijos, deudas y gasto diario, y cuánto te sobra.',
+    ed: 'Aquí verás cómo se reparte tu quincena. Primero dinos cuánto ganas: toca tu inicial, arriba en Inicio.' },
+  { k: 'categorias', tab: 'presupuesto', t: '¿En qué se va tu dinero?', d: 'Tus gastos del mes por categoría. Si les pones límite, la barra te avisa al acercarte.',
+    ed: 'Cuando anotes gastos, aquí verás cuánto va en comida, súper, transporte y más.' },
+  { k: 'regla', tab: 'presupuesto', t: 'La regla 50/30/20', d: 'Una guía sencilla: la mitad para lo necesario, 30% para gustos y 20% para ahorrar.',
+    ed: 'Cuando nos digas cuánto ganas, aquí verás si tu dinero está bien repartido entre necesidades, gustos y ahorro.' },
+  { k: 'fijos', tab: 'presupuesto', t: 'Tus pagos de cada mes', d: 'Toca aquí para ver o agregar renta, luz, internet o celular. Budgy les aparta el dinero.',
+    empty: d => !(d.exps || []).length, ed: 'Todavía no tienes pagos fijos. Toca aquí y agrega renta, luz, internet o celular: Budgy les aparta el dinero.' },
+  { k: 'emergencia', tab: 'metas', t: 'Tu fondo para emergencias', d: 'Tu colchón para imprevistos: cuánto llevas y cuánto te falta.',
+    empty: d => !(+d.emerGoal > 0), ed: 'Es dinero guardado para imprevistos. Toca «Crear mi meta» y Budgy te dice cuánto juntar.' },
+  { k: 'apartados', tab: 'metas', t: 'Dinero apartado', d: 'Lo que separas para algo que viene, como el predial o unas vacaciones.',
+    empty: d => !(d.apartados || []).length, ed: 'Aquí separas dinero para algo que viene, como el predial o unas vacaciones. Budgy te dice cuánto guardar cada quincena.' },
+  { k: 'inversiones', tab: 'metas', t: 'Tus inversiones', d: 'Tus CETES, cajitas o pagarés: cuánto llevas ganado y cuándo vencen.',
+    empty: d => !(d.investments || []).some(i => i.status !== 'cobrada'), ed: 'Si tienes CETES, cajitas o pagarés, regístralos aquí. Budgy calcula lo que ganas y te avisa cuando vencen.' },
+  { k: 'deudas', tab: 'metas', t: 'Salir de deudas', d: 'Tus tarjetas y préstamos. Budgy te dice cuál conviene pagar primero.',
+    empty: d => !(d.debts || []).length, ed: 'Si debes algo (tarjeta, préstamo o a un amigo), agrégalo aquí y Budgy arma tu plan para pagarlo.' },
+  { k: 'ayuda', tab: 'inicio', t: '¿Se te olvidó algo?', d: 'Toca «Ayuda» en cualquier pantalla y te explico esa parte. Tus ajustes están en tu inicial.' }
 ];
-function TourSheet(_p) {
+const TOUR_TAB_NAME = { inicio: 'Inicio', movs: 'Movimientos', presupuesto: 'Presupuesto', metas: 'Metas' };
+function HelpBtn(_p) {
+  return e('button', { className: 'b-help', 'data-tour': 'ayuda', onClick: _p.onClick, 'aria-label': 'Ayuda: cómo se usa esta pantalla' },
+    e('span', { className: 'b-help-q', 'aria-hidden': 'true' }, '?'), 'Ayuda');
+}
+function GuidedTour(_p) {
+  const only = _p.only && _p.only !== 'inicio' && TOUR_TAB_NAME[_p.only] ? _p.only : null;
+  const steps = only ? TOUR_STEPS.filter(s => s.tab === only) : TOUR_STEPS;
   const [i, setI] = useState(0);
-  const s = TOUR[i], last = i === TOUR.length - 1;
-  return e(Sheet, { title: `${i + 1} de ${TOUR.length}`, label: 'Cómo funciona Budgy', onClose: _p.onClose },
-    e('div', { className: 'b-tour' },
-      e('span', { className: 'b-tour-ic', style: { background: s.bg, color: s.fg } }, e(Icon, { d: s.p, w: 2.2 })),
-      e('div', { className: 'b-wiz-q' }, s.t),
-      e('p', { className: 'b-tour-d' }, s.d),
-      e('div', { className: 'b-tour-dots', 'aria-hidden': 'true' }, TOUR.map((_, j) => e('i', { key: j, className: j === i ? 'on' : '' })))),
-    e('div', { className: 'b-wiz-foot' },
-      i > 0 ? e('button', { className: 'b-secondary', onClick: () => setI(i - 1) }, 'Atrás') : e('button', { className: 'b-secondary', onClick: _p.onClose }, 'Saltar'),
-      e('button', { className: 'b-primary', onClick: () => last ? _p.onClose() : setI(i + 1) }, last ? 'Empezar a usar Budgy' : 'Siguiente')));
+  const [rect, setRect] = useState(null);
+  const [ready, setReady] = useState(false);
+  const nextRef = useRef(null);
+  const s = steps[i], last = i === steps.length - 1;
+  useEffect(() => { if (s.tab !== _p.tab) _p.onTab(s.tab); }, [i]);
+  useEffect(() => {
+    let alive = true;
+    setReady(false);
+    const find = () => {
+      if (s.k === 'intro') return null;
+      const el = document.querySelector(`[data-tour="${s.k}"]`);
+      return el && el.getClientRects().length ? el : null;
+    };
+    const place = () => {
+      if (!alive) return;
+      const el = find();
+      if (!el) { setRect(null); return; }
+      const r = el.getBoundingClientRect();
+      setRect({ top: r.top, left: r.left, width: r.width, height: Math.min(r.height, window.innerHeight * 0.42) });
+    };
+    // Espera a que la pantalla cambie, lleva la parte arriba y la ilumina
+    const t = setTimeout(() => {
+      const el = find();
+      if (el && !el.closest('.b-nav')) {
+        const r = el.getBoundingClientRect();
+        window.scrollTo(0, Math.max(0, window.scrollY + r.top - 90));
+      }
+      place();
+      setReady(true);
+      if (nextRef.current) nextRef.current.focus();
+    }, 140);
+    const onKey = ev => { if (ev.key === 'Escape') _p.onClose(); };
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, { passive: true });
+    window.addEventListener('keydown', onKey);
+    return () => { alive = false; clearTimeout(t); window.removeEventListener('resize', place); window.removeEventListener('scroll', place); window.removeEventListener('keydown', onKey); };
+  }, [i, _p.tab]);
+  const isEmpty = s.k !== 'intro' && (!rect || (s.empty && s.empty(_p.data, _p.dp)));
+  const text = isEmpty && s.ed ? s.ed : s.d;
+  const vh = window.innerHeight;
+  const pad = 6;
+  // La tarjeta va debajo de lo iluminado; si no cabe, arriba
+  const below = rect && rect.top + rect.height + pad < vh * 0.58;
+  const cardPos = !rect ? { top: '50%', transform: 'translateY(-50%)' } : below ? { top: rect.top + rect.height + pad + 14 } : { bottom: vh - rect.top + pad + 14 };
+  return e('div', { className: 'b-gt' + (ready ? ' on' : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Recorrido de Budgy' },
+    rect ? e('div', { className: 'b-gt-hole', style: { top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 } }) : e('div', { className: 'b-gt-dim' }),
+    e('div', { className: 'b-gt-card', style: cardPos },
+      e('div', { className: 'b-gt-top' },
+        e('span', { className: 'b-gt-step' }, `${only ? TOUR_TAB_NAME[only] + ' · ' : ''}${i + 1} de ${steps.length}`),
+        e('button', { className: 'b-gt-x', onClick: _p.onClose }, 'Salir')),
+      e('div', { className: 'b-gt-prog', 'aria-hidden': 'true' }, e('i', { style: { width: ((i + 1) / steps.length * 100) + '%' } })),
+      isEmpty && s.ed && e('div', { className: 'b-gt-tag' }, 'Todavía está vacío'),
+      e('h2', { className: 'b-gt-t' }, s.t),
+      e('p', { className: 'b-gt-d', 'aria-live': 'polite' }, text),
+      e('div', { className: 'b-gt-btns' },
+        i > 0 && e('button', { className: 'b-gt-back', onClick: () => setI(i - 1) }, 'Atrás'),
+        e('button', { ref: nextRef, className: 'b-gt-next', onClick: () => last ? _p.onClose() : setI(i + 1) }, last ? 'Listo' : 'Siguiente')),
+      last && only && e('button', { className: 'b-gt-all', onClick: _p.onAll }, 'Ver el recorrido completo')));
 }
 /* ════ MOTOR FINANCIERO ════
    Una sola forma de proyectar: quincena por quincena, con tu dinero libre de hoy,
@@ -5887,7 +6027,7 @@ function Rule503020(_p) {
     if (r.pn > 50) tips.push(`Tus necesidades se llevan ${r.pn}%${r.debts > r.income * 0.15 ? ': buena parte son deudas, liquidarlas es lo que más te libera' : '. Revisa pagos fijos que se puedan renegociar o cambiar'}.`);
     tips.push(`Para llegar a 20% de ahorro te faltan ${fmt(r.income * 0.2 - Math.max(0, r.savings))} al mes.`);
   } else tips.push(`¡Muy bien! Ahorras ${r.ps}% de lo que ganas. Lo ideal es que ese dinero trabaje: fondo de emergencia primero, luego inversiones.`);
-  return e('section', null,
+  return e('section', { 'data-tour': 'regla' },
     e('div', { className: 'b-sh' }, e('h2', null, 'Tu reparto ideal: 50 / 30 / 20')),
     e('div', { className: 'b-503020' }, rows.map(x => e('div', { key: x[0], className: 'b-r5' },
       e('div', { className: 'b-r5-h' }, e('b', null, x[0]), e('span', { className: 'b-num' + (x[0] === 'Ahorro' ? (x[2] >= x[3] ? ' b-ok' : ' b-warn-t') : (x[2] > x[3] ? ' b-warn-t' : ' b-ok')) }, `${x[2]}%`), e('span', { className: 'b-d' }, `meta ${x[3]}%`)),
@@ -6239,7 +6379,7 @@ function InvestmentsSection(_p) {
   const [open, setOpen] = useState(null); // 'new' | id
   const t = invTotals(data);
   const cur = open && open !== 'new' ? list.find(i => i.id === open) : null;
-  return e('section', null,
+  return e('section', { 'data-tour': 'inversiones' },
     e('div', { className: 'b-sh' }, e('h2', null, 'Inversiones')),
     list.length === 0 ? e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Registra tus cajitas, CETES, pagarés o fondos. Budgy calcula cuánto llevas ganado, te avisa cuando vence un plazo y separa lo que puedes usar de lo que está bloqueado.') :
       e(React.Fragment, null,
@@ -7139,6 +7279,7 @@ function MainApp(_ref22) {
     prefs,
     userName,
     setPrefs: updatePrefs,
+    onHelp: () => setShowTutorial(tab === 'inicio' ? 'all' : tab),
     onFeedback: () => setFeedbackOpen(true),
     onFresh: () => setFreshOpen(true),
     onUpdate: update,
@@ -7162,8 +7303,20 @@ function MainApp(_ref22) {
   }), gameOn && levelUpData && _h(LevelUpOverlay, {
     lvlData: levelUpData,
     onDismiss: () => setLevelUpData(null)
-  }), showTutorial && _h(TourSheet, {
-    onClose: () => setShowTutorial(false)
+  }), showTutorial && _h(GuidedTour, {
+    key: String(showTutorial),
+    only: showTutorial === true ? null : showTutorial,
+    tab: tab,
+    onTab: goTab,
+    data: data,
+    dp: dp,
+    onAll: () => setShowTutorial('all'),
+    onClose: () => {
+      setShowTutorial(false);
+      updatePrefs({
+        tourSeen: true
+      });
+    }
   }), _h('main', {
     className: 'b-app'
   }, tab === 'inicio' && _h(HomeScreen, {
@@ -7245,7 +7398,7 @@ function MainApp(_ref22) {
     ...screenProps,
     setPrefs: updatePrefs,
     saveStatus,
-    onTutorial: () => setShowTutorial(true),
+    onTutorial: () => setShowTutorial('all'),
     onLock: onLock,
     infoProps: {
       data: data,
@@ -7363,7 +7516,7 @@ function MainApp(_ref22) {
       });
       setShowOnboarding(false);
       goTab('inicio');
-      setShowTutorial(true);
+      setShowTutorial('all');
     }
   }), freshOpen && _h(FreshStartSheet, {
     data: data,
