@@ -853,6 +853,12 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-kindrow{display:flex;gap:12px;align-items:center;text-align:left;width:100%;background:none;border:0;padding:10px 6px;border-radius:var(--r-c);font:inherit;color:inherit}
 .b-kindrow.on{background:var(--as);box-shadow:inset 0 0 0 2px var(--indigo)}
 .b-tag2{display:inline-block;font-size:.78rem;font-weight:700;padding:4px 10px;border-radius:99px}
+
+.b-goal-inv{margin-top:10px;font-size:.88rem;font-weight:600;opacity:.9}
+.b-goal-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.b-goal-btns .b-goal-btn{margin-top:0}
+.b-goal-btn.ghost{background:transparent;box-shadow:inset 0 0 0 2px rgba(11,42,32,.25)}
+.b-rows>button.b-sel{box-shadow:inset 0 0 0 2px var(--emerald);border-radius:var(--r-c)}
 </style>
 </head>
 <body>
@@ -1405,7 +1411,8 @@ function getWealth(data) {
   const assetsTotal = assets.reduce((s, a) => s + (+a.value || 0), 0) + inv.total;
   const invested = assets.filter(a => a.type === 'inversion').reduce((s, a) => s + (+a.value || 0), 0) + inv.total;
   const passive = assets.reduce((s, a) => s + (+a.monthlyIncome || 0), 0) + inv.monthly;
-  const emer = +data.emerSaved || 0;
+  // Si el fondo vive en una inversión, ya está contado en inv.total
+  const emer = emerInv(data) ? 0 : +data.emerSaved || 0;
   const debt = getTotalDebt(data);
   const monthlyExp = (data.exps || []).reduce((s, e) => s + (+e.amount || 0), 0) + (data.varExps || []).reduce((s, e) => s + (+e.amount || 0), 0);
   const cardDebt = (data.debts || []).filter(d => d.type === 'tarjeta').reduce((s, d) => s + (+d.balance || 0), 0);
@@ -1425,7 +1432,7 @@ function levelReqs(n, data, game) {
   const income = (+data.q1 || 0) + (+data.q2 || 0);
   const days = new Set([...(data.cashTransactions || []), ...(data.cardTransactions || [])].map(t => t.date)).size;
   const goal = +data.emerGoal || 0;
-  const emerPct = goal > 0 ? (+data.emerSaved || 0) / goal : 0;
+  const emerPct = goal > 0 ? emerSavedOf(data) / goal : 0;
   const dp = calcDP(data);
   const pctTxt = p => Math.min(100, Math.round(p * 100)) + '%';
   switch (n) {
@@ -2438,7 +2445,7 @@ function calcHealthScore(data, game, dp) {
   const weekAgo = new Date(Date.now() - 6 * 864e5).toLocalISO().slice(0, 10);
   const daysLogged = new Set([...(data.cashTransactions || []), ...(data.cardTransactions || [])].map(t => t.date).filter(d => d && d >= weekAgo)).size;
   if (daysLogged >= 5) score += 20;else if (daysLogged >= 3) score += 12;else if (daysLogged >= 1) score += 6;
-  const emerPct = data.emerGoal ? Math.min(100, (+data.emerSaved || 0) / +data.emerGoal * 100) : 0;
+  const emerPct = data.emerGoal ? Math.min(100, emerSavedOf(data) / +data.emerGoal * 100) : 0;
   if (emerPct >= 100) score += 15;else if (emerPct >= 50) score += 8;else if (emerPct >= 20) score += 4;
   return Math.min(100, score);
 }
@@ -2537,7 +2544,7 @@ function getSmartSuggestions(data, dp) {
   }
   if (surplus > 1000) {
     const emerGoal = +(data.emerGoal || 0);
-    const emerSaved = +(data.emerSaved || 0);
+    const emerSaved = emerSavedOf(data);
     const missing = emerGoal - emerSaved;
     if (missing > 0) {
       suggestions.push({
@@ -3617,8 +3624,10 @@ function PresupuestoScreen(_p) {
 /* ════ METAS ════ */
 function MetasScreen(_p) {
   const data = _p.data;
+  const [linkOpen, setLinkOpen] = useState(false);
+  const linked = emerInv(data);
   const goal = +data.emerGoal || 0,
-    saved = +data.emerSaved || 0;
+    saved = emerSavedOf(data);
   const pct = goal > 0 ? Math.min(100, Math.round(saved / goal * 100)) : 0;
   const totalDebt = getTotalDebt(data);
   return h(React.Fragment, null, h(ScreenHead, {
@@ -3641,10 +3650,19 @@ function MetasScreen(_p) {
     }
   })), h('div', {
     className: 's'
-  }, pct >= 100 ? '¡Completo! Ya tienes un colchón para imprevistos.' : `Llevas ${pct}%. Sin este fondo, cada imprevisto se vuelve deuda.`), h('button', {
+  }, pct >= 100 ? '¡Completo! Ya tienes un colchón para imprevistos.' : `Llevas ${pct}%. Sin este fondo, cada imprevisto se vuelve deuda.`), linked ? h('div', {
+    className: 'b-goal-inv'
+  }, `Está en ${linked.name}${+linked.rate ? ` al ${linked.rate}% anual: te gana unos ${fmt(invValue(linked).value * linked.rate / 100 / 12)} al mes` : ''}. Lo sacas el mismo día si lo necesitas.`) : saved > 0 && h('div', {
+    className: 'b-goal-inv'
+  }, 'Tu fondo podría estar ganando intereses sin dejar de estar disponible.'), h('div', {
+    className: 'b-goal-btns'
+  }, h('button', {
     className: 'b-goal-btn',
+    onClick: () => setLinkOpen(true)
+  }, linked ? 'Cambiar inversión' : 'Ponerlo a ganar intereses'), !linked && h('button', {
+    className: 'b-goal-btn ghost',
     onClick: () => _p.onTab('perfil')
-  }, 'Actualizar lo que llevo')) : h('section', {
+  }, 'Actualizar lo que llevo'))) : h('section', {
     className: 'b-goal empty'
   }, h('div', {
     className: 'k'
@@ -3655,7 +3673,30 @@ function MetasScreen(_p) {
   }, 'La meta recomendada es un mes de tu ingreso.'), h('button', {
     className: 'b-goal-btn',
     onClick: () => _p.onTab('perfil')
-  }, 'Crear mi meta')), h(ApartadosSection, {
+  }, 'Crear mi meta')), linkOpen && h(EmerLinkSheet, {
+    data: data,
+    onClose: () => setLinkOpen(false),
+    onLink: id => {
+      _p.onUpdate({
+        emerInvId: id
+      });
+      setLinkOpen(false);
+    },
+    onUnlink: () => {
+      _p.onUpdate({
+        emerInvId: null,
+        emerSaved: String(Math.round(saved))
+      });
+      setLinkOpen(false);
+    },
+    onCreate: (inv, fromCash) => {
+      _p.invProps.onSave(inv, fromCash);
+      _p.onUpdate({
+        emerInvId: inv.id
+      });
+      setLinkOpen(false);
+    }
+  }), h(ApartadosSection, {
     data: data,
     onUpdate: _p.onUpdate
   }), h(InvestmentsSection, {
@@ -4587,6 +4628,7 @@ function MyInfo(_p) {
       e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Sin este colchón, cada imprevisto se vuelve deuda. Lo recomendado: un mes de lo que ganas', income > 0 ? ` (${fmt(income)}).` : '.'),
       e('div', { className: 'b-grid2' },
         e(Field, { label: 'Tu meta', value: data.emerGoal, ph: income > 0 ? String(income) : '$0', onChange: v => set({ emerGoal: v }) }),
+        emerInv(data) ? e('div', { className: 'b-field' }, 'Lo que llevas', e('div', { className: 'b-num', style: { fontSize: '1.4rem', fontWeight: 800, padding: '8px 0' } }, fmt(emerSavedOf(data))), e('span', { className: 'b-field-help' }, `Se actualiza solo con ${emerInv(data).name}.`)) :
         e(Field, { label: 'Lo que llevas', value: data.emerSaved, ph: '$0', onChange: v => set({ emerSaved: v }) }))),
     e('section', null, e('div', { className: 'b-sh' }, e('h2', null, 'Respaldo de tus datos')),
       e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Tus datos viven en este teléfono. Haz un respaldo para no perderlos si cambias de cel.', lastBackup ? ` Último respaldo: ${fmtDate(lastBackup)}.` : ''),
@@ -4612,7 +4654,7 @@ function HealthNative(_p) {
   const score = calcHealthScore(data, game, dp);
   const st = score >= 80 ? ['Excelente', 'var(--good)', 'var(--emerald)'] : score >= 60 ? ['Vas bien', 'var(--good)', 'var(--emerald)'] : score >= 40 ? ['Hay cosas por mejorar', 'var(--warn)', 'var(--mango)'] : ['Necesita atención', 'var(--danger)', 'var(--danger)'];
   const goal = +data.emerGoal || 0;
-  const emerPct = goal > 0 ? Math.min(100, Math.round((+data.emerSaved || 0) / goal * 100)) : 0;
+  const emerPct = goal > 0 ? Math.min(100, Math.round(emerSavedOf(data) / goal * 100)) : 0;
   const urgent = (data.debts || []).filter(d => { const u = calcUrgency(d); return u.key === 'critical' || u.key === 'danger'; }).length;
   const f = [
     (() => { const mm = monthlyModel(data); return [dp.available >= 0 && mm.surplus >= 0, dp.available < 0 ? 'Esta quincena no te alcanza para tus pagos' : mm.surplus < 0 ? `En un mes normal gastas ${fmt(-mm.surplus)} más de lo que entra` : 'Tus números del mes cierran en verde']; })(),
@@ -4645,7 +4687,7 @@ function AffordTool(_p) {
   const m = monthlyModel(data);
   const r = +amt > 0 ? canAfford(data, +amt, months) : null;
   const need = r && !r.ok && m.surplus > 0 ? Math.ceil(-r.diff / m.surplus) : null;
-  const goal = +data.emerGoal || 0, saved = +data.emerSaved || 0;
+  const goal = +data.emerGoal || 0, saved = emerSavedOf(data);
   const rem = Math.max(0, goal - saved);
   const per = Math.max(0, m.surplus) + (+extra || 0);
   const kv = (l, v, strong) => e('div', { className: 'b-kv' + (strong ? ' strong' : '') }, e('span', null, l), e('span', { className: 'b-num' }, v));
@@ -5296,6 +5338,7 @@ function FreshStartSheet(_p) {
     () => e(React.Fragment, null,
       e('div', { className: 'b-wiz-q' }, 'Tu ahorro'),
       e('div', { className: 'b-wiz-help' }, 'Lo que tienes guardado para emergencias, aparte de tu cuenta del día a día. Si lo tienes en la misma cuenta de débito, pon $0 para no contarlo dos veces.'),
+      emerInv(data) ? e('p', { className: 'b-note good' }, `Tu fondo está en ${emerInv(data).name} y se actualiza solo: hoy llevas ${fmt(emerSavedOf(data))}.`) :
       e(Field, { label: 'Lo que llevas ahorrado', value: f.emerSaved, ph: '$0', onChange: v => set({ emerSaved: v }) }),
       e(Field, { label: 'Tu meta', value: f.emerGoal, ph: f.q1 && f.q2 ? String((+f.q1 || 0) + (+f.q2 || 0)) : '$0', onChange: v => set({ emerGoal: v }) }),
       e('p', { className: 'b-note' }, 'Lo recomendado: un mes de lo que ganas.')),
@@ -5647,7 +5690,7 @@ function buildAIReport(data, months) {
   }
   L.push(`- Libre para gastar hasta fin de quincena (ya descontando pagos pendientes): $${m(dp.available)}`);
   L.push(`- Días que faltan de la quincena: ${dp.daysLeft}`);
-  L.push(`- Fondo de emergencia: $${m(data.emerSaved)} de meta $${m(data.emerGoal)}`);
+  L.push(`- Fondo de emergencia: $${m(emerSavedOf(data))} de meta $${m(data.emerGoal)}${emerInv(data) ? ` (invertido en ${emerInv(data).name})` : ''}`);
   (data.apartados || []).forEach(a => L.push(`- Apartado "${a.name}": $${m(a.saved)}${a.goal ? ` de meta $${m(a.goal)}` : ''}`));
   (data.investments || []).filter(i => i.status !== 'cobrada').forEach(i => { const v = invValue(i); L.push(`- Inversión "${i.name}" (${invKind(i.kind).t}${+i.rate ? `, ${i.rate}% anual` : ''}${i.kind === 'plazo' ? `, vence ${i.maturity}` : ''}): invertí $${m(i.amount)}, vale hoy ~$${m(v.value)}`); });
   if ((data.exps || []).length) {
@@ -5964,6 +6007,9 @@ function invTotals(data) {
   return t;
 }
 // Inversiones a plazo que ya vencieron y no has dicho qué pasó con el dinero
+// Fondo de emergencia conectado a una inversión disponible diario: su valor es lo que llevas
+const emerInv = data => data.emerInvId ? (data.investments || []).find(i => i.id === data.emerInvId && i.kind === 'liquida' && i.status !== 'cobrada') || null : null;
+const emerSavedOf = data => { const i = emerInv(data); return i ? invValue(i).value : +data.emerSaved || 0; };
 const invMatured = data => (data.investments || []).filter(i => i.kind === 'plazo' && i.status !== 'cobrada' && i.maturity && i.maturity <= todayISO());
 const INV_BLANK = { kind: 'liquida', name: '', amount: '', rate: '', start: '', termDays: 28, maturity: '', value: '', from: 'cuenta' };
 
@@ -6035,6 +6081,33 @@ function InvestmentSheet(_p) {
     e('button', { className: 'b-primary', disabled: !f.name.trim() || !(+f.amount > 0) || f.kind === 'plazo' && !maturity, onClick: save }, inv ? 'Guardar' : 'Agregar inversión'));
 }
 
+function EmerLinkSheet(_p) {
+  const data = _p.data;
+  const cur = emerInv(data);
+  const options = (data.investments || []).filter(i => i.kind === 'liquida' && i.status !== 'cobrada');
+  const [f, setF] = useState({ name: '', rate: '', amount: String(Math.round(+data.emerSaved || 0) || ''), from: +data.emerSaved > 0 ? 'ya' : 'cuenta' });
+  const today = todayISO();
+  const ok = f.name.trim() && +f.amount > 0;
+  return e(Sheet, { title: 'Pon tu fondo a ganar', label: 'Fondo de emergencia', onClose: _p.onClose },
+    e('p', { className: 'b-note', style: { marginTop: 0 } }, 'El mejor lugar para tu fondo de emergencia es una inversión disponible diario (cajita Nu, Mercado Pago, Klar, BONDDIA): genera intereses y lo sacas el mismo día. No lo pongas a plazo ni en algo que suba y baje.'),
+    options.length > 0 && e(React.Fragment, null,
+      e('div', { className: 'b-sh' }, e('h2', null, 'Usar una que ya tienes')),
+      e('div', { className: 'b-rows' }, options.map(i => e('button', { key: i.id, className: cur && cur.id === i.id ? 'b-sel' : '', onClick: () => _p.onLink(i.id) },
+        e(CatIcon, { c: { fg: '#0E9F6E', bg: 'rgba(16,185,129,.14)', p: INV_IC } }),
+        e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, i.name), e('div', { className: 'b-d' }, (+i.rate ? i.rate + '% anual · ' : '') + (cur && cur.id === i.id ? 'conectada' : 'tocar para conectar'))),
+        e('span', { className: 'b-n b-num' }, fmt(invValue(i).value)))))),
+    e('div', { className: 'b-sh' }, e('h2', null, options.length ? 'O registra otra' : 'Regístrala')),
+    e(Field, { label: '¿Dónde está?', text: true, value: f.name, ph: 'Ej. Cajita Nu', onChange: v => setF({ ...f, name: v }) }),
+    e('div', { className: 'b-grid2' },
+      e(Field, { label: '¿Cuánto tienes ahí?', value: f.amount, ph: '$0', onChange: v => setF({ ...f, amount: v }) }),
+      e(Field, { label: 'Tasa anual (%)', value: f.rate, ph: 'Ej. 9', onChange: v => setF({ ...f, rate: v }) })),
+    e('div', { className: 'b-field' }, '¿De dónde salió el dinero?', e('div', { className: 'b-chips' },
+      e('button', { className: 'b-chip' + (f.from === 'ya' ? ' on' : ''), onClick: () => setF({ ...f, from: 'ya' }) }, 'Ya lo tenía ahí'),
+      e('button', { className: 'b-chip' + (f.from === 'cuenta' ? ' on' : ''), onClick: () => setF({ ...f, from: 'cuenta' }) }, 'Lo paso de mi cuenta hoy'))),
+    +f.amount > 0 && +f.rate > 0 && e('p', { className: 'b-note good' }, `Te ganaría unos ${fmt(+f.amount * f.rate / 100 / 12)} al mes, y en un año tendrías ${fmt(invProject(+f.amount, f.rate, 12))} sin hacer nada.`),
+    e('button', { className: 'b-primary', disabled: !ok, onClick: () => _p.onCreate({ ...INV_BLANK, id: 'i' + uid(), kind: 'liquida', name: f.name.trim(), amount: +f.amount, rate: +f.rate || 0, start: today, status: 'activa', value: null }, f.from === 'cuenta' ? +f.amount : 0) }, 'Guardar y conectar'),
+    cur && e('button', { className: 'b-textbtn b-quiet', style: { marginTop: 8 }, onClick: _p.onUnlink }, 'Desconectar mi fondo de la inversión'));
+}
 function InvestmentsSection(_p) {
   const data = _p.data, list = (data.investments || []).filter(i => i.status !== 'cobrada');
   const [open, setOpen] = useState(null); // 'new' | id
@@ -6054,7 +6127,7 @@ function InvestmentsSection(_p) {
           return e('button', { key: i.id, onClick: () => setOpen(i.id) },
             e(CatIcon, { c: { fg: k.fg, bg: k.bg, p: INV_IC } }),
             e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, i.name),
-              e('div', { className: 'b-d' }, i.kind === 'plazo' ? (v.matured ? 'Ya venció · dinos qué pasó' : `Bloqueado · vence ${fmtDate(i.maturity)}`) : k.tag + (+i.rate ? ` · ${i.rate}% anual` : ''))),
+              e('div', { className: 'b-d' }, data.emerInvId === i.id ? 'Tu fondo de emergencia · disponible' : i.kind === 'plazo' ? (v.matured ? 'Ya venció · dinos qué pasó' : `Bloqueado · vence ${fmtDate(i.maturity)}`) : k.tag + (+i.rate ? ` · ${i.rate}% anual` : ''))),
             e('div', { className: 'b-cf-end' }, e('span', { className: 'b-n b-num' }, fmt(v.value)), e('span', { className: 'b-d' + (v.gain >= 0 ? ' b-ok' : '') }, (v.gain >= 0 ? '+' : '−') + fmt(Math.abs(v.gain)))));
         }))),
     e('button', { className: 'b-primary ghost', onClick: () => setOpen('new') }, 'Agregar inversión'),
@@ -6123,7 +6196,11 @@ function MainApp(_ref22) {
       invMoves: fromCash > 0 ? [...(data.invMoves || []), invMove(fromCash)] : data.invMoves || []
     }),
     onDelete: inv => update({
-      investments: (data.investments || []).filter(i => i.id !== inv.id)
+      investments: (data.investments || []).filter(i => i.id !== inv.id),
+      ...(data.emerInvId === inv.id ? {
+        emerInvId: null,
+        emerSaved: String(Math.round(invValue(inv).value))
+      } : {})
     }),
     onMove: (inv, n) => {
       const cur = invValue(inv);
