@@ -3300,7 +3300,8 @@ function HomeScreen(_p) {
   const nearLimits = limitsNear(data);
   // Un solo aviso a la vez para no saturar Inicio
   const tourCard = !prefs.tourSeen;
-  const promo = tourCard ? null : !real && income > 0 && !prefs.freshDismissed ? 'fresh' : backupDue(data, prefs) ? 'backup' : gameOn && (game.xp || 0) >= 100 && !game.levelsNoticeSeen ? 'levels' : !prefs.installDismissed && !isStandalone() ? 'install' : null;
+  const news = !tourCard && pendingNews(data, prefs);
+  const promo = tourCard || news ? null : !real && income > 0 && !prefs.freshDismissed ? 'fresh' : backupDue(data, prefs) ? 'backup' : gameOn && (game.xp || 0) >= 100 && !game.levelsNoticeSeen ? 'levels' : !prefs.installDismissed && !isStandalone() ? 'install' : null;
   const missions = getDailyMissions(todayStr);
   const missionsDone = missions.filter(m => (game.completedMissions || {})[`${todayStr}-${m.id}`]).length;
   const cards = data.debts.filter(d => d.type === 'tarjeta');
@@ -3402,6 +3403,23 @@ function HomeScreen(_p) {
     className: 'b-textbtn',
     onClick: () => _p.setPrefs({
       tourSeen: true
+    })
+  }, 'Ahora no')))), news && h('section', {
+    className: 'b-install b-tourcard'
+  }, h('span', {
+    className: 'b-help-q big',
+    'aria-hidden': 'true'
+  }, '!'), h('div', {
+    className: 'b-m'
+  }, h('b', null, news.t), h('p', null, news.d), h('div', {
+    className: 'b-notice-btns'
+  }, h('button', {
+    className: 'b-secondary',
+    onClick: _p.onNews
+  }, 'Ver qué cambió'), h('button', {
+    className: 'b-textbtn',
+    onClick: () => _p.setPrefs({
+      newsSeen: [...(prefs.newsSeen || []), news.id]
     })
   }, 'Ahora no')))), promo === 'fresh' && h('section', {
     className: 'b-install'
@@ -5971,7 +5989,7 @@ function ExportSection(_p) {
    Si esa parte todavía está vacía, explica qué va ahí y cómo llenarla. ── */
 const TOUR_STEPS = [
   { k: 'intro', tab: 'inicio', t: 'Te enseño Budgy en 1 minuto', d: 'Vamos pantalla por pantalla. Toca «Siguiente» para avanzar. Puedes salir cuando quieras.' },
-  { k: 'dinero', tab: 'inicio', t: 'Lo que puedes gastar', d: 'Este es tu dinero libre hasta la próxima quincena. Tus pagos ya vienen descontados.',
+  { k: 'dinero', tab: 'inicio', t: 'Lo que puedes gastar', d: 'Este es tu dinero libre hasta la próxima quincena, sin contar tu crédito. Tus pagos ya vienen descontados.',
     empty: (d, dp) => !(dp.income > 0 || dp.hasSaldo), ed: 'Aquí verás cuánto puedes gastar hasta tu quincena. Toca «Empezar» y dinos cuánto ganas y cuánto tienes.' },
   { k: 'atencion', tab: 'inicio', t: 'Tus pagos que vienen', d: 'Aquí te avisamos qué pagos se acercan y te preguntamos si ya los pagaste.',
     empty: d => !(d.debts || []).length && !(d.exps || []).length, ed: 'Aquí aparecerán tus pagos: renta, luz, tarjetas. Agrégalos en Presupuesto (pagos fijos) y en Metas (deudas).' },
@@ -5994,10 +6012,19 @@ const TOUR_STEPS = [
     empty: d => !(d.apartados || []).length, ed: 'Aquí separas dinero para algo que viene, como el predial o unas vacaciones. Budgy te dice cuánto guardar cada quincena.' },
   { k: 'inversiones', tab: 'metas', t: 'Tus inversiones', d: 'Tus CETES, cajitas o pagarés: cuánto llevas ganado y cuándo vencen.',
     empty: d => !(d.investments || []).some(i => i.status !== 'cobrada'), ed: 'Si tienes CETES, cajitas o pagarés, regístralos aquí. Budgy calcula lo que ganas y te avisa cuando vencen.' },
-  { k: 'deudas', tab: 'metas', t: 'Salir de deudas', d: 'Tus tarjetas y préstamos. Budgy te dice cuál conviene pagar primero.',
+  { k: 'deudas', tab: 'metas', t: 'Salir de deudas', d: 'Tus tarjetas y préstamos, y cuál conviene pagar primero. Toca una para corregir su saldo, límite o día de corte.',
     empty: d => !(d.debts || []).length, ed: 'Si debes algo (tarjeta, préstamo o a un amigo), agrégalo aquí y Budgy arma tu plan para pagarlo.' },
   { k: 'ayuda', tab: 'inicio', t: '¿Se te olvidó algo?', d: 'Toca «Ayuda» en cualquier pantalla y te explico esa parte. Tus ajustes están en tu inicial.' }
 ];
+const NEWS = [
+  { id: 'credito-1', when: d => (d.debts || []).some(x => x.type === 'tarjeta'),
+    t: 'Nuevo: tu crédito, aparte de tu dinero', d: 'Ahora ves cuánto puedes usar de tus tarjetas. También corregimos cómo se registran los pagos: revisa que cada tarjeta coincida con tu banco.',
+    steps: [
+      { k: 'credito', tab: 'inicio', t: 'Tu crédito, por separado', d: 'Cuánto puedes usar de tus tarjetas y hasta cuándo pagas lo que compres hoy. No es tu dinero: no se suma a lo que puedes gastar.' },
+      { k: 'deudas', tab: 'metas', t: 'Revisa tus tarjetas', d: 'Toca cada tarjeta, abre «Editar datos» y pon lo que dice tu banco: saldo total, límite y día de corte.' }
+    ] }
+];
+const pendingNews = (data, prefs) => NEWS.find(n => !(prefs.newsSeen || []).includes(n.id) && n.when(data)) || null;
 const TOUR_TAB_NAME = { inicio: 'Inicio', movs: 'Movimientos', presupuesto: 'Presupuesto', metas: 'Metas' };
 function HelpBtn(_p) {
   return e('button', { className: 'b-help', 'data-tour': 'ayuda', onClick: _p.onClick, 'aria-label': 'Ayuda: cómo se usa esta pantalla' },
@@ -6005,7 +6032,8 @@ function HelpBtn(_p) {
 }
 function GuidedTour(_p) {
   const only = _p.only && _p.only !== 'inicio' && TOUR_TAB_NAME[_p.only] ? _p.only : null;
-  const steps = only ? TOUR_STEPS.filter(s => s.tab === only) : TOUR_STEPS;
+  const steps = _p.steps || (only ? TOUR_STEPS.filter(s => s.tab === only) : TOUR_STEPS);
+  const label = _p.label || (only ? TOUR_TAB_NAME[only] : null);
   const [i, setI] = useState(0);
   const [rect, setRect] = useState(null);
   const [ready, setReady] = useState(false);
@@ -6055,7 +6083,7 @@ function GuidedTour(_p) {
     rect ? e('div', { className: 'b-gt-hole', style: { top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 } }) : e('div', { className: 'b-gt-dim' }),
     e('div', { className: 'b-gt-card', style: cardPos },
       e('div', { className: 'b-gt-top' },
-        e('span', { className: 'b-gt-step' }, `${only ? TOUR_TAB_NAME[only] + ' · ' : ''}${i + 1} de ${steps.length}`),
+        e('span', { className: 'b-gt-step' }, `${label ? label + ' · ' : ''}${i + 1} de ${steps.length}`),
         e('button', { className: 'b-gt-x', onClick: _p.onClose }, 'Salir')),
       e('div', { className: 'b-gt-prog', 'aria-hidden': 'true' }, e('i', { style: { width: ((i + 1) / steps.length * 100) + '%' } })),
       isEmpty && s.ed && e('div', { className: 'b-gt-tag' }, 'Todavía está vacío'),
@@ -6064,7 +6092,7 @@ function GuidedTour(_p) {
       e('div', { className: 'b-gt-btns' },
         i > 0 && e('button', { className: 'b-gt-back', onClick: () => setI(i - 1) }, 'Atrás'),
         e('button', { ref: nextRef, className: 'b-gt-next', onClick: () => last ? _p.onClose() : setI(i + 1) }, last ? 'Listo' : 'Siguiente')),
-      last && only && e('button', { className: 'b-gt-all', onClick: _p.onAll }, 'Ver el recorrido completo')));
+      last && only && !_p.steps && e('button', { className: 'b-gt-all', onClick: _p.onAll }, 'Ver el recorrido completo')));
 }
 /* ════ MOTOR FINANCIERO ════
    Una sola forma de proyectar: quincena por quincena, con tu dinero libre de hoy,
@@ -7369,6 +7397,7 @@ function MainApp(_ref22) {
     userName,
     setPrefs: updatePrefs,
     onHelp: () => setShowTutorial(tab === 'inicio' ? 'all' : tab),
+    onNews: () => setShowTutorial('news'),
     onFeedback: () => setFeedbackOpen(true),
     onFresh: () => setFreshOpen(true),
     onUpdate: update,
@@ -7394,16 +7423,21 @@ function MainApp(_ref22) {
     onDismiss: () => setLevelUpData(null)
   }), showTutorial && _h(GuidedTour, {
     key: String(showTutorial),
-    only: showTutorial === true ? null : showTutorial,
+    only: showTutorial === true || showTutorial === 'news' ? null : showTutorial,
+    steps: showTutorial === 'news' && pendingNews(data, prefs) ? pendingNews(data, prefs).steps : null,
+    label: showTutorial === 'news' ? 'Novedades' : null,
     tab: tab,
     onTab: goTab,
     data: data,
     dp: dp,
     onAll: () => setShowTutorial('all'),
     onClose: () => {
+      const n = showTutorial === 'news' ? pendingNews(data, prefs) : null;
       setShowTutorial(false);
+      // El recorrido completo ya enseña todo lo nuevo; las novedades se ven una vez
       updatePrefs({
-        tourSeen: true
+        tourSeen: true,
+        newsSeen: showTutorial === 'all' || showTutorial === true ? NEWS.map(x => x.id) : n ? [...(prefs.newsSeen || []), n.id] : prefs.newsSeen || []
       });
     }
   }), _h('main', {
