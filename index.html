@@ -2457,6 +2457,7 @@ function calcDP(data) {
   let pendingFixed = 0,
     pendingDebts = 0;
   const pendingItems = [];
+  let ledger = null;
   if (hasSaldo) {
     const totalPaydays = (data.paydays || []).filter(p => afterBaseline(data, p.addedAt, p.ts)).reduce((s, p) => s + (+p.amount || 0), 0);
     const spentDebit = (data.cashTransactions || []).filter(t => t.method === 'debit' && afterBaseline(data, t.date, t.ts)).reduce((s, t) => s + (+t.amount || 0), 0);
@@ -2469,6 +2470,15 @@ function calcDP(data) {
     const invOut = (data.invMoves || []).filter(m => afterBaseline(data, m.date, m.ts)).reduce((x, m) => x + (+m.amount || 0), 0);
     currentDebit = saldoD + totalPaydays - spentDebit - paidOut - invOut;
     currentEfectivo = saldoE - spentCash - paidCash;
+    const after = list => list.filter(t => afterBaseline(data, t.date, t.ts));
+    const cardAfter = cardTxAfter(data);
+    ledger = {
+      saldoD, saldoE, totalPaydays, spentDebit, spentCash, paidOut, paidCash, invOut,
+      nPaydays: (data.paydays || []).filter(p => afterBaseline(data, p.addedAt, p.ts)).length,
+      nDebit: after((data.cashTransactions || []).filter(t => t.method === 'debit')).length,
+      nCash: after((data.cashTransactions || []).filter(t => !t.method || t.method === 'cash')).length,
+      cardSpent: cardAfter.reduce((x, t) => x + (+t.amount || 0), 0), nCard: cardAfter.length
+    };
     const fixedPend = data.exps.filter(e => !expCard(e, data)).filter(e => e.day && +e.day >= day && (isQ1 ? +e.day <= 15 : +e.day >= 16)).filter(e => !(data.paidExps || {})[`${e.id}_${curMonth}`]);
     pendingFixed = fixedPend.reduce((s, e) => s + (+e.amount || 0), 0);
     fixedPend.forEach(e => pendingItems.push({ name: e.name, amount: +e.amount || 0, when: `día ${e.day}` }));
@@ -2517,6 +2527,7 @@ function calcDP(data) {
     nextGap,
     next,
     pendingItems,
+    ledger,
     balanceDate: data.balanceDate || null
   };
 }
@@ -3245,6 +3256,30 @@ function DailyBreakdown(_p) {
   }, row('Tu quincena', fmt(dp.income)), dp.fixedQ > 0 && row('Gastos fijos por pagar', '−' + fmt(dp.fixedQ)), dp.varQ > 0 && row(dp.spentQ > dp.varH ? 'Lo que llevas gastado esta quincena' : 'Tu presupuesto del día a día', '−' + fmt(dp.varQ)), dp.debtQ + dp.cardPayQ > 0 && row('Pagos de deudas', '−' + fmt(dp.debtQ + dp.cardPayQ)), dp.apartadoQ > 0 && row('Apartado para tus metas', '−' + fmt(dp.apartadoQ)), row('Te queda', fmt(dp.remaining), true), dp.hasSaldo && row('Después de pagos pendientes', fmt(dp.realBalance)));
 }
 
+/* ── Cómo llegamos a "En tus cuentas": cada peso que entró y salió desde que pusiste tu saldo ── */
+function LedgerSheet(_p) {
+  const dp = _p.dp, L = dp.ledger;
+  if (!L) return null;
+  const since = dp.balanceDate ? fmtDate(dp.balanceDate) : 'que empezaste';
+  const row = (k, name, sub, v, sign) => e('div', { key: k, className: 'b-kv' }, e('span', null, name, sub && e('small', { className: 'b-kv-sub' }, sub)), e('span', { className: 'b-num' }, (sign || '') + fmt(v)));
+  const n = (c, one, many) => `${c} ${c === 1 ? one : many}`;
+  return e(Sheet, { title: 'Cómo llegamos a este número', label: 'En tus cuentas', onClose: _p.onClose },
+    e('div', { className: 'b-breakdown' },
+      row('s', `Lo que tenías el ${since}`, 'Débito más efectivo, cuando pusiste tus cuentas al día', L.saldoD + L.saldoE),
+      L.totalPaydays > 0 && row('q', 'Quincenas que te cayeron', n(L.nPaydays, 'quincena', 'quincenas'), L.totalPaydays, '+'),
+      L.spentDebit > 0 && row('d', 'Gastos con débito', n(L.nDebit, 'gasto', 'gastos'), L.spentDebit, '−'),
+      L.spentCash > 0 && row('c', 'Gastos en efectivo', n(L.nCash, 'gasto', 'gastos'), L.spentCash, '−'),
+      L.paidOut + L.paidCash > 0 && row('p', 'Pagos que marcaste como hechos', 'Tarjetas, deudas y pagos fijos', L.paidOut + L.paidCash, '−'),
+      L.invOut !== 0 && row('i', L.invOut > 0 ? 'A tus inversiones' : 'De tus inversiones', null, Math.abs(L.invOut), L.invOut > 0 ? '−' : '+'),
+      e('div', { className: 'b-kv strong' }, e('span', null, 'En tus cuentas hoy'), e('span', { className: 'b-num' }, fmt(dp.currentDebit + dp.currentEfectivo)))),
+    L.cardSpent > 0 && e('div', { className: 'b-insight-box', style: { marginTop: 12 } },
+      e('b', null, `Además gastaste ${fmt(L.cardSpent)} con tarjeta`),
+      e('p', null, `${n(L.nCard, 'compra', 'compras')} desde el ${since}. No salen de tus cuentas hoy: se suman a lo que debes y los pagas en la fecha de cada tarjeta.`)),
+    e('p', { className: 'b-note' }, '¿No cuadra con tu banco? Casi siempre es un gasto que no anotaste o que anotaste con otro método (débito, efectivo o tarjeta). Revísalo en Movimientos o pon tu saldo real.'),
+    e('div', { className: 'b-notice-btns' },
+      e('button', { className: 'b-secondary', onClick: _p.onFix }, 'Poner mi saldo real'),
+      e('button', { className: 'b-textbtn', onClick: _p.onMovs }, 'Ver Movimientos')));
+}
 /* ── "Ya comprometido": dinero que está en tu cuenta pero ya tiene dueño ── */
 function CommitSheet(_p) {
   const dp = _p.dp, total = dp.currentDebit + dp.currentEfectivo - dp.realBalance;
@@ -3263,6 +3298,7 @@ function CommitSheet(_p) {
 /* ════ INICIO ════ */
 function HomeScreen(_p) {
   const [commitOpen, setCommitOpen] = useState(false);
+  const [ledgerOpen, setLedgerOpen] = useState(false);
   const data = _p.data,
     dp = _p.dp,
     game = _p.game,
@@ -3362,9 +3398,12 @@ function HomeScreen(_p) {
     className: 'b-cap'
   }, avail >= 0 ? real ? `libres hasta el ${endDay} de ${monthName}, con tus pagos ya descontados` : `disponibles hasta el ${endDay} de ${monthName}` : real ? 'te faltan para cubrir tus pagos de esta quincena' : 'te faltan para cubrir esta quincena'), real && h('div', {
     className: 'b-heroline'
-  }, h('span', null, 'En tus cuentas ', h('b', {
+  }, h('span', null, h('button', {
+    className: 'b-linkbtn',
+    onClick: () => setLedgerOpen(true)
+  }, 'En tus cuentas ', h('b', {
     className: 'b-num'
-  }, fmt(dp.currentDebit + dp.currentEfectivo)), dp.currentDebit + dp.currentEfectivo - dp.realBalance > 0 ? h(React.Fragment, null, ' · ', h('button', {
+  }, fmt(dp.currentDebit + dp.currentEfectivo))), dp.currentDebit + dp.currentEfectivo - dp.realBalance > 0 ? h(React.Fragment, null, ' · ', h('button', {
     className: 'b-linkbtn',
     onClick: () => setCommitOpen(true)
   }, 'ya comprometido ', h('b', {
@@ -3433,7 +3472,12 @@ function HomeScreen(_p) {
     className: 'b-num'
   }, fmt(credit.owed)))), h('span', {
     className: 'b-credtag'
-  }, 'No es tu dinero')), commitOpen && h(CommitSheet, {
+  }, 'No es tu dinero')), ledgerOpen && h(LedgerSheet, {
+    dp: dp,
+    onClose: () => setLedgerOpen(false),
+    onFix: () => { setLedgerOpen(false); _p.onFixBalance(); },
+    onMovs: () => { setLedgerOpen(false); _p.onTab('movs'); }
+  }), commitOpen && h(CommitSheet, {
     dp: dp,
     endLabel: `${endDay} de ${monthName}`,
     onClose: () => setCommitOpen(false)
