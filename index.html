@@ -897,6 +897,8 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-credpill-t{flex:1;font-size:.95rem;color:var(--dim)}
 .b-credpill-t b{color:var(--text)}
 .b-credpill .b-credtag{background:var(--bg);flex:none}
+
+.b-sheet .b-primary.b-what-save{margin:10px 0 4px;min-height:52px}
 </style>
 </head>
 <body>
@@ -2091,6 +2093,14 @@ function getCardInfo(card, cardTxs) {
   // El ciclo actual empieza el día después del último corte.
   const lastCut = day > cutThis ? dayOf(today.getFullYear(), today.getMonth(), cutDay) : dayOf(today.getFullYear(), today.getMonth() - 1, cutDay);
   const lastCutISO = lastCut.toLocalISO().slice(0, 10);
+  const prevCutISO = dayOf(lastCut.getFullYear(), lastCut.getMonth() - 1, cutDay).toLocalISO().slice(0, 10);
+  // Compras que ya cerraron en el último estado de cuenta, y su fecha de pago
+  const stmtSpend = (cardTxs || []).filter(t => t.cardId === card.id && t.date && t.date > prevCutISO && t.date <= lastCutISO).reduce((s, t) => s + (+t.amount || 0), 0);
+  let stmtDue = null;
+  if (card.dueDay) {
+    stmtDue = dayOf(lastCut.getFullYear(), lastCut.getMonth(), +card.dueDay);
+    if (stmtDue <= lastCut) stmtDue = dayOf(lastCut.getFullYear(), lastCut.getMonth() + 1, +card.dueDay);
+  }
   const cycleTxs = (cardTxs || []).filter(t => t.cardId === card.id && t.date && t.date > lastCutISO);
   const cycleSpend = cycleTxs.reduce((s, t) => s + (+t.amount || 0), 0);
   const t0 = new Date(today.getFullYear(), today.getMonth(), day);
@@ -2105,6 +2115,9 @@ function getCardInfo(card, cardTxs) {
   return {
     cycleSpend,
     cycleTxs,
+    lastCutISO,
+    stmtSpend,
+    stmtDue,
     daysUntilCut,
     daysUntilPay,
     availableCredit: limit > 0 ? limit - debtBalance(card, cardTxs) : null,
@@ -2455,7 +2468,8 @@ function calcDP(data) {
   let currentDebit = saldoD;
   let currentEfectivo = saldoE;
   let pendingFixed = 0,
-    pendingDebts = 0;
+    pendingDebts = 0,
+    cardCommit = 0;
   const pendingItems = [];
   let ledger = null;
   if (hasSaldo) {
@@ -2492,11 +2506,40 @@ function calcDP(data) {
       return !paidFor(d, curMonth);
     }).reduce((s, d) => {
       const pay = isDeadlineDebt(d) ? +d.balance : debtMonthPay(d);
-      if (pay > 0) pendingItems.push({ name: d.name, amount: pay, when: isDeadlineDebt(d) ? fmtDate(deadlineOf(d)) : `día ${d.dueDay}` });
+      if (pay > 0) pendingItems.push({ name: d.name, amount: pay, debtId: d.id, when: isDeadlineDebt(d) ? fmtDate(deadlineOf(d)) : `día ${d.dueDay}` });
       return s + pay;
     }, 0);
+    // Lo que compraste con tarjeta en el corte actual lo vas a pagar con tu dinero: ya está comprometido.
+    // Menos los abonos que ya hiciste desde el corte, y nunca más de lo que debes en la tarjeta
+    // (sin contar el pago de esta quincena, que ya se apartó arriba).
+    const cardTx = cardTxAfter(data);
+    cardCommit = (data.debts || []).filter(d => d.type === 'tarjeta').reduce((sum, c) => {
+      const info = getCardInfo(c, cardTx, today);
+      const owed = debtBalance(c, cardTx);
+      const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      // Estado de cuenta que ya cerró y no has pagado: sus compras anotadas también hay que pagarlas
+      const stmtOpen = info.stmtSpend > 0 && info.stmtDue && info.stmtDue >= t0 && !paidFor(c, info.stmtDue.toLocalISO().slice(0, 7));
+      let stmt = 0;
+      const pend = pendingItems.find(it => it.debtId === c.id);
+      if (stmtOpen) {
+        if (pend) {
+          // Vence en esta quincena: aparta lo mayor entre tu pago sin intereses y lo que compraste en ese corte
+          const extra = Math.max(0, Math.min(info.stmtSpend, owed) - pend.amount);
+          pend.amount += extra; pendingDebts += extra;
+        } else stmt = info.stmtSpend;
+      }
+      const pendingHere = pend ? pend.amount : 0;
+      const abonos = (c.monthlyPayments || []).filter(p => p.extra && p.paidAt && info.lastCutISO && p.paidAt > info.lastCutISO).reduce((x, p) => x + (+p.amount || 0), 0);
+      const room = Math.max(0, owed - pendingHere);
+      const amtS = Math.min(stmt, room);
+      const amtC = Math.max(0, Math.min(info.cycleSpend - abonos, room - amtS));
+      const dt = cardDates(c, today);
+      if (amtS > 0) pendingItems.push({ name: `${c.name}: compras del corte que ya cerró`, amount: amtS, when: `las pagas el ${fmtDay(info.stmtDue)}`, card: true });
+      if (amtC > 0) pendingItems.push({ name: `${c.name}: compras de este corte`, amount: amtC, when: dt && dt.due ? `las pagas el ${fmtDay(dt.due)}` : 'las pagas en tu fecha de pago', card: true });
+      return sum + amtS + amtC;
+    }, 0);
     // Lo apartado para metas sigue en tu cuenta, pero ya no es libre
-    realBalance = currentDebit + currentEfectivo - pendingFixed - pendingDebts - apartados - overdue - nextGap;
+    realBalance = currentDebit + currentEfectivo - pendingFixed - pendingDebts - apartados - overdue - nextGap - cardCommit;
   }
   return {
     income,
@@ -2527,6 +2570,7 @@ function calcDP(data) {
     nextGap,
     next,
     pendingItems,
+    cardCommit,
     ledger,
     balanceDate: data.balanceDate || null
   };
@@ -3246,7 +3290,7 @@ function DailyBreakdown(_p) {
     className: 'b-num'
   }, '−' + fmt(it.amount)))), dp.overdue > 0 && row('Pagos vencidos sin pagar', '−' + fmt(dp.overdue)), dp.nextGap > 0 && row(`Para tus pagos ${dp.next.label} (tu quincena no alcanza)`, '−' + fmt(dp.nextGap)), dp.apartados > 0 && row('Apartado para tus metas', '−' + fmt(dp.apartados)), row('Te queda libre', fmt(dp.realBalance), true), dp.cardReserved > 0 && h('p', {
     className: 'b-note'
-  }, 'Llevas ', fmt(dp.cardReserved), ' en compras con tarjeta desde tu último corte. No se descuentan todavía: los pagas en la siguiente fecha límite de tu tarjeta.'), dp.balanceDate && h('p', {
+  }, 'Llevas ', fmt(dp.cardReserved), ' en compras con tarjeta desde tu último corte. Ya se descuentan de tu dinero libre: las pagas en la siguiente fecha límite de tu tarjeta.'), dp.balanceDate && h('p', {
     className: 'b-note'
   }, 'Contando desde el ', fmtDate(dp.balanceDate), ', cuando pusiste tus cuentas al día. Se suman tus quincenas y se restan los gastos en efectivo y débito.'), dp.next && dp.next.items.length > 0 && h('div', {
     className: 'b-next'
@@ -3274,7 +3318,7 @@ function LedgerSheet(_p) {
       e('div', { className: 'b-kv strong' }, e('span', null, 'En tus cuentas hoy'), e('span', { className: 'b-num' }, fmt(dp.currentDebit + dp.currentEfectivo)))),
     L.cardSpent > 0 && e('div', { className: 'b-insight-box', style: { marginTop: 12 } },
       e('b', null, `Además gastaste ${fmt(L.cardSpent)} con tarjeta`),
-      e('p', null, `${n(L.nCard, 'compra', 'compras')} desde el ${since}. No salen de tus cuentas hoy: se suman a lo que debes y los pagas en la fecha de cada tarjeta.`)),
+      e('p', null, `${n(L.nCard, 'compra', 'compras')} desde el ${since}. No salen de tus cuentas hoy, pero las de este corte ya cuentan como comprometidas: las pagas en la fecha de cada tarjeta.`)),
     e('p', { className: 'b-note' }, '¿No cuadra con tu banco? Casi siempre es un gasto que no anotaste o que anotaste con otro método (débito, efectivo o tarjeta). Revísalo en Movimientos o pon tu saldo real.'),
     e('div', { className: 'b-notice-btns' },
       e('button', { className: 'b-secondary', onClick: _p.onFix }, 'Poner mi saldo real'),
@@ -3287,12 +3331,12 @@ function CommitSheet(_p) {
   return e(Sheet, { title: 'Ya comprometido', label: 'Ya comprometido', onClose: _p.onClose },
     e('p', { className: 'b-note', style: { marginTop: 0 } }, `Este dinero sí está en tu cuenta, pero ya tiene dueño antes del ${_p.endLabel}. Por eso no cuenta como libre.`),
     e('div', { className: 'b-breakdown' },
-      (dp.pendingItems || []).map((it, i) => row('p' + i, it.name, `Toca pagar · ${it.when}`, it.amount)),
+      (dp.pendingItems || []).map((it, i) => row('p' + i, it.name, it.card ? `Con tarjeta · ${it.when}` : `Toca pagar · ${it.when}`, it.amount)),
       dp.overdue > 0 && row('o', 'Pagos vencidos sin pagar', 'Marcaste que aún no los pagas', dp.overdue),
       dp.nextGap > 0 && row('g', `Pagos ${dp.next.label}`, 'Tu siguiente quincena no alcanza para ellos', dp.nextGap),
       dp.apartados > 0 && row('a', 'Apartados de Metas', 'Lo que guardas para el predial, vacaciones…', dp.apartados),
       e('div', { className: 'b-kv strong' }, e('span', null, 'Total comprometido'), e('span', { className: 'b-num' }, fmt(total)))),
-    e('p', { className: 'b-note' }, 'Lo que compras o pagas con tarjeta no está aquí: se suma a lo que debes en esa tarjeta. Aquí solo entra el pago de la tarjeta cuando te toca hacerlo.'),
+    e('p', { className: 'b-note' }, 'Lo que compras con tarjeta en este corte sí cuenta aquí: no sale de tu cuenta hoy, pero lo vas a pagar con este dinero. Si abonas a la tarjeta, baja de aquí.'),
     e('p', { className: 'b-note' }, 'Cuando marques un pago como hecho, sale de aquí y de tu cuenta al mismo tiempo: tu dinero libre no cambia.'));
 }
 /* ════ INICIO ════ */
@@ -4171,7 +4215,11 @@ function QuickAddSheet(_p) {
   const _method = method, _cardId = cardId;
   const [voice, setVoice] = useState(null); // {state:'listening'|'heard'|'error', text, desc, cat}
   const [what, setWhat] = useState('');
+  const [pick, setPick] = useState(null); // categoría elegida esperando que escribas qué fue (p. ej. "Otro")
+  const whatRef = useRef(null);
   const sug = what.trim() ? guessCat(what) : null;
+  // Con lo que escribiste: la categoría que elegiste, la que se adivina, o "Otro"
+  const typedCat = pick || (sug ? sug.id : 'v6');
   const [showAll, setShowAll] = useState(false);
   const counts = {};
   [...(data.cashTransactions || []), ...(data.cardTransactions || [])].forEach(t => {
@@ -4272,7 +4320,7 @@ function QuickAddSheet(_p) {
     };
   }, []);
   const heard = voice && voice.state === 'heard';
-  const hint = heard ? 'Revisa y confirma' : amt ? 'Ahora toca en qué fue' : '¿Cuánto gastaste?';
+  const hint = heard ? 'Revisa y confirma' : pick ? 'Escribe qué fue y toca Guardar' : amt ? 'Ahora toca en qué fue' : '¿Cuánto gastaste?';
   return h(React.Fragment, null, h('div', {
     className: 'b-scrim',
     onClick: _p.onClose
@@ -4301,13 +4349,23 @@ function QuickAddSheet(_p) {
   }, hint)), voice && voice.state !== 'listening' && h('div', {
     className: 'b-heard' + (voice.state === 'error' ? ' err' : '')
   }, heard ? `“${voice.text}”` : voice.text), !heard && h('input', {
+    ref: whatRef,
     className: 'b-what',
     value: what,
     maxLength: 40,
-    placeholder: '¿Qué fue? (opcional) Ej. tacos, Uber, regalo',
-    'aria-label': '¿Qué fue? (opcional)',
-    onChange: ev => setWhat(ev.target.value)
-  }), !amt && !voice && !what && favs.length > 0 && h('div', {
+    enterKeyHint: amt ? 'send' : 'done',
+    placeholder: pick ? 'Escribe qué fue. Ej. farmacia, regalo' : '¿Qué fue? (opcional) Ej. tacos, Uber, regalo',
+    'aria-label': '¿Qué fue?',
+    onChange: ev => setWhat(ev.target.value),
+    onKeyDown: ev => {
+      if (ev.key !== 'Enter') return;
+      ev.preventDefault();
+      if (+amt > 0) save(typedCat);else ev.target.blur();
+    }
+  }), !heard && +amt > 0 && (what.trim() || pick) && h('button', {
+    className: 'b-primary b-what-save',
+    onClick: () => save(typedCat)
+  }, `Guardar ${fmt(+amt)} en ${what.trim() ? what.trim() : quickCat(typedCat).n}`), !amt && !voice && !what && favs.length > 0 && h('div', {
     className: 'b-favs'
   }, h('div', {
     className: 'b-favs-h'
@@ -4347,12 +4405,20 @@ function QuickAddSheet(_p) {
     return [...top, quickCat('v6')];
   })().map(c => h('button', {
     key: c.id,
-    className: 'b-cat' + (heard && voice.cat === c.id || !heard && sug && sug.id === c.id ? ' sel' : ''),
+    className: 'b-cat' + (heard && voice.cat === c.id || !heard && (pick ? pick === c.id : sug && sug.id === c.id) ? ' sel' : ''),
     disabled: !amt,
-    onClick: () => heard ? setVoice({
-      ...voice,
-      cat: c.id
-    }) : save(c.id)
+    onClick: () => {
+      if (heard) return setVoice({
+        ...voice,
+        cat: c.id
+      });
+      if (c.id === 'v6' && !what.trim()) {
+        setPick('v6');
+        if (whatRef.current) whatRef.current.focus();
+        return;
+      }
+      save(c.id);
+    }
   }, h(CatIcon, {
     c: c,
     big: true
@@ -6118,6 +6184,12 @@ const NEWS = [
       { k: 'deudas', tab: 'metas', t: 'Revisa tus tarjetas', d: 'Toca cada tarjeta, abre «Editar datos» y pon lo que dice tu banco: saldo total, límite y día de corte.' }
     ] }
 ];
+NEWS.push({ id: 'tarjeta-comprometido-1', when: d => (d.cardTransactions || []).length > 0,
+  t: 'Tus compras con tarjeta ya cuentan', d: 'Lo que compras con tarjeta en este corte ahora se descuenta de tu dinero libre: lo vas a pagar con ese dinero. Por eso puede verse más bajo.',
+  steps: [
+    { k: 'dinero', tab: 'inicio', t: 'Tu dinero libre, más real', d: 'Ahora descuenta lo que compraste con tarjeta en este corte. Toca «ya comprometido» para ver cuánto es de cada tarjeta.' },
+    { k: 'credito', tab: 'inicio', t: 'Abonar no cambia tu libre', d: 'Si abonas o pagas tu tarjeta, el dinero sale de tu cuenta y de lo comprometido al mismo tiempo.' }
+  ] });
 const pendingNews = (data, prefs) => NEWS.find(n => !(prefs.newsSeen || []).includes(n.id) && n.when(data)) || null;
 const TOUR_TAB_NAME = { inicio: 'Inicio', movs: 'Movimientos', presupuesto: 'Presupuesto', metas: 'Metas' };
 function HelpBtn(_p) {
