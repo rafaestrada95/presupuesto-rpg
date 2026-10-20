@@ -899,6 +899,8 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-credpill .b-credtag{background:var(--bg);flex:none}
 
 .b-sheet .b-primary.b-what-save{margin:10px 0 4px;min-height:52px}
+
+.b-sheet .b-inlink{display:block;margin:2px auto 6px;font-size:.92rem}
 </style>
 </head>
 <body>
@@ -1449,7 +1451,8 @@ const ASSET_TYPES = [{
 function getWealth(data) {
   const assets = data.assets || [];
   const inv = invTotals(data);
-  const assetsTotal = assets.reduce((s, a) => s + (+a.value || 0), 0) + inv.total;
+  // Tus seguros de ahorro también son tuyos (aunque no los puedas usar hoy)
+  const assetsTotal = assets.reduce((s, a) => s + (+a.value || 0), 0) + inv.total + savingsTotal(data);
   const invested = assets.filter(a => a.type === 'inversion').reduce((s, a) => s + (+a.value || 0), 0) + inv.total;
   const passive = assets.reduce((s, a) => s + (+a.monthlyIncome || 0), 0) + inv.monthly;
   // Si el fondo vive en una inversión, ya está contado en inv.total
@@ -2482,12 +2485,16 @@ function calcDP(data) {
     const paidCash = (data.expPayLog || []).filter(p => p.method === 'cash' && afterBaseline(data, p.date, p.ts)).reduce((x, p) => x + (+p.amount || 0), 0);
     // Lo que metiste a inversiones sale de tu cuenta; lo que te regresó, entra
     const invOut = (data.invMoves || []).filter(m => afterBaseline(data, m.date, m.ts)).reduce((x, m) => x + (+m.amount || 0), 0);
-    currentDebit = saldoD + totalPaydays - spentDebit - paidOut - invOut;
-    currentEfectivo = saldoE - spentCash - paidCash;
+    // Ingresos extra que te llegaron (bono, venta, reembolso) desde que pusiste tu saldo
+    const extraIn = (data.extraIncome || []).filter(x => x.type === 'once' && afterBaseline(data, x.date, x.ts));
+    const extraInD = extraIn.filter(x => x.method !== 'cash').reduce((x, i) => x + (+i.amount || 0), 0);
+    const extraInC = extraIn.filter(x => x.method === 'cash').reduce((x, i) => x + (+i.amount || 0), 0);
+    currentDebit = saldoD + totalPaydays + extraInD - spentDebit - paidOut - invOut;
+    currentEfectivo = saldoE + extraInC - spentCash - paidCash;
     const after = list => list.filter(t => afterBaseline(data, t.date, t.ts));
     const cardAfter = cardTxAfter(data);
     ledger = {
-      saldoD, saldoE, totalPaydays, spentDebit, spentCash, paidOut, paidCash, invOut,
+      saldoD, saldoE, totalPaydays, spentDebit, spentCash, paidOut, paidCash, invOut, extraIn: extraInD + extraInC, nExtra: extraIn.length,
       nPaydays: (data.paydays || []).filter(p => afterBaseline(data, p.addedAt, p.ts)).length,
       nDebit: after((data.cashTransactions || []).filter(t => t.method === 'debit')).length,
       nCash: after((data.cashTransactions || []).filter(t => !t.method || t.method === 'cash')).length,
@@ -3311,6 +3318,7 @@ function LedgerSheet(_p) {
     e('div', { className: 'b-breakdown' },
       row('s', `Lo que tenías el ${since}`, 'Débito más efectivo, cuando pusiste tus cuentas al día', L.saldoD + L.saldoE),
       L.totalPaydays > 0 && row('q', 'Quincenas que te cayeron', n(L.nPaydays, 'quincena', 'quincenas'), L.totalPaydays, '+'),
+      L.extraIn > 0 && row('x', 'Ingresos extra', n(L.nExtra, 'ingreso', 'ingresos'), L.extraIn, '+'),
       L.spentDebit > 0 && row('d', 'Gastos con débito', n(L.nDebit, 'gasto', 'gastos'), L.spentDebit, '−'),
       L.spentCash > 0 && row('c', 'Gastos en efectivo', n(L.nCash, 'gasto', 'gastos'), L.spentCash, '−'),
       L.paidOut + L.paidCash > 0 && row('p', 'Pagos que marcaste como hechos', 'Tarjetas, deudas y pagos fijos', L.paidOut + L.paidCash, '−'),
@@ -3944,6 +3952,43 @@ function PresupuestoScreen(_p) {
   }))));
 }
 
+/* ── Ahorro programado (seguros de ahorro, tandas…): cuánto llevas acumulado ── */
+// Meses que marcaste como pagados de un pago fijo
+const paidMonthsOf = (x, data) => Object.keys(data.paidExps || {}).filter(k => (data.paidExps || {})[k]).map(k => k.match(/^(.*)_(\d{4}-\d{2})$/)).filter(m => m && m[1] === String(x.id)).map(m => m[2]);
+// Lo acumulado: lo que dijiste que llevabas (estado de cuenta) más lo que has pagado desde entonces
+function savingAcc(x, data) {
+  const months = paidMonthsOf(x, data), amt = +x.amount || 0;
+  if (x.savedBase == null || x.savedBase === '') return { acc: amt * months.length, months: months.length, fromBase: false };
+  const after = months.filter(m => m > x.savedBaseMonth || m === x.savedBaseMonth && !x.savedBasePaid).length;
+  return { acc: +x.savedBase + amt * after, months: after, fromBase: true };
+}
+const savingsTotal = data => (data.exps || []).filter(x => x.saving).reduce((s, x) => s + savingAcc(x, data).acc, 0);
+function SavingsSection(_p) {
+  const data = _p.data, list = (data.exps || []).filter(x => x.saving);
+  const [edit, setEdit] = useState(null); // {id, v}
+  if (!list.length) return null;
+  const month = todayISO().slice(0, 7);
+  const total = savingsTotal(data), monthly = list.reduce((s, x) => s + (+x.amount || 0), 0);
+  const save = () => {
+    const v = +edit.v;
+    _p.onUpdate({ exps: data.exps.map(x => x.id === edit.id ? { ...x, savedBase: edit.v === '' ? null : v, savedBaseMonth: month, savedBasePaid: !!(data.paidExps || {})[`${x.id}_${month}`] } : x) });
+    setEdit(null);
+  };
+  return e('section', { 'data-tour': 'ahorros' },
+    e('div', { className: 'b-sh' }, e('h2', null, 'Tu ahorro programado')),
+    e('div', { className: 'b-debt-sum' }, e('span', { className: 'b-amount sm' }, e(Money, { n: total })), e('span', { className: 'b-cap' }, `acumulado · sumas ${fmt(monthly)} al mes (${fmt(monthly * 12)} al año)`)),
+    e('div', { className: 'b-rows' }, list.map(x => {
+      const a = savingAcc(x, data), card = expCard(x, data);
+      return edit && edit.id === x.id ? e('div', { key: x.id, className: 'b-form' },
+        e(Field, { label: `¿Cuánto llevas acumulado en ${x.name}?`, value: edit.v, ph: '$0', help: 'Viene en tu estado de cuenta del seguro. Desde hoy Budgy le suma cada pago que marques.', onChange: v => setEdit({ ...edit, v }) }),
+        e('div', { className: 'b-form-btns' }, e('button', { className: 'b-secondary', onClick: () => setEdit(null) }, 'Cancelar'), e('button', { className: 'b-primary sm', onClick: save }, 'Guardar'))) :
+        e('button', { key: x.id, onClick: () => setEdit({ id: x.id, v: x.savedBase != null && x.savedBase !== '' ? String(x.savedBase) : '' }) },
+          e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, x.name),
+            e('div', { className: 'b-d' }, `${fmt(+x.amount || 0)} al mes${card ? ' · con ' + card.name : ''} · `, a.fromBase ? (a.months ? `${a.months} ${a.months === 1 ? 'pago' : 'pagos'} desde tu último estado de cuenta` : 'según tu último estado de cuenta') : 'toca para poner lo que llevas en total')),
+          e('span', { className: 'b-n b-num' }, fmt(a.acc)));
+    })),
+    e('p', { className: 'b-note' }, 'Es dinero tuyo, pero no lo puedes usar hoy: no cuenta en tu dinero libre. Sí cuenta en tu patrimonio.'));
+}
 /* ════ METAS ════ */
 function MetasScreen(_p) {
   const data = _p.data;
@@ -4024,6 +4069,9 @@ function MetasScreen(_p) {
       });
       setLinkOpen(false);
     }
+  }), h(SavingsSection, {
+    data: data,
+    onUpdate: _p.onUpdate
   }), h(ApartadosSection, {
     data: data,
     onUpdate: _p.onUpdate
@@ -4215,7 +4263,8 @@ function QuickAddSheet(_p) {
   const _method = method, _cardId = cardId;
   const [voice, setVoice] = useState(null); // {state:'listening'|'heard'|'error', text, desc, cat}
   const [what, setWhat] = useState('');
-  const [pick, setPick] = useState(null); // categoría elegida esperando que escribas qué fue (p. ej. "Otro")
+  const [pick, setPick] = useState(null);
+  const [mode, setMode] = useState('out'); // 'out' gasto · 'in' te llegó dinero // categoría elegida esperando que escribas qué fue (p. ej. "Otro")
   const whatRef = useRef(null);
   const sug = what.trim() ? guessCat(what) : null;
   // Con lo que escribiste: la categoría que elegiste, la que se adivina, o "Otro"
@@ -4320,7 +4369,12 @@ function QuickAddSheet(_p) {
     };
   }, []);
   const heard = voice && voice.state === 'heard';
-  const hint = heard ? 'Revisa y confirma' : pick ? 'Escribe qué fue y toca Guardar' : amt ? 'Ahora toca en qué fue' : '¿Cuánto gastaste?';
+  const saveIncome = () => {
+    const n = parseFloat(amt);
+    if (!n) return;
+    _p.onAddIncome({ amount: n, desc: what.trim() || 'Ingreso extra', method: method === 'cash' ? 'cash' : 'debit' });
+  };
+  const hint = mode === 'in' ? amt ? 'Escribe de qué es y guárdalo' : '¿Cuánto te llegó?' : heard ? 'Revisa y confirma' : pick ? 'Escribe qué fue y toca Guardar' : amt ? 'Ahora toca en qué fue' : '¿Cuánto gastaste?';
   return h(React.Fragment, null, h('div', {
     className: 'b-scrim',
     onClick: _p.onClose
@@ -4335,7 +4389,7 @@ function QuickAddSheet(_p) {
     className: 'b-grab'
   }), h('div', {
     className: 'b-sheet-h'
-  }, h('span', null, 'Anotar un gasto'), h('button', {
+  }, h('span', null, mode === 'in' ? 'Anotar un ingreso' : 'Anotar un gasto'), h('button', {
     className: 'b-textbtn',
     onClick: _p.onClose
   }, 'Cerrar')), h('div', {
@@ -4346,7 +4400,14 @@ function QuickAddSheet(_p) {
     n: +amt || 0
   })), h('div', {
     className: 'b-amt-h'
-  }, hint)), voice && voice.state !== 'listening' && h('div', {
+  }, hint)), !heard && h('button', {
+    className: 'b-textbtn b-inlink',
+    onClick: () => {
+      setMode(mode === 'in' ? 'out' : 'in');
+      setPick(null);
+      if (method === 'card') setMethod('debit');
+    }
+  }, mode === 'in' ? '← Mejor anotar un gasto' : '¿Te llegó dinero? Anota un ingreso'), voice && voice.state !== 'listening' && h('div', {
     className: 'b-heard' + (voice.state === 'error' ? ' err' : '')
   }, heard ? `“${voice.text}”` : voice.text), !heard && h('input', {
     ref: whatRef,
@@ -4354,18 +4415,18 @@ function QuickAddSheet(_p) {
     value: what,
     maxLength: 40,
     enterKeyHint: amt ? 'send' : 'done',
-    placeholder: pick ? 'Escribe qué fue. Ej. farmacia, regalo' : '¿Qué fue? (opcional) Ej. tacos, Uber, regalo',
+    placeholder: mode === 'in' ? '¿De qué es? Ej. bono, venta, reembolso' : pick ? 'Escribe qué fue. Ej. farmacia, regalo' : '¿Qué fue? (opcional) Ej. tacos, Uber, regalo',
     'aria-label': '¿Qué fue?',
     onChange: ev => setWhat(ev.target.value),
     onKeyDown: ev => {
       if (ev.key !== 'Enter') return;
       ev.preventDefault();
-      if (+amt > 0) save(typedCat);else ev.target.blur();
+      if (+amt > 0) mode === 'in' ? saveIncome() : save(typedCat);else ev.target.blur();
     }
-  }), !heard && +amt > 0 && (what.trim() || pick) && h('button', {
+  }), mode !== 'in' && !heard && +amt > 0 && (what.trim() || pick) && h('button', {
     className: 'b-primary b-what-save',
     onClick: () => save(typedCat)
-  }, `Guardar ${fmt(+amt)} en ${what.trim() ? what.trim() : quickCat(typedCat).n}`), !amt && !voice && !what && favs.length > 0 && h('div', {
+  }, `Guardar ${fmt(+amt)} en ${what.trim() ? what.trim() : quickCat(typedCat).n}`), mode !== 'in' && !amt && !voice && !what && favs.length > 0 && h('div', {
     className: 'b-favs'
   }, h('div', {
     className: 'b-favs-h'
@@ -4385,17 +4446,21 @@ function QuickAddSheet(_p) {
     className: 'b-paywith',
     role: 'group',
     'aria-label': 'Cómo pagaste'
-  }, [['cash', 'Efectivo'], ['debit', 'Débito'], ['card', 'Tarjeta']].filter(m => m[0] !== 'card' || cards.length).map(m => h('button', {
+  }, [['cash', 'Efectivo'], ['debit', 'Débito'], ['card', 'Tarjeta']].filter(m => m[0] !== 'card' || cards.length && mode !== 'in').map(m => h('button', {
     key: m[0],
     className: method === m[0] ? 'on' : '',
     onClick: () => setMethod(m[0])
-  }, m[1]))), method === 'card' && cards.length > 1 && h('div', {
+  }, m[1]))), mode !== 'in' && method === 'card' && cards.length > 1 && h('div', {
     className: 'b-cardpick'
   }, cards.map(c => h('button', {
     key: c.id,
     className: cardId === c.id ? 'on' : '',
     onClick: () => setCardId(c.id)
-  }, c.name))), h('div', {
+  }, c.name))), mode === 'in' ? h('button', {
+    className: 'b-primary b-what-save',
+    disabled: !(+amt > 0),
+    onClick: saveIncome
+  }, +amt > 0 ? `Sumar ${fmt(+amt)} a tu ${method === 'cash' ? 'efectivo' : 'cuenta'}` : 'Escribe cuánto te llegó') : h('div', {
     className: 'b-cats'
   }, (() => {
     if (showAll) return cats;
@@ -4439,7 +4504,7 @@ function QuickAddSheet(_p) {
     className: 'b-key',
     'aria-label': k === '⌫' ? 'Borrar' : k,
     onClick: () => press(k)
-  }, k))), h('button', {
+  }, k))), mode !== 'in' && h('button', {
     className: 'b-voice' + (voice && voice.state === 'listening' ? ' live' : ''),
     onClick: listen
   }, h(Icon, {
@@ -4971,14 +5036,26 @@ function MyInfo(_p) {
         e(Field, { label: 'Quincena del 1 al 15', value: data.q1, ph: '$0', onChange: v => set({ q1: v }) }),
         e(Field, { label: 'Quincena del 16 al 31', value: data.q2, ph: '$0', onChange: v => set({ q2: v }) })),
       e('div', { className: 'b-field', style: { marginTop: 12 } }, '¿Qué días te depositan?', e('div', { className: 'b-chips' }, PAY_SCHEDULES.map(o => e('button', { key: o[0], className: 'b-chip' + ((data.paySchedule || '15-ultimo') === o[0] ? ' on' : ''), onClick: () => set({ paySchedule: o[0] }) }, o[1])))),
-      income > 0 && e('p', { className: 'b-note' }, 'Al mes: ', e('b', null, fmt(income)), '. Tu quincena se suma sola el día que te pagan.')),
+      income > 0 && e('p', { className: 'b-note' }, 'Al mes: ', e('b', null, fmt(income)), '. Tu quincena se suma sola el día que te pagan.'),
+      (() => {
+        // La quincena de este periodo ya se sumó: si cambiaste el monto, ¿corregimos lo que ya entró?
+        const now = new Date(), cur = currentPayDate(data, now);
+        const rec = cur && (data.paydays || []).find(p => p.quincena === cur.key);
+        const want = cur ? +(cur.isQ1 ? data.q1 : data.q2) || 0 : 0;
+        const nxt = [...payDatesOf(data, now.getFullYear(), now.getMonth()), ...payDatesOf(data, now.getFullYear(), now.getMonth() + 1)].find(q => q.date > now.toLocalISO().slice(0, 10));
+        const fixIt = rec && want > 0 && Math.round(+rec.amount) !== Math.round(want);
+        return e(React.Fragment, null,
+          fixIt && e('div', { className: 'b-note warn' }, `Tu quincena del ${fmtDate(cur.date)} ya se sumó como ${fmt(rec.amount)}. ¿Te depositaron ${fmt(want)}?`,
+            e('div', { style: { marginTop: 8 } }, e('button', { className: 'b-secondary', onClick: () => set({ paydays: data.paydays.map(p => p.quincena === cur.key ? { ...p, amount: want } : p) }) }, `Sí, corregir a ${fmt(want)}`))),
+          !fixIt && nxt && +nxt.amount > 0 && e('p', { className: 'b-note' }, `Cambiar tu quincena no mueve tu dinero de hoy: tu siguiente quincena (${fmt(nxt.amount)}) se suma sola el ${fmtDate(nxt.date)}.`));
+      })()),
     e('section', null, e('div', { className: 'b-sh' }, e('h2', null, 'Lo que tienes hoy')),
       e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Cuando lo cambias, Budgy empieza a contar desde ese momento: lo anotado antes ya está incluido en esta cifra.'),
       e('div', { className: 'b-grid2' },
         e(Field, { label: 'En tu cuenta (débito)', value: data.saldoDebito, ph: '$0', onChange: v => set({ ...rebaseBalances(data, v, data.saldoEfectivo || '0'), saldoDebito: v }) }),
         e(Field, { label: 'En efectivo', value: data.saldoEfectivo, ph: '$0', onChange: v => set({ ...rebaseBalances(data, data.saldoDebito || '0', v), saldoEfectivo: v }) }))),
     e('section', null, e('div', { className: 'b-sh' }, e('h2', null, 'Ingresos extra')),
-      (data.extraIncome || []).length === 0 && !xf && e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Freelance, comisiones, bonos o rentas, aparte de tu quincena.'),
+      e('p', { className: 'b-note', style: { marginTop: 0 } }, '«Solo una vez» se suma a tu cuenta hoy. «Cada mes» se usa en tus planes; cuando te llegue, anótalo con + Anotar → ¿Te llegó dinero?'),
       e('div', { className: 'b-rows' }, (data.extraIncome || []).map((x, i) => e('div', { key: x.id || i },
         e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, x.desc || x.label || 'Extra'), e('div', { className: 'b-d' }, x.type === 'monthly' ? 'Cada mes' : 'Una vez · ' + fmtDate(x.date))),
         e('span', { className: 'b-n b-num b-ok' }, '+' + fmt(x.amount)),
@@ -4988,7 +5065,7 @@ function MyInfo(_p) {
         e(Field, { label: '¿Cuánto?', value: xf.amount, ph: '$0', onChange: v => setXf({ ...xf, amount: v }) }),
         e('div', { className: 'b-seg' }, [['monthly', 'Cada mes'], ['once', 'Solo una vez']].map(o => e('button', { key: o[0], className: xf.type === o[0] ? 'on' : '', onClick: () => setXf({ ...xf, type: o[0] }) }, o[1]))),
         e('div', { className: 'b-form-btns' }, e('button', { className: 'b-secondary', onClick: () => setXf(null) }, 'Cancelar'),
-          e('button', { className: 'b-primary sm', disabled: !(+xf.amount > 0), onClick: () => { _p.onAddExtra({ amount: +xf.amount, desc: xf.desc || 'Extra', type: xf.type, date: new Date().toLocalISO().slice(0, 10) }); setXf(null); } }, 'Guardar')))
+          e('button', { className: 'b-primary sm', disabled: !(+xf.amount > 0), onClick: () => { _p.onAddExtra({ amount: +xf.amount, desc: xf.desc || 'Extra', type: xf.type, date: new Date().toLocalISO().slice(0, 10), ts: Date.now(), method: 'debit' }); setXf(null); } }, 'Guardar')))
         : e('button', { className: 'b-primary ghost', onClick: () => setXf({ desc: '', amount: '', type: 'monthly' }) }, 'Agregar ingreso extra')),
     e('section', null, e('div', { className: 'b-sh' }, e('h2', null, 'Fondo para emergencias')),
       e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Sin este colchón, cada imprevisto se vuelve deuda. Lo recomendado: un mes de lo que ganas', income > 0 ? ` (${fmt(income)}).` : '.'),
@@ -6168,6 +6245,8 @@ const TOUR_STEPS = [
     empty: d => !(d.exps || []).length, ed: 'Todavía no tienes pagos fijos. Toca aquí y agrega renta, luz, internet o celular: Budgy les aparta el dinero.' },
   { k: 'emergencia', tab: 'metas', t: 'Tu fondo para emergencias', d: 'Tu colchón para imprevistos: cuánto llevas y cuánto te falta.',
     empty: d => !(+d.emerGoal > 0), ed: 'Es dinero guardado para imprevistos. Toca «Crear mi meta» y Budgy te dice cuánto juntar.' },
+  { k: 'ahorros', tab: 'metas', t: 'Tu ahorro programado', d: 'Tus seguros de ahorro y lo que guardas cada mes: cuánto llevas acumulado. Toca uno para poner lo que dice tu estado de cuenta.',
+    ed: 'Si pagas un seguro con ahorro o guardas algo fijo cada mes, márcalo como «Es un ahorro» en tus pagos fijos y aquí verás cuánto llevas.' },
   { k: 'apartados', tab: 'metas', t: 'Dinero apartado', d: 'Lo que separas para algo que viene, como el predial o unas vacaciones.',
     empty: d => !(d.apartados || []).length, ed: 'Aquí separas dinero para algo que viene, como el predial o unas vacaciones. Budgy te dice cuánto guardar cada quincena.' },
   { k: 'inversiones', tab: 'metas', t: 'Tus inversiones', d: 'Tus CETES, cajitas o pagarés: cuánto llevas ganado y cuándo vencen.',
@@ -6189,6 +6268,12 @@ NEWS.push({ id: 'tarjeta-comprometido-1', when: d => (d.cardTransactions || []).
   steps: [
     { k: 'dinero', tab: 'inicio', t: 'Tu dinero libre, más real', d: 'Ahora descuenta lo que compraste con tarjeta en este corte. Toca «ya comprometido» para ver cuánto es de cada tarjeta.' },
     { k: 'credito', tab: 'inicio', t: 'Abonar no cambia tu libre', d: 'Si abonas o pagas tu tarjeta, el dinero sale de tu cuenta y de lo comprometido al mismo tiempo.' }
+  ] });
+NEWS.push({ id: 'ahorro-1', when: d => (d.exps || []).some(x => x.saving),
+  t: 'Nuevo: cuánto llevas en tus seguros de ahorro', d: 'En Metas ves tu ahorro programado acumulado. Y si te llega dinero extra, ahora lo anotas desde + Anotar.',
+  steps: [
+    { k: 'ahorros', tab: 'metas', t: 'Tu ahorro acumulado', d: 'Toca cada seguro y pon lo que dice tu estado de cuenta. Desde ahí, Budgy le suma cada pago que marques.' },
+    { k: 'anotar', tab: 'inicio', t: '¿Te llegó dinero?', d: 'Toca «Anotar» y luego «¿Te llegó dinero? Anota un ingreso». Se suma a tu cuenta al momento.' }
   ] });
 const pendingNews = (data, prefs) => NEWS.find(n => !(prefs.newsSeen || []).includes(n.id) && n.when(data)) || null;
 const TOUR_TAB_NAME = { inicio: 'Inicio', movs: 'Movimientos', presupuesto: 'Presupuesto', metas: 'Metas' };
@@ -7734,6 +7819,29 @@ function MainApp(_ref22) {
     },
     onAddCash: actions.addCash,
     onAddCard: actions.addCard,
+    onAddIncome: inc => {
+      const id = uid();
+      update({
+        extraIncome: [...(data.extraIncome || []), {
+          id,
+          type: 'once',
+          amount: inc.amount,
+          desc: inc.desc,
+          method: inc.method,
+          date: new Date().toLocalISO().slice(0, 10),
+          ts: Date.now()
+        }]
+      });
+      setQuickOpen(false);
+      setQuickAmount('');
+      setToast({
+        text: `Sumado: ${fmt(inc.amount)} a tu ${inc.method === 'cash' ? 'efectivo' : 'cuenta'}`,
+        onUndo: () => setData(prev => ({
+          ...prev,
+          extraIncome: (prev.extraIncome || []).filter(x => x.id !== id)
+        }))
+      });
+    },
     onSaved: t => {
       setQuickOpen(false);
       setQuickAmount('');
