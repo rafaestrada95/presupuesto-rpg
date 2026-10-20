@@ -3952,42 +3952,67 @@ function PresupuestoScreen(_p) {
   }))));
 }
 
-/* ── Ahorro programado (seguros de ahorro, tandas…): cuánto llevas acumulado ── */
+/* ── Ahorro programado (seguros de ahorro, tandas…): cuánto llevas, con lo que te rinde ── */
 // Meses que marcaste como pagados de un pago fijo
 const paidMonthsOf = (x, data) => Object.keys(data.paidExps || {}).filter(k => (data.paidExps || {})[k]).map(k => k.match(/^(.*)_(\d{4}-\d{2})$/)).filter(m => m && m[1] === String(x.id)).map(m => m[2]);
-// Lo acumulado: lo que dijiste que llevabas (estado de cuenta) más lo que has pagado desde entonces
-function savingAcc(x, data) {
-  const months = paidMonthsOf(x, data), amt = +x.amount || 0;
-  if (x.savedBase == null || x.savedBase === '') return { acc: amt * months.length, months: months.length, fromBase: false };
-  const after = months.filter(m => m > x.savedBaseMonth || m === x.savedBaseMonth && !x.savedBasePaid).length;
-  return { acc: +x.savedBase + amt * after, months: after, fromBase: true };
+// Lo acumulado: lo que dice tu estado de cuenta más cada pago desde entonces, y todo crece con su rendimiento
+// (interés compuesto mensual). Sin estado de cuenta: lo que has pagado desde que usas Budgy.
+function savingAcc(x, data, today) {
+  today = today || todayISO();
+  const amt = +x.amount || 0, i = (+x.rate || 0) / 100 / 12;
+  const grow = (v, from) => i > 0 && from < today ? v * Math.pow(1 + i, daysBetween(from, today) / 30.4375) : v;
+  const hasBase = x.savedBase != null && x.savedBase !== '';
+  let months = paidMonthsOf(x, data);
+  if (hasBase) months = months.filter(m => m > x.savedBaseMonth || m === x.savedBaseMonth && !x.savedBasePaid);
+  // Fecha de cada pago: el día del pago fijo en ese mes
+  const payDate = m => { const [y, mo] = m.split('-').map(Number); return `${m}-${pad2(Math.min(+x.day || 1, new Date(y, mo, 0).getDate()))}`; };
+  const base = hasBase ? +x.savedBase : 0;
+  const baseDate = x.savedBaseDate || (x.savedBaseMonth ? x.savedBaseMonth + '-01' : today);
+  const acc = grow(base, baseDate) + months.reduce((s, m) => s + grow(amt, payDate(m)), 0);
+  const put = base + amt * months.length;
+  return { acc, put, gain: acc - put, months: months.length, fromBase: hasBase, rate: +x.rate || 0 };
 }
+// Cuánto tendrás en n meses si sigues aportando lo mismo
+const savingFuture = (acc, amt, rate, n) => { const i = (+rate || 0) / 100 / 12; return i > 0 ? acc * Math.pow(1 + i, n) + amt * (Math.pow(1 + i, n) - 1) / i : acc + amt * n; };
 const savingsTotal = data => (data.exps || []).filter(x => x.saving).reduce((s, x) => s + savingAcc(x, data).acc, 0);
 function SavingsSection(_p) {
   const data = _p.data, list = (data.exps || []).filter(x => x.saving);
-  const [edit, setEdit] = useState(null); // {id, v}
+  const [edit, setEdit] = useState(null); // {id, v, rate}
   if (!list.length) return null;
-  const month = todayISO().slice(0, 7);
-  const total = savingsTotal(data), monthly = list.reduce((s, x) => s + (+x.amount || 0), 0);
+  const today = todayISO(), month = today.slice(0, 7);
+  const rows = list.map(x => ({ x, a: savingAcc(x, data) }));
+  const total = rows.reduce((s, r) => s + r.a.acc, 0), gain = rows.reduce((s, r) => s + r.a.gain, 0);
+  const monthly = list.reduce((s, x) => s + (+x.amount || 0), 0);
+  const future = n => rows.reduce((s, r) => s + savingFuture(r.a.acc, +r.x.amount || 0, r.x.rate, n), 0);
+  const withRate = rows.filter(r => r.a.rate > 0);
+  const avgRate = total > 0 && withRate.length ? withRate.reduce((s, r) => s + r.a.rate * r.a.acc, 0) / Math.max(1, withRate.reduce((s, r) => s + r.a.acc, 0)) : 0;
   const save = () => {
-    const v = +edit.v;
-    _p.onUpdate({ exps: data.exps.map(x => x.id === edit.id ? { ...x, savedBase: edit.v === '' ? null : v, savedBaseMonth: month, savedBasePaid: !!(data.paidExps || {})[`${x.id}_${month}`] } : x) });
+    _p.onUpdate({ exps: data.exps.map(x => x.id === edit.id ? { ...x, savedBase: edit.v === '' ? null : +edit.v, savedBaseDate: today, savedBaseMonth: month, savedBasePaid: !!(data.paidExps || {})[`${x.id}_${month}`], rate: edit.rate === '' ? '' : +edit.rate } : x) });
     setEdit(null);
   };
   return e('section', { 'data-tour': 'ahorros' },
     e('div', { className: 'b-sh' }, e('h2', null, 'Tu ahorro programado')),
-    e('div', { className: 'b-debt-sum' }, e('span', { className: 'b-amount sm' }, e(Money, { n: total })), e('span', { className: 'b-cap' }, `acumulado · sumas ${fmt(monthly)} al mes (${fmt(monthly * 12)} al año)`)),
-    e('div', { className: 'b-rows' }, list.map(x => {
-      const a = savingAcc(x, data), card = expCard(x, data);
+    e('div', { className: 'b-debt-sum' }, e('span', { className: 'b-amount sm' }, e(Money, { n: total })),
+      e('span', { className: 'b-cap' }, gain >= 1 ? `acumulado · ${fmt(gain)} son rendimientos` : `acumulado · sumas ${fmt(monthly)} al mes`)),
+    e('div', { className: 'b-rows' }, rows.map(({ x, a }) => {
+      const card = expCard(x, data);
       return edit && edit.id === x.id ? e('div', { key: x.id, className: 'b-form' },
-        e(Field, { label: `¿Cuánto llevas acumulado en ${x.name}?`, value: edit.v, ph: '$0', help: 'Viene en tu estado de cuenta del seguro. Desde hoy Budgy le suma cada pago que marques.', onChange: v => setEdit({ ...edit, v }) }),
+        e(Field, { label: `¿Cuánto llevas acumulado en ${x.name}?`, value: edit.v, ph: '$0', help: 'Lo que dice tu estado de cuenta, con todo lo que ya te ha rendido.', onChange: v => setEdit({ ...edit, v }) }),
+        e(Field, { label: '¿Cuánto te rinde al año? (%)', value: edit.rate, ph: 'Ej. 7', help: 'Viene en tu póliza o estado de cuenta. Si no lo sabes, déjalo vacío.', onChange: v => setEdit({ ...edit, rate: v }) }),
         e('div', { className: 'b-form-btns' }, e('button', { className: 'b-secondary', onClick: () => setEdit(null) }, 'Cancelar'), e('button', { className: 'b-primary sm', onClick: save }, 'Guardar'))) :
-        e('button', { key: x.id, onClick: () => setEdit({ id: x.id, v: x.savedBase != null && x.savedBase !== '' ? String(x.savedBase) : '' }) },
+        e('button', { key: x.id, onClick: () => setEdit({ id: x.id, v: a.fromBase ? String(x.savedBase) : '', rate: x.rate ? String(x.rate) : '' }) },
           e('div', { className: 'b-m' }, e('div', { className: 'b-n' }, x.name),
-            e('div', { className: 'b-d' }, `${fmt(+x.amount || 0)} al mes${card ? ' · con ' + card.name : ''} · `, a.fromBase ? (a.months ? `${a.months} ${a.months === 1 ? 'pago' : 'pagos'} desde tu último estado de cuenta` : 'según tu último estado de cuenta') : 'toca para poner lo que llevas en total')),
+            e('div', { className: 'b-d' }, [`${fmt(+x.amount || 0)} al mes${card ? ' con ' + card.name : ''}`, a.rate ? `rinde ${a.rate}% al año` : null,
+              a.fromBase ? (a.gain >= 1 ? `+${fmt(a.gain)} de rendimiento` : null) : 'toca para poner lo que llevas y su rendimiento'].filter(Boolean).join(' · '))),
           e('span', { className: 'b-n b-num' }, fmt(a.acc)));
     })),
-    e('p', { className: 'b-note' }, 'Es dinero tuyo, pero no lo puedes usar hoy: no cuenta en tu dinero libre. Sí cuenta en tu patrimonio.'));
+    total > 0 && e('div', { className: 'b-breakdown', style: { marginTop: 12 } },
+      e('div', { className: 'b-kv' }, e('span', null, 'Si sigues así, en 5 años'), e('span', { className: 'b-num' }, fmt(future(60)))),
+      e('div', { className: 'b-kv' }, e('span', null, 'En 10 años'), e('span', { className: 'b-num' }, fmt(future(120))))),
+    withRate.length > 0 && e('p', { className: 'b-note' + (avgRate < INFLACION ? ' warn' : ' good') }, avgRate < INFLACION
+      ? `Rinde menos que la inflación (~${INFLACION}%): tu dinero pierde valor con el tiempo. Pregunta a tu asesor si hay una opción mejor.`
+      : `Rinde unos ${(avgRate - INFLACION).toFixed(1)} puntos arriba de la inflación (~${INFLACION}%): tu dinero sí crece.`),
+    e('p', { className: 'b-note' }, 'Es dinero tuyo, pero no lo puedes usar hoy: no cuenta en tu dinero libre. Sí cuenta en tu patrimonio. Es un estimado: actualízalo cuando te llegue tu estado de cuenta.'));
 }
 /* ════ METAS ════ */
 function MetasScreen(_p) {
@@ -6272,7 +6297,7 @@ NEWS.push({ id: 'tarjeta-comprometido-1', when: d => (d.cardTransactions || []).
 NEWS.push({ id: 'ahorro-1', when: d => (d.exps || []).some(x => x.saving),
   t: 'Nuevo: cuánto llevas en tus seguros de ahorro', d: 'En Metas ves tu ahorro programado acumulado. Y si te llega dinero extra, ahora lo anotas desde + Anotar.',
   steps: [
-    { k: 'ahorros', tab: 'metas', t: 'Tu ahorro acumulado', d: 'Toca cada seguro y pon lo que dice tu estado de cuenta. Desde ahí, Budgy le suma cada pago que marques.' },
+    { k: 'ahorros', tab: 'metas', t: 'Tu ahorro acumulado', d: 'Toca cada seguro y pon lo que dice tu estado de cuenta y cuánto te rinde al año. Budgy le suma cada pago y sus rendimientos.' },
     { k: 'anotar', tab: 'inicio', t: '¿Te llegó dinero?', d: 'Toca «Anotar» y luego «¿Te llegó dinero? Anota un ingreso». Se suma a tu cuenta al momento.' }
   ] });
 const pendingNews = (data, prefs) => NEWS.find(n => !(prefs.newsSeen || []).includes(n.id) && n.when(data)) || null;
