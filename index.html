@@ -2459,7 +2459,9 @@ function calcDP(data) {
   const varQ = Math.max(varH, spentQ);
   const apartadoQ = apartadosThisQuincena(data, today);
   const apartados = apartadosTotal(data);
-  const overdue = overdueItems(data).filter(o => !(o.kind === 'exp' && expCard(o.x, data))).reduce((s, o) => s + o.pay, 0);
+  // Vencidos sin pagar, también los que pagas con tarjeta: cuando los pagues se cargan a la tarjeta
+  // y esa la pagas con tu dinero, así que desde hoy ya tienen dueño
+  const overdue = overdueItems(data).reduce((s, o) => s + o.pay, 0);
   const next = nextQuincenaGap(data, today);
   const nextGap = next.gap;
   const committed = fixedQ + varQ + debtQ + cardPayQ + apartadoQ + overdue + nextGap;
@@ -2500,9 +2502,9 @@ function calcDP(data) {
       nCash: after((data.cashTransactions || []).filter(t => !t.method || t.method === 'cash')).length,
       cardSpent: cardAfter.reduce((x, t) => x + (+t.amount || 0), 0), nCard: cardAfter.length
     };
-    const fixedPend = data.exps.filter(e => !expCard(e, data)).filter(e => e.day && +e.day >= day && (isQ1 ? +e.day <= 15 : +e.day >= 16)).filter(e => !(data.paidExps || {})[`${e.id}_${curMonth}`]);
+    const fixedPend = data.exps.filter(e => e.day && +e.day >= day && (isQ1 ? +e.day <= 15 : +e.day >= 16)).filter(e => !(data.paidExps || {})[`${e.id}_${curMonth}`]);
     pendingFixed = fixedPend.reduce((s, e) => s + (+e.amount || 0), 0);
-    fixedPend.forEach(e => pendingItems.push({ name: e.name, amount: +e.amount || 0, when: `día ${e.day}` }));
+    fixedPend.forEach(e => { const c = expCard(e, data); pendingItems.push({ name: e.name, amount: +e.amount || 0, when: c ? `día ${e.day} · con ${c.name}` : `día ${e.day}` }); });
     const qEndStr = curMonth + '-' + String(isQ1 ? 15 : new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()).padStart(2, '0');
     pendingDebts = data.debts.filter(d => {
       // Deudas de fecha única: si la fecha cae en esta quincena (o ya pasó) se aparta lo que debes
@@ -2577,6 +2579,7 @@ function calcDP(data) {
     nextGap,
     next,
     pendingItems,
+    overdueList: overdueItems(data),
     cardCommit,
     ledger,
     balanceDate: data.balanceDate || null
@@ -3340,7 +3343,8 @@ function CommitSheet(_p) {
     e('p', { className: 'b-note', style: { marginTop: 0 } }, `Este dinero sí está en tu cuenta, pero ya tiene dueño antes del ${_p.endLabel}. Por eso no cuenta como libre.`),
     e('div', { className: 'b-breakdown' },
       (dp.pendingItems || []).map((it, i) => row('p' + i, it.name, it.card ? `Con tarjeta · ${it.when}` : `Toca pagar · ${it.when}`, it.amount)),
-      dp.overdue > 0 && row('o', 'Pagos vencidos sin pagar', 'Marcaste que aún no los pagas', dp.overdue),
+      (dp.overdueList || []).map((o, i) => { const c = o.kind === 'exp' && o.x ? expCard(o.x, _p.data) : null; const [y, m] = o.month.split('-').map(Number);
+        return row('o' + i, o.name, `Vencido el ${Math.min(o.day || 1, new Date(y, m, 0).getDate())} de ${MES_CORTO[m - 1]}${c ? ' · con ' + c.name : ''} · aún no lo pagas`, o.pay); }),
       dp.nextGap > 0 && row('g', `Pagos ${dp.next.label}`, 'Tu siguiente quincena no alcanza para ellos', dp.nextGap),
       dp.apartados > 0 && row('a', 'Apartados de Metas', 'Lo que guardas para el predial, vacaciones…', dp.apartados),
       e('div', { className: 'b-kv strong' }, e('span', null, 'Total comprometido'), e('span', { className: 'b-num' }, fmt(total)))),
@@ -3531,6 +3535,7 @@ function HomeScreen(_p) {
     onMovs: () => { setLedgerOpen(false); _p.onTab('movs'); }
   }), commitOpen && h(CommitSheet, {
     dp: dp,
+    data: data,
     endLabel: `${endDay} de ${monthName}`,
     onClose: () => setCommitOpen(false)
   }), tourCard && h('section', {
