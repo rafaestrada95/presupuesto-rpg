@@ -6798,7 +6798,35 @@ function InvestmentsSection(_p) {
       onDelete: inv => { _p.onDelete(inv); setOpen(null); },
       onMove: (inv, n) => { _p.onMove(inv, n); setOpen(null); },
       onCollect: inv => { _p.onCollect(inv); setOpen(null); },
-      onRollover: inv => { _p.onRollover(inv); setOpen(null); } }));
+      onRollover: inv => { _p.onRollover(inv); setOpen(null); } }),
+    e(JarvisCard, { data }));
+}
+
+/* ── Puente a Jarvis: manda a tu panel de inversiones cuánto vas a invertir este mes.
+   Solo copia un código; tus datos no salen del teléfono hasta que tú lo pegas en Jarvis. ── */
+const JARVIS_URL = 'https://claude.ai/artifact/XgeYyBQwC8fUQcnwD5NVMN';
+function JarvisCard(_p) {
+  const data = _p.data;
+  const m = monthlyModel(data), t = invTotals(data);
+  const sugg = Math.max(0, Math.round(m.surplus || 0));
+  const [amt, setAmt] = useState('');
+  const [msg, setMsg] = useState('');
+  const [code, setCode] = useState('');
+  const value = +(amt || sugg) || 0;
+  const send = async () => {
+    const payload = { budgy: 1, mes: todayISO().slice(0, 7), fecha: todayISO(), invertir: value, sobra_mes: Math.round(m.surplus || 0), te_entra: Math.round(m.income || 0), invertido_budgy: Math.round(t.total || 0) };
+    const txt = 'JARVIS:' + btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+    try { await navigator.clipboard.writeText(txt); setCode(''); setMsg('Copiado. Abre Jarvis, toca «Pegar de Budgy» y listo.'); }
+    catch (err) { setCode(txt); setMsg('No se pudo copiar solo. Mantén presionado el código de abajo y cópialo.'); }
+  };
+  return e('div', { className: 'b-insight-box', style: { marginTop: 14 } },
+    e('div', { className: 'b-sh' }, e('h2', null, 'Invertir con Jarvis')),
+    e('p', { className: 'b-note', style: { marginTop: 0 } }, sugg > 0 ? `En un mes normal te sobran unos ${fmt(sugg)}. ¿Cuánto vas a invertir en bolsa este mes?` : '¿Cuánto vas a invertir en bolsa este mes?'),
+    e(Field, { label: 'Monto a invertir', value: amt, ph: sugg ? fmt(sugg) : '$0', onChange: setAmt }),
+    e('button', { className: 'b-primary', disabled: !(value > 0), onClick: send }, 'Mandar a Jarvis'),
+    e('a', { className: 'b-textbtn', href: JARVIS_URL, target: '_blank', rel: 'noopener', style: { display: 'inline-block', marginTop: 8 } }, 'Abrir Jarvis'),
+    msg && e('p', { className: 'b-note', role: 'status' }, msg),
+    code && e('textarea', { className: 'b-textarea', readOnly: true, value: code, style: { marginTop: 8 }, onFocus: ev => ev.target.select() }));
 }
 
 function MainApp(_ref22) {
