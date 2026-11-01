@@ -6774,9 +6774,18 @@ function InvestmentsSection(_p) {
   const data = _p.data, list = (data.investments || []).filter(i => i.status !== 'cobrada');
   const [open, setOpen] = useState(null); // 'new' | id
   const t = invTotals(data);
+  // Jarvis es personal: la tarjeta solo aparece en el teléfono donde se activa.
+  // Se activa (o se quita) tocando 5 veces el título «Inversiones», o abriendo la app con ?jarvis=1 / ?jarvis=0.
+  const [jarvisOn, setJarvisOn] = useState(jarvisEnabled);
+  const taps = useRef({ n: 0, t: 0 });
+  const tapTitle = () => {
+    const now = Date.now(), r = taps.current;
+    r.n = now - r.t < 1500 ? r.n + 1 : 1; r.t = now;
+    if (r.n >= 5) { r.n = 0; const next = !jarvisOn; setJarvisFlag(next); setJarvisOn(next); }
+  };
   const cur = open && open !== 'new' ? list.find(i => i.id === open) : null;
   return e('section', { 'data-tour': 'inversiones' },
-    e('div', { className: 'b-sh' }, e('h2', null, 'Inversiones')),
+    e('div', { className: 'b-sh' }, e('h2', { onClick: tapTitle }, 'Inversiones')),
     list.length === 0 ? e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Registra tus cajitas, CETES, pagarés o fondos. Budgy calcula cuánto llevas ganado, te avisa cuando vence un plazo y separa lo que puedes usar de lo que está bloqueado.') :
       e(React.Fragment, null,
         e('div', { className: 'b-strip' },
@@ -6799,12 +6808,22 @@ function InvestmentsSection(_p) {
       onMove: (inv, n) => { _p.onMove(inv, n); setOpen(null); },
       onCollect: inv => { _p.onCollect(inv); setOpen(null); },
       onRollover: inv => { _p.onRollover(inv); setOpen(null); } }),
-    e(JarvisCard, { data }));
+    jarvisOn && e(JarvisCard, { data }));
 }
 
 /* ── Puente a Jarvis: manda a tu panel de inversiones cuánto vas a invertir este mes.
    Solo copia un código; tus datos no salen del teléfono hasta que tú lo pegas en Jarvis. ── */
 const JARVIS_URL = 'https://claude.ai/artifact/XgeYyBQwC8fUQcnwD5NVMN';
+const JARVIS_KEY = 'budgy-jarvis';
+function setJarvisFlag(on) { try { on ? localStorage.setItem(JARVIS_KEY, '1') : localStorage.removeItem(JARVIS_KEY); } catch (err) { /* sin almacenamiento: queda apagado */ } }
+function jarvisEnabled() {
+  try {
+    const q = window.location.search;
+    if (q.indexOf('jarvis=1') !== -1) setJarvisFlag(true);
+    if (q.indexOf('jarvis=0') !== -1) setJarvisFlag(false);
+    return localStorage.getItem(JARVIS_KEY) === '1';
+  } catch (err) { return false; }
+}
 function JarvisCard(_p) {
   const data = _p.data;
   const m = monthlyModel(data), t = invTotals(data);
