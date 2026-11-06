@@ -951,7 +951,36 @@ function pinCheck(){
   else if(pstep==='create'){pf=pv;pv='';pinDots(false);pstep='confirm';document.getElementById('pt').textContent='Confirma tu PIN';document.getElementById('ps2').textContent='Repite el PIN para confirmarlo';}
   else if(pstep==='confirm'){if(pv===pf){busy=true;storePin(pv).then(function(){busy=false;var n=document.getElementById('pn').value.trim();if(n)ss(NK,n);pinUnlock();});}else{document.getElementById('pe').textContent='No coinciden.';pinDots(true);setTimeout(function(){pv='';pf='';pstep='create';pinDots(false);document.getElementById('pe').textContent='';document.getElementById('pt').textContent='¡Bienvenido!';document.getElementById('ps2').textContent='Tu asistente de presupuesto personal.';},800);}}
 }
-function pinUnlock(){document.getElementById('ps').style.display='none';document.getElementById('root').style.display='block';mountApp();}
+// Si algo falla al abrir Budgy, en vez de una pantalla en blanco: qué pasó, reintentar o bajar tus datos
+window.budgyRescue=function(msg){
+  if(document.getElementById('rescue'))return;
+  try{document.getElementById('root').style.display='none';document.getElementById('ps').style.display='none';}catch(e){}
+  var d=document.createElement('div');d.id='rescue';
+  d.setAttribute('style','position:fixed;inset:0;z-index:99999;background:#F7F6F2;color:#18212F;font-family:system-ui,-apple-system,sans-serif;padding:max(48px,env(safe-area-inset-top)) 24px 24px;overflow:auto');
+  d.innerHTML='<h1 style="font-size:1.5rem;margin:0 0 8px">Budgy no pudo abrir</h1>'+
+    '<p style="font-size:1.05rem;line-height:1.5;margin:0 0 16px">Tus datos están a salvo en este teléfono. Prueba «Volver a intentar». Si sigue igual, manda una captura de esta pantalla.</p>'+
+    '<button id="rs1" style="display:block;width:100%;min-height:56px;border:0;border-radius:12px;background:#4F46E5;color:#fff;font-size:1.05rem;font-weight:700;margin-bottom:10px">Volver a intentar</button>'+
+    '<button id="rs2" style="display:block;width:100%;min-height:52px;border:0;border-radius:12px;background:#E8E6F7;color:#18212F;font-size:1rem;font-weight:700">Descargar mis datos</button>'+
+    '<pre id="rsm" style="white-space:pre-wrap;font-size:.75rem;color:#6B7280;margin-top:20px"></pre>';
+  document.body.appendChild(d);
+  document.getElementById('rsm').textContent='Detalle: '+String(msg||'').slice(0,600);
+  document.getElementById('rs1').onclick=function(){
+    var done=function(){location.reload();};
+    try{var p=[];if(navigator.serviceWorker)p.push(navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(r){return r.unregister();}));}));
+      if(window.caches)p.push(caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k);}));}));
+      Promise.all(p).then(done,done);}catch(e){done();}
+  };
+  document.getElementById('rs2').onclick=function(){
+    var o={};for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(/^(mipres|budgy)/.test(k)&&!/pin/.test(k))o[k]=localStorage.getItem(k);}
+    var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(o)],{type:'application/json'}));a.download='budgy-respaldo-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();
+  };
+};
+window.addEventListener('error',function(e){if(document.getElementById('root').style.display!=='none'&&!document.getElementById('root').children.length)window.budgyRescue((e.error&&e.error.stack)||e.message);});
+function pinUnlock(){document.getElementById('ps').style.display='none';document.getElementById('root').style.display='block';
+  if(!window.React||!window.ReactDOM||typeof mountApp!=='function'){window.budgyRescue('No se cargó la app (React). Revisa tu internet y vuelve a intentar.');return;}
+  try{mountApp();}catch(e){window.budgyRescue(e&&e.stack||e);return;}
+  // Si a los 4 segundos no se dibujó nada, no dejes la pantalla en blanco
+  setTimeout(function(){var r=document.getElementById('root');if(r.style.display!=='none'&&!r.children.length)window.budgyRescue('La app no terminó de cargar.');},4000);}
 window.pinReset=function(){pv='';pf='';document.getElementById('root').style.display='none';document.getElementById('ps').style.display='flex';pinInit();pinDots(false);document.getElementById('pe').textContent='';}
 // Se bloquea sola si sales de Budgy más de 2 minutos
 var hiddenAt=0;
@@ -964,8 +993,8 @@ try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().
 if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js').catch(function(){});});}
 
 </script>
-<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="vendor/react.production.min.js"></script>
+<script src="vendor/react-dom.production.min.js"></script>
 <script>
 // Fechas en la hora del teléfono, no en UTC: en México, después de las 6 p. m.
 // la fecha UTC ya es "mañana" y los gastos de la noche caían en el día equivocado.
@@ -7968,13 +7997,19 @@ function MainApp(_ref22) {
 
 
 /* ════════ PIN ════════ */
+class BudgyBoundary extends React.Component {
+  constructor(p) { super(p); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidCatch(err, info) { window.budgyRescue((err && err.stack || String(err)) + '\n' + (info && info.componentStack || '').split('\n').slice(0, 6).join('\n')); }
+  render() { return this.state.err ? null : this.props.children; }
+}
 function mountApp() {
   // Al desbloquear de nuevo se reusa la misma app (no se crea otra encima)
   if (window.__budgyRoot) return;
   window.__budgyRoot = ReactDOM.createRoot(document.getElementById('root'));
-  window.__budgyRoot.render(React.createElement(MainApp, {
+  window.__budgyRoot.render(React.createElement(BudgyBoundary, null, React.createElement(MainApp, {
     onLock: window.pinReset
-  }));
+  })));
 }
 </script>
 </body>

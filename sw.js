@@ -1,8 +1,8 @@
 /* Budgy · funciona sin internet.
    La app se pide primero a la red (para recibir actualizaciones) y, si no hay
    conexión, se sirve la última copia guardada. */
-const VERSION = 'budgy-v2';
-const CORE = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
+const VERSION = 'budgy-v3';
+const CORE = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './vendor/react.production.min.js', './vendor/react-dom.production.min.js'];
 const CDN = /(^|\.)cdnjs\.cloudflare\.com$|(^|\.)fonts\.(googleapis|gstatic)\.com$/;
 
 self.addEventListener('install', event => {
@@ -33,7 +33,7 @@ self.addEventListener('fetch', event => {
           caches.open(VERSION).then(c => c.put(req, copy));
         }
         return res;
-      }).catch(() => hit);
+      }).catch(() => hit || Response.error());
       return hit || net;
     }));
   }
