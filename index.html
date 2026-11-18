@@ -901,6 +901,8 @@ section>.b-more:last-child{border-bottom:1px solid var(--border)}
 .b-sheet .b-primary.b-what-save{margin:10px 0 4px;min-height:52px}
 
 .b-sheet .b-inlink{display:block;margin:2px auto 6px;font-size:.92rem}
+
+.b-hero .b-chg{display:block;margin-top:2px;font-size:.92rem}
 </style>
 </head>
 <body>
@@ -2177,8 +2179,10 @@ const fmtDay = dt => `${dt.getDate()} de ${MES_CORTO[dt.getMonth()]}`;
 function creditSummary(data) {
   const tx = cardTxAfter(data);
   const cards = (data.debts || []).filter(d => d.type === 'tarjeta').map(c => {
-    const owed = debtBalance(c, tx), limit = +c.creditLimit || 0;
-    return { c, owed, limit, avail: limit > 0 ? limit - owed : null, pct: limit > 0 ? Math.round(owed / limit * 100) : null, dates: cardDates(c) };
+    // Lo que te falta de compras a meses en esta tarjeta también ocupa tu límite
+    const msi = (data.debts || []).filter(p => isCardMsi(p) && p.cardId === c.id).reduce((s, p) => s + getPlanInfo(p).remainingAmount, 0);
+    const owed = debtBalance(c, tx) + msi, limit = +c.creditLimit || 0;
+    return { c, owed, msi, limit, avail: limit > 0 ? limit - owed : null, pct: limit > 0 ? Math.round(owed / limit * 100) : null, dates: cardDates(c) };
   });
   const withLim = cards.filter(x => x.limit > 0);
   const limit = withLim.reduce((s, x) => s + x.limit, 0);
@@ -2217,7 +2221,7 @@ function CreditSection(_p) {
       const l = creditCardLine(x);
       return e('div', { key: x.c.id },
         e('div', { className: 'b-credrow-h' }, e('b', null, x.c.name), e('span', { className: 'b-num' + (l.over ? ' b-warn-t' : '') }, l.lim)),
-        e('div', { className: 'b-d' }, `Debes ${fmt(x.owed)} · ${l.buy}`));
+        e('div', { className: 'b-d' }, `Debes ${fmt(x.owed)}${x.msi > 0 ? ` (${fmt(x.msi)} a meses)` : ''} · ${l.buy}`));
     })),
     s.best && e('p', { className: 'b-note' }, `Si vas a comprar hoy, conviene ${s.best.c.name}: lo pagas hasta el ${fmtDay(s.best.dates.due)} sin intereses.`),
     e('p', { className: 'b-note' }, 'Lo que uses, págalo completo en tu fecha de pago o te cobran intereses.'),
@@ -2231,7 +2235,12 @@ function getTotalDebt(data) {
 }
 function getPlanInfo(debt) {
   const total = +(debt.totalPayments || 0);
-  const paid = +(debt.paidPayments || 0);
+  let paid = +(debt.paidPayments || 0);
+  // A meses con tarjeta: cada mes se carga una mensualidad sola en el estado de cuenta
+  if (debt.cardId && debt.msiFrom) {
+    const [y0, m0] = debt.msiFrom.split('-').map(Number), now = new Date();
+    paid = Math.min(total, (+debt.msiPaidAtFrom || 0) + Math.max(0, (now.getFullYear() - y0) * 12 + now.getMonth() + 1 - m0));
+  }
   const remaining = Math.max(0, total - paid);
   const amount = +(debt.paymentAmount || 0);
   return {
@@ -2244,6 +2253,7 @@ function getPlanInfo(debt) {
   };
 }
 function calcUrgency(debt) {
+  if (isSettled(debt) || isCardMsi(debt)) return { key: 'none', daysLeft: null, settled: isSettled(debt) };
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   let target = null;
@@ -2327,6 +2337,7 @@ function sortDebts(debts) {
     urg: calcUrgency(d),
     interestCost: getDebtInterestCost(d)
   })).sort((a, b) => {
+    if (isSettled(a) !== isSettled(b)) return isSettled(a) ? 1 : -1;
     // Fecha crítica (atrasarte te cuesta recargos/daño) siempre va primero, sin importar interés
     const aCrit = a.urg.key === 'critical';
     const bCrit = b.urg.key === 'critical';
@@ -2391,9 +2402,13 @@ function dueMonthOf(d, now) {
   return new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocalISO().slice(0, 7);
 }
 // Tarjeta: si registraste el "pago para no generar intereses", ese es el pago del mes
-const debtMonthPay = d => d.type === 'tarjeta' && +d.pngi > 0 ? +d.pngi : d.type === 'plan' ? +(d.paymentAmount || 0) : d.type === 'informal' && d.informalMode === 'fixed' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
-// ¿Ya cubriste el pago de ese mes? (los abonos extra no cuentan)
-const paidFor = (d, M) => (d.monthlyPayments || []).some(p => !p.extra && p.month === M);
+const debtMonthPay = d => isSettled(d) || isCardMsi(d) ? 0 : d.type === 'tarjeta' && +d.pngi > 0 ? +d.pngi : d.type === 'plan' ? +(d.paymentAmount || 0) : d.type === 'informal' && d.informalMode === 'fixed' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
+// Deuda liquidada: saldo en cero (o compra a meses sin pagos pendientes). Ya no hay nada que pagar ni recordar.
+const isSettled = d => d.type === 'plan' ? getPlanInfo(d).remaining <= 0 : d.type !== 'tarjeta' && d.balance !== '' && d.balance != null && +d.balance <= 0;
+// Compra a meses con tarjeta: cada mensualidad viene dentro del pago de esa tarjeta, no se paga aparte
+const isCardMsi = d => d.type === 'plan' && !!d.cardId;
+// ¿Ya cubriste el pago de ese mes? (los abonos extra no cuentan). Una deuda liquidada o a meses con tarjeta no se paga aparte.
+const paidFor = (d, M) => isSettled(d) || isCardMsi(d) || (d.monthlyPayments || []).some(p => !p.extra && p.month === M);
 // Cómo se paga un gasto fijo: débito (default), efectivo o una tarjeta
 const expCard = (x, data) => x.payWith && x.payWith !== 'debit' && x.payWith !== 'cash' ? (data.debts || []).find(d => d.id === x.payWith) : null;
 // Estado de una tarjeta en palabras: al corriente o pago pendiente, con fecha
@@ -2436,7 +2451,10 @@ function nextQuincenaGap(data, now) {
   // Con pago el 15 y el último día, el sueldo que llega antes del 16-31 es el del 15 (y viceversa)
   const late = (data.paySchedule || '15-ultimo') === '15-ultimo';
   const pay = (half === 2 ? (late ? +data.q1 : +data.q2) : (late ? +data.q2 : +data.q1)) || 0;
-  const income = pay + extra;
+  // Con pago el 15 y el último día: si ese depósito ya llegó (hoy es 15 o fin de mes), ya está en tu cuenta.
+  // Contarlo otra vez como "lo que viene" inflaba tu dinero libre justo el día de pago.
+  const received = late && now.getDate() >= (half === 2 ? 15 : new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate());
+  const income = (received ? 0 : pay) + extra;
   const items = [];
   (data.exps || []).filter(x => inHalf(x.day) && !expCard(x, data) && !(data.paidExps || {})[`${x.id}_${mk}`] && +x.amount > 0)
     .forEach(x => items.push({ name: x.name, amount: +x.amount, day: Math.min(+x.day, last) }));
@@ -2452,7 +2470,7 @@ function nextQuincenaGap(data, now) {
   });
   items.sort((a, b) => a.day - b.day);
   const need = items.reduce((s, i) => s + i.amount, 0);
-  return { gap: Math.max(0, need - income), need, income, items, label: half === 1 ? `del 1 al 15 de ${MES_CORTO[mo]}` : `del 16 al ${last} de ${MES_CORTO[mo]}` };
+  return { gap: Math.max(0, need - income), need, income, received, items, label: half === 1 ? `del 1 al 15 de ${MES_CORTO[mo]}` : `del 16 al ${last} de ${MES_CORTO[mo]}` };
 }
 function calcDP(data) {
   const today = new Date();
@@ -2468,7 +2486,7 @@ function calcDP(data) {
   const daysLeft = Math.max(1, lastDay - day + 1);
   const fixedQ = data.exps.filter(e => e.day && (isQ1 ? +e.day <= 15 : +e.day >= 16)).filter(e => !(data.paidExps || {})[`${e.id}_${curMonth}`]).reduce((s, e) => s + (+e.amount || 0), 0);
   const varH = data.varExps.reduce((s, e) => s + (+e.amount || 0), 0) / 2;
-  const debtQ = data.debts.filter(d => d.type !== "tarjeta").reduce((s, d) => {
+  const debtQ = data.debts.filter(d => d.type !== "tarjeta" && !isSettled(d) && !isCardMsi(d)).reduce((s, d) => {
     const pay = d.type === "plan" ? +(d.paymentAmount || 0) : d.type === "informal" && d.informalMode === 'fixed' ? +(d.paymentAmount || 0) : +(d.minPayment || d.monthlyPayment || 0);
     if (!d.dueDay || !pay) return s;
     const dd = +d.dueDay;
@@ -2547,6 +2565,17 @@ function calcDP(data) {
       if (pay > 0) pendingItems.push({ name: d.name, amount: pay, debtId: d.id, when: isDeadlineDebt(d) ? fmtDate(deadlineOf(d)) : `día ${d.dueDay}` });
       return s + pay;
     }, 0);
+    // Pagos que vencieron en los últimos 7 días y no has dicho si los pagaste: siguen apartados hasta que
+    // contestes «¿Ya pagaste?» en Inicio (antes se liberaban solos al pasar la fecha y el libre saltaba)
+    const od = data.overdue || {};
+    for (let k = 1; k <= 7; k++) {
+      const dt = new Date(today.getFullYear(), today.getMonth(), today.getDate() - k);
+      const M = dt.toLocalISO().slice(0, 7), lastD = new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate(), dd = dt.getDate();
+      const hits = x => +x > 0 && Math.min(+x, lastD) === dd;
+      const when = `venció el ${dd} de ${MES_CORTO[dt.getMonth()]} · ¿ya lo pagaste?`;
+      data.exps.filter(e => hits(e.day) && !(data.paidExps || {})[`${e.id}_${M}`] && !od[`${e.id}|${M}`] && +e.amount > 0).forEach(e => { pendingFixed += +e.amount; pendingItems.push({ name: e.name, amount: +e.amount, when, ask: true }); });
+      data.debts.filter(d => !isDeadlineDebt(d) && hits(d.dueDay) && debtMonthPay(d) > 0 && !paidFor(d, M) && !od[`${d.id}|${M}`]).forEach(d => { const p = debtMonthPay(d); pendingDebts += p; pendingItems.push({ name: d.name, amount: p, debtId: d.id, when, ask: true }); });
+    }
     // Lo que compraste con tarjeta en el corte actual lo vas a pagar con tu dinero: ya está comprometido.
     // Menos los abonos que ya hiciste desde el corte, y nunca más de lo que debes en la tarjeta
     // (sin contar el pago de esta quincena, que ya se apartó arriba).
@@ -2704,7 +2733,7 @@ function getSmartSuggestions(data, dp) {
       icon: '✂️',
       text: `Tus variables estimados suman ${fmt(varTotal)} esta quincena. Recortar aunque sea el 20% (${fmt(Math.round(varTotal * 0.2))}) te acercaría al equilibrio.`
     });
-    const deadlines = data.debts.filter(d => d.type === 'informal' && d.informalMode === 'deadline' && d.deadlineDate);
+    const deadlines = data.debts.filter(d => d.type === 'informal' && d.informalMode === 'deadline' && d.deadlineDate && !isSettled(d));
     if (deadlines.length > 0) {
       const d = deadlines[0];
       const daysLeft = Math.max(1, Math.ceil((new Date(d.deadlineDate + 'T12:00:00') - new Date()) / 86400000));
@@ -3333,7 +3362,7 @@ function DailyBreakdown(_p) {
     className: 'b-note'
   }, 'Contando desde el ', fmtDate(dp.balanceDate), ', cuando pusiste tus cuentas al día. Se suman tus quincenas y se restan los gastos en efectivo y débito.'), dp.next && dp.next.items.length > 0 && h('div', {
     className: 'b-next'
-  }, h('b', null, `Lo que viene ${dp.next.label}: ${fmt(dp.next.need)}`), h('p', null, dp.next.items.map(i => `${i.name} ${fmt(i.amount)} (día ${i.day})`).join(' · ')), h('p', null, dp.nextGap > 0 ? `Tu quincena de ${fmt(dp.next.income)} no alcanza: Budgy aparta desde hoy los ${fmt(dp.nextGap)} que faltan.` : `Lo cubre tu quincena de ${fmt(dp.next.income)}, por eso no se aparta de hoy.`)));
+  }, h('b', null, `Lo que viene ${dp.next.label}: ${fmt(dp.next.need)}`), h('p', null, dp.next.items.map(i => `${i.name} ${fmt(i.amount)} (día ${i.day})`).join(' · ')), h('p', null, dp.next.received ? `Tu quincena de hoy ya está en tu cuenta y es la que paga esto: Budgy lo aparta desde hoy.` : dp.nextGap > 0 ? `Tu quincena de ${fmt(dp.next.income)} no alcanza: Budgy aparta desde hoy los ${fmt(dp.nextGap)} que faltan.` : `Lo cubre tu quincena de ${fmt(dp.next.income)}, por eso no se aparta de hoy.`)));
   return h('div', {
     className: 'b-breakdown'
   }, row('Tu quincena', fmt(dp.income)), dp.fixedQ > 0 && row('Gastos fijos por pagar', '−' + fmt(dp.fixedQ)), dp.varQ > 0 && row(dp.spentQ > dp.varH ? 'Lo que llevas gastado esta quincena' : 'Tu presupuesto del día a día', '−' + fmt(dp.varQ)), dp.debtQ + dp.cardPayQ > 0 && row('Pagos de deudas', '−' + fmt(dp.debtQ + dp.cardPayQ)), dp.apartadoQ > 0 && row('Apartado para tus metas', '−' + fmt(dp.apartadoQ)), row('Te queda', fmt(dp.remaining), true), dp.hasSaldo && row('Después de pagos pendientes', fmt(dp.realBalance)));
@@ -3364,6 +3393,52 @@ function LedgerSheet(_p) {
       e('button', { className: 'b-secondary', onClick: _p.onFix }, 'Poner mi saldo real'),
       e('button', { className: 'b-textbtn', onClick: _p.onMovs }, 'Ver Movimientos')));
 }
+/* ── ¿Qué cambió? Una foto por día de tu dinero libre, para explicar cualquier salto ── */
+function budgySnapOf(dp, todayStr, base) {
+  const items = {};
+  const add = (k, v) => { if (v) items[k] = (items[k] || 0) + v; };
+  (dp.pendingItems || []).forEach(it => add(it.name, it.amount));
+  (dp.overdueList || []).forEach(o => add(o.name + ' (vencido)', o.pay));
+  add('Pagos de tu siguiente quincena', dp.nextGap);
+  add('Apartados de Metas', dp.apartados);
+  const L = dp.ledger || {};
+  return { date: todayStr, base, libre: dp.realBalance, cuentas: dp.currentDebit + dp.currentEfectivo, items,
+    L: { q: L.totalPaydays || 0, x: L.extraIn || 0, d: L.spentDebit || 0, c: L.spentCash || 0, p: (L.paidOut || 0) + (L.paidCash || 0), i: L.invOut || 0 } };
+}
+function readSnap() { try { return JSON.parse(localStorage.getItem('budgy-snap') || '{}') || {}; } catch (e) { return {}; } }
+function writeSnap(now) {
+  try {
+    const s = readSnap();
+    const next = s.today && s.today.date !== now.date ? { prev: s.today, today: now } : { prev: s.prev, today: now };
+    localStorage.setItem('budgy-snap', JSON.stringify(next));
+  } catch (e) {}
+}
+// Renglones que explican la diferencia entre dos fotos (suman exacto la diferencia del libre)
+function snapDiff(prev, now) {
+  const rows = [];
+  if (prev.base !== now.base) rows.push(['Pusiste tus cuentas al día', 'Budgy empezó a contar desde tu saldo real', now.cuentas - prev.cuentas]);
+  else {
+    const P = prev.L || {}, N = now.L || {};
+    [['q', 'Te cayó tu quincena', 1], ['x', 'Ingresos extra', 1], ['d', 'Gastos con débito', -1], ['c', 'Gastos en efectivo', -1], ['p', 'Pagos que marcaste como hechos', -1], ['i', 'Movimientos a inversiones', -1]]
+      .forEach(([k, name, sign]) => { const d = sign * ((N[k] || 0) - (P[k] || 0)); if (Math.abs(d) >= 0.5) rows.push([name, d > 0 ? 'Entró a tu cuenta' : 'Salió de tu cuenta', d]); });
+  }
+  const names = new Set([...Object.keys(prev.items || {}), ...Object.keys(now.items || {})]);
+  names.forEach(n => {
+    const a = (prev.items || {})[n] || 0, b = (now.items || {})[n] || 0, d = a - b;
+    if (Math.abs(d) < 0.5) return;
+    rows.push([n, !b ? 'Ya no está comprometido: lo marcaste como pagado o cambió su fecha' : !a ? 'Nuevo comprometido' : 'Cambió lo comprometido', d]);
+  });
+  return rows;
+}
+function ChangeSheet(_p) {
+  const rows = snapDiff(_p.prev, _p.now), total = _p.now.libre - _p.prev.libre;
+  return e(Sheet, { title: '¿Qué cambió?', label: '¿Qué cambió?', onClose: _p.onClose },
+    e('p', { className: 'b-note', style: { marginTop: 0 } }, `Tu dinero libre ${_p.since}: ${fmt(_p.prev.libre)}. Hoy: ${fmt(_p.now.libre)}.`),
+    e('div', { className: 'b-breakdown' },
+      rows.map((r, i) => e('div', { key: i, className: 'b-kv' }, e('span', null, r[0], e('small', { className: 'b-kv-sub' }, r[1])), e('span', { className: 'b-num' + (r[2] > 0 ? ' b-ok' : '') }, (r[2] > 0 ? '+' : '−') + fmt(Math.abs(r[2]))))),
+      e('div', { className: 'b-kv strong' }, e('span', null, total >= 0 ? 'Subió' : 'Bajó'), e('span', { className: 'b-num' }, (total >= 0 ? '+' : '−') + fmt(Math.abs(total))))),
+    e('p', { className: 'b-note' }, 'Que algo deje de estar comprometido no significa que tengas más dinero: si ya lo pagaste, salió de tu cuenta al mismo tiempo.'));
+}
 /* ── "Ya comprometido": dinero que está en tu cuenta pero ya tiene dueño ── */
 function CommitSheet(_p) {
   const dp = _p.dp, total = dp.currentDebit + dp.currentEfectivo - dp.realBalance;
@@ -3371,7 +3446,7 @@ function CommitSheet(_p) {
   return e(Sheet, { title: 'Ya comprometido', label: 'Ya comprometido', onClose: _p.onClose },
     e('p', { className: 'b-note', style: { marginTop: 0 } }, `Este dinero sí está en tu cuenta, pero ya tiene dueño antes del ${_p.endLabel}. Por eso no cuenta como libre.`),
     e('div', { className: 'b-breakdown' },
-      (dp.pendingItems || []).map((it, i) => row('p' + i, it.name, it.card ? `Con tarjeta · ${it.when}` : `Toca pagar · ${it.when}`, it.amount)),
+      (dp.pendingItems || []).map((it, i) => row('p' + i, it.name, it.card ? `Con tarjeta · ${it.when}` : it.ask ? it.when.charAt(0).toUpperCase() + it.when.slice(1) : `Toca pagar · ${it.when}`, it.amount)),
       (dp.overdueList || []).map((o, i) => { const c = o.kind === 'exp' && o.x ? expCard(o.x, _p.data) : null; const [y, m] = o.month.split('-').map(Number);
         return row('o' + i, o.name, `Vencido el ${Math.min(o.day || 1, new Date(y, m, 0).getDate())} de ${MES_CORTO[m - 1]}${c ? ' · con ' + c.name : ''} · aún no lo pagas`, o.pay); }),
       dp.nextGap > 0 && row('g', `Pagos ${dp.next.label}`, 'Tu siguiente quincena no alcanza para ellos', dp.nextGap),
@@ -3384,6 +3459,7 @@ function CommitSheet(_p) {
 function HomeScreen(_p) {
   const [commitOpen, setCommitOpen] = useState(false);
   const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [changeOpen, setChangeOpen] = useState(false);
   const data = _p.data,
     dp = _p.dp,
     game = _p.game,
@@ -3395,9 +3471,15 @@ function HomeScreen(_p) {
   // Con saldo real: lo que tienes menos los pagos que faltan. Sin saldo: el estimado por quincena
   const real = dp.hasSaldo;
   const avail = real ? dp.realBalance : dp.remaining;
-  const dailyAmt = real ? Math.max(0, dp.realBalance) / dp.daysLeft : dp.daily;
-  const periodLen = dp.isQ1 ? 15 : new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - 15;
-  const dayOfPeriod = Math.max(1, periodLen - dp.daysLeft + 1);
+  // De tu último depósito al siguiente (con pago el 15, el día 15 empieza una quincena nueva)
+  const todayISO0 = now.toLocalISO().slice(0, 10);
+  const payDates = [-1, 0, 1].flatMap(k => { const d0 = new Date(now.getFullYear(), now.getMonth() + k, 1); return payDatesOf(data, d0.getFullYear(), d0.getMonth()).map(q => q.date); });
+  const nextPay = payDates.find(d => d > todayISO0), lastPay = payDates.filter(d => d <= todayISO0).pop();
+  const daysToPay = Math.max(1, daysBetween(todayISO0, nextPay));
+  const dailyAmt = real ? Math.max(0, dp.realBalance) / daysToPay : dp.daily;
+  const periodLen = real ? Math.max(1, daysBetween(lastPay, nextPay)) : dp.isQ1 ? 15 : new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - 15;
+  const dayOfPeriod = real ? Math.min(periodLen, daysBetween(lastPay, todayISO0) + 1) : Math.max(1, periodLen - dp.daysLeft + 1);
+  const nextPayD = new Date(nextPay + 'T12:00:00');
   const usedPct = real ? Math.round(dayOfPeriod / periodLen * 100) : income > 0 ? Math.min(100, Math.max(0, Math.round(dp.committed / income * 100))) : 0;
   const barColor = avail < 0 ? 'var(--danger)' : !real && usedPct >= 85 ? 'var(--mango)' : 'var(--indigo)';
   const endDay = dp.isQ1 ? 15 : new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
@@ -3450,6 +3532,12 @@ function HomeScreen(_p) {
   const missionsDone = missions.filter(m => (game.completedMissions || {})[`${todayStr}-${m.id}`]).length;
   const cards = data.debts.filter(d => d.type === 'tarjeta');
   const credit = cards.length > 0 ? creditSummary(data) : null;
+  const snapNow = real ? budgySnapOf(dp, todayStr, data.balanceAt || 0) : null;
+  const snapStore = readSnap();
+  const snapPrev = snapStore.today && snapStore.today.date !== todayStr ? snapStore.today : snapStore.prev;
+  const showChange = snapNow && snapPrev && snapPrev.date < todayStr && Math.abs(snapNow.libre - snapPrev.libre) >= 1;
+  const sinceLabel = snapPrev ? (snapPrev.date === new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).toLocalISO().slice(0, 10) ? 'ayer' : `el ${fmtDate(snapPrev.date)}`) : '';
+  useEffect(() => { if (snapNow) writeSnap(snapNow); });
   return h(React.Fragment, null, h(ScreenHead, {
     eyebrow: greeting() + ' 👋',
     title: _p.userName || 'Hola',
@@ -3481,7 +3569,7 @@ function HomeScreen(_p) {
     n: avail
   })), h('div', {
     className: 'b-cap'
-  }, avail >= 0 ? real ? `libres hasta el ${endDay} de ${monthName}, con tus pagos ya descontados` : `disponibles hasta el ${endDay} de ${monthName}` : real ? 'te faltan para cubrir tus pagos de esta quincena' : 'te faltan para cubrir esta quincena'), real && h('div', {
+  }, avail >= 0 ? real ? `libres hasta tu siguiente quincena (${nextPayD.getDate()} de ${nextPayD.toLocaleDateString('es-MX', { month: 'long' })}), con tus pagos ya descontados` : `disponibles hasta el ${endDay} de ${monthName}` : real ? 'te faltan para cubrir tus pagos de esta quincena' : 'te faltan para cubrir esta quincena'), real && h('div', {
     className: 'b-heroline'
   }, h('span', null, h('button', {
     className: 'b-linkbtn',
@@ -3496,7 +3584,10 @@ function HomeScreen(_p) {
   }, fmt(dp.currentDebit + dp.currentEfectivo - dp.realBalance)))) : null), h('button', {
     className: 'b-textbtn',
     onClick: _p.onFixBalance
-  }, '¿No cuadra con tu banco?')), avail > 0 && h('div', {
+  }, '¿No cuadra con tu banco?')), showChange && h('button', {
+    className: 'b-textbtn b-chg',
+    onClick: () => setChangeOpen(true)
+  }, `${sinceLabel === 'ayer' ? 'Desde ayer' : 'Desde ' + sinceLabel}: ${snapNow.libre >= snapPrev.libre ? 'subió' : 'bajó'} ${fmt(Math.abs(snapNow.libre - snapPrev.libre))} · ¿por qué?`), avail > 0 && h('div', {
     className: 'b-daily'
   }, h(Icon, {
     d: IC.cal
@@ -3518,7 +3609,7 @@ function HomeScreen(_p) {
     }
   })), h('div', {
     className: 'b-used-l'
-  }, h('span', null, real ? `Día ${dayOfPeriod} de ${periodLen} de tu quincena` : `Has usado ${usedPct}% de tu quincena`), h('span', null, dp.daysLeft === 1 ? 'Último día' : `Quedan ${dp.daysLeft} días`))), !simple && h(More, {
+  }, h('span', null, real ? `Día ${dayOfPeriod} de ${periodLen} de tu quincena` : `Has usado ${usedPct}% de tu quincena`), h('span', null, real ? (daysToPay === 1 ? 'Mañana te pagan' : `Faltan ${daysToPay} días`) : dp.daysLeft === 1 ? 'Último día' : `Quedan ${dp.daysLeft} días`))), !simple && h(More, {
     title: '¿De dónde sale este número?'
   }, h(DailyBreakdown, {
     dp: dp
@@ -3557,7 +3648,12 @@ function HomeScreen(_p) {
     className: 'b-num'
   }, fmt(credit.owed)))), h('span', {
     className: 'b-credtag'
-  }, 'No es tu dinero')), ledgerOpen && h(LedgerSheet, {
+  }, 'No es tu dinero')), changeOpen && showChange && h(ChangeSheet, {
+    prev: snapPrev,
+    now: snapNow,
+    since: sinceLabel,
+    onClose: () => setChangeOpen(false)
+  }), ledgerOpen && h(LedgerSheet, {
     dp: dp,
     onClose: () => setLedgerOpen(false),
     onFix: () => { setLedgerOpen(false); _p.onFixBalance(); },
@@ -3565,7 +3661,7 @@ function HomeScreen(_p) {
   }), commitOpen && h(CommitSheet, {
     dp: dp,
     data: data,
-    endLabel: `${endDay} de ${monthName}`,
+    endLabel: real ? `${nextPayD.getDate()} de ${nextPayD.toLocaleDateString('es-MX', { month: 'long' })}` : `${endDay} de ${monthName}`,
     onClose: () => setCommitOpen(false)
   }), tourCard && h('section', {
     className: 'b-install b-tourcard'
@@ -4594,7 +4690,7 @@ const DEBT_KINDS = [{
 }, {
   key: 'prestamo', t: 'Préstamo', s: 'Del banco, de nómina o automotriz', p: '<path d="M3.5 10 12 4.5l8.5 5.5M5.5 10v8M10 10v8M14 10v8M18.5 10v8M3.5 20.5h17"/>', fg: '#0B8FCC', bg: 'rgba(56,189,248,.16)'
 }, {
-  key: 'plan', t: 'Compra a meses', s: 'Pagos iguales: meses sin intereses, planes', p: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M8 14h2M12 14h2M16 14h.5"/>', fg: '#0E9F6E', bg: 'rgba(16,185,129,.14)'
+  key: 'plan', t: 'Compra a meses', s: 'Meses sin intereses (con tarjeta o en tienda), planes de pagos', p: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M8 14h2M12 14h2M16 14h.5"/>', fg: '#0E9F6E', bg: 'rgba(16,185,129,.14)'
 }, {
   key: 'informal', t: 'Le debo a una persona', s: 'Un familiar, amigo o conocido', p: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20.5a7 7 0 0 1 14 0"/>', fg: '#E2574A', bg: 'rgba(255,107,94,.14)'
 }, {
@@ -4604,7 +4700,7 @@ const DEBT_BLANK = {
   type: 'tarjeta', name: '', balance: '', creditLimit: '', cutDay: '', minPayment: '', monthlyPayment: '', interestRate: '', dueDay: '', monthsLeft: '',
   person: '', entity: '', deadlineDate: '', status: 'cobranza', paymentAmount: '', totalPayments: '', paidPayments: '', informalMode: 'fixed'
 };
-function debtQuestions(df) {
+function debtQuestions(df, cards) {
   const Q = [{
     id: 'kind'
   }, {
@@ -4621,11 +4717,11 @@ function debtQuestions(df) {
     id: 'min', q: '¿Cuál es tu pago mínimo del mes?', help: 'En tu estado de cuenta dice “Pago mínimo”. Si no lo sabes, sáltalo.',
     fields: [{ k: 'minPayment', kind: 'money' }]
   }, {
-    id: 'due', q: '¿Qué día del mes tienes que pagar?', help: 'En tu estado de cuenta dice “Fecha límite de pago”. Budgy te avisa antes.',
+    id: 'due', q: '¿Cuál es tu fecha límite de pago?', help: 'El último día para pagar sin intereses ni recargos. En tu estado de cuenta dice “Fecha límite de pago”. Budgy te avisa antes.',
     fields: [{ k: 'dueDay', kind: 'day' }]
   }, {
-    id: 'extra', q: 'Si los tienes a la mano', help: 'Son opcionales, pero hacen más exactas las cuentas.',
-    fields: [{ k: 'cutDay', kind: 'day', label: 'Día de corte (cuando el banco cierra tu mes)' }, { k: 'creditLimit', kind: 'money', label: 'Límite de crédito' }, { k: 'interestRate', kind: 'pct', label: 'Interés al año (aparece como CAT)' }]
+    id: 'extra', q: 'Si los tienes a la mano', help: 'Día de corte: el día que el banco cierra tu mes y suma lo que compraste; lo que compres después lo pagas hasta el mes siguiente. Vienen en tu estado de cuenta.',
+    fields: [{ k: 'cutDay', kind: 'day', label: 'Día de corte' }, { k: 'creditLimit', kind: 'money', label: 'Límite de crédito' }, { k: 'interestRate', kind: 'pct', label: 'Interés al año (aparece como CAT)' }]
   });
   if (df.type === 'prestamo') Q.push({
     id: 'bal', q: '¿Cuánto te falta por pagar?', help: 'Si no sabes exacto, pon un aproximado.',
@@ -4637,13 +4733,18 @@ function debtQuestions(df) {
     id: 'extra', q: 'Si los tienes a la mano', help: 'Son opcionales.',
     fields: [{ k: 'monthsLeft', kind: 'int', label: 'Meses que te faltan' }, { k: 'interestRate', kind: 'pct', label: 'Interés al año' }]
   });
+  if (df.type === 'plan' && (cards || []).length) Q.push({
+    id: 'via', q: '¿Es a meses con tarjeta de crédito?', help: 'Si es con tarjeta, cada mensualidad viene dentro del pago de esa tarjeta: Budgy no te la aparta dos veces.',
+    choice: { k: 'via', opts: [...cards.map(c => [c.id, `Sí, con ${c.name}`, 'Meses sin intereses que se cobran en tu estado de cuenta']), ['none', 'No, la pago aparte', 'En la tienda, en línea o con pagos directos']] }
+  });
   if (df.type === 'plan') Q.push({
     id: 'pay', q: '¿De cuánto es cada pago?', help: 'El pago que haces cada mes.',
     fields: [{ k: 'paymentAmount', kind: 'money' }], required: ['paymentAmount']
   }, {
     id: 'count', q: '¿Cuántos pagos son y cuántos llevas?', help: 'Ejemplo: 12 pagos en total y ya llevas 3.',
     fields: [{ k: 'totalPayments', kind: 'int', label: 'Pagos en total' }, { k: 'paidPayments', kind: 'int', label: 'Pagos que ya hiciste' }]
-  }, {
+  });
+  if (df.type === 'plan' && !(df.via && df.via !== 'none')) Q.push({
     id: 'due', q: '¿Qué día del mes pagas?', help: 'Budgy te avisa unos días antes.',
     fields: [{ k: 'dueDay', kind: 'day' }]
   });
@@ -4672,7 +4773,7 @@ function debtQuestions(df) {
 function AddDebtSheet(_p) {
   const [df, setDf] = useState({ ...DEBT_BLANK });
   const [step, setStep] = useState(0);
-  const Q = debtQuestions(df);
+  const Q = debtQuestions(df, _p.cards);
   const cur = Q[Math.min(step, Q.length - 1)];
   const last = step >= Q.length - 1;
   const filled = k => String(df[k] ?? '').trim() !== '';
@@ -4681,6 +4782,9 @@ function AddDebtSheet(_p) {
   const set = (k, v) => setDf(p => ({ ...p, [k]: v }));
   const finish = d => {
     const out = { ...d, name: d.name.trim(), entity: d.type === 'deadline' ? d.name.trim() : d.entity, person: d.type === 'informal' ? d.name.trim() : d.person };
+    // A meses con tarjeta: queda ligada a esa tarjeta y avanza sola cada mes
+    if (d.type === 'plan' && d.via && d.via !== 'none') Object.assign(out, { cardId: d.via, msiFrom: new Date().toLocalISO().slice(0, 7), msiPaidAtFrom: +d.paidPayments || 0, dueDay: '' });
+    delete out.via;
     if (_p.onAddDebt(out)) _p.onDone(out.name);
   };
   const next = () => {
@@ -4897,12 +5001,23 @@ function DebtSheet(_p) {
       e('div', { className: 'b-wiz-q' }, d.name),
       e('div', { className: 'b-d' }, dueLabel(d.urg ? d.urg.daysLeft : null), pay > 0 ? ` · ${fmt(pay)} al mes` : ''))),
     e('div', null, e('div', { className: 'b-amount sm' }, e(Money, { n: bal })), e('div', { className: 'b-cap' }, 'te falta por pagar')),
+    d.type === 'tarjeta' && e(More, { title: '¿Qué es el corte y la fecha límite?' }, (() => {
+      const dt = cardDates(d);
+      if (!dt || !dt.due) return e('p', { className: 'b-note', style: { marginTop: 0 } }, 'Día de corte: el día que el banco cierra tu mes y suma lo que compraste. Fecha límite de pago: el último día para pagarlo sin intereses. Ponle los dos en «Editar datos» y aquí te lo explico con tus fechas.');
+      const prev = new Date(dt.nextCut.getFullYear(), dt.nextCut.getMonth() - 1, dt.nextCut.getDate() + 1);
+      return e(React.Fragment, null,
+        e('p', { className: 'b-note', style: { marginTop: 0 } }, e('b', null, `Corte: día ${d.cutDay}. `), `El ${fmtDay(dt.nextCut)} el banco cierra tu mes y suma lo que compraste del ${fmtDay(prev)} al ${fmtDay(dt.nextCut)}.`),
+        e('p', { className: 'b-note' }, e('b', null, `Fecha límite: día ${d.dueDay}. `), `Tienes hasta el ${fmtDay(dt.due)} para pagar ese total sin intereses. Si pagas menos, te cobran intereses sobre lo que quede.`),
+        e('p', { className: 'b-note good' }, `Por eso lo que compres hoy lo pagas hasta el ${fmtDay(dt.due)}: ${dt.daysToDue} días.`));
+    })()),
     credit && e('div', { className: 'b-breakdown', style: { marginTop: 12 } },
       e('div', { className: 'b-kv' }, e('span', null, 'Crédito'), e('span', { className: 'b-num' + (credit.over ? ' b-warn-t' : '') }, credit.lim)),
       e('div', { className: 'b-d', style: { marginTop: 4 } }, credit.buy.charAt(0).toUpperCase() + credit.buy.slice(1) + '.')),
     plan && e('div', null, e('div', { className: 'b-dots' }, Array.from({ length: Math.min(plan.total, 36) }, (_, i) => e('i', { key: i, className: i < plan.paid ? 'on' : '' }))),
       e('div', { className: 'b-d', style: { marginTop: 6 } }, `${plan.paid} de ${plan.total} pagos hechos · te faltan ${plan.remaining}`)),
     // Pago del mes
+    isSettled(d) ? e('p', { className: 'b-note good', style: { marginTop: 0 } }, '¡La liquidaste! Ya no hay nada que pagar ni recordar. Puedes borrarla abajo.') :
+    isCardMsi(d) ? e('p', { className: 'b-note', style: { marginTop: 0 } }, `Cada mes se cobra sola en tu tarjeta ${(((_p.data || {}).debts || []).find(c => c.id === d.cardId) || { name: '' }).name}: va dentro de tu pago para no generar intereses, no se paga aparte. Budgy le resta un pago cada mes.`) :
     d.type === 'plan' ? e('button', { className: 'b-primary', onClick: () => { a.onMarkPayment(d.id); _p.onClose(); } }, `Registrar pago de ${fmt(plan.amount)}`) :
       e(React.Fragment, null,
         d.type === 'tarjeta' && e('p', { className: 'b-note' + (cardStatus(d).ok === false ? ' warn' : ' good'), style: { marginTop: 0 } }, cardStatus(d).text),
@@ -4931,11 +5046,11 @@ function DebtSheet(_p) {
         e(React.Fragment, null,
           e(Field, { label: 'Lo que debes hoy', value: ef.balance, help: d.type === 'tarjeta' ? 'El saldo total que dice tu banco, con todo lo que has comprado.' : null, onChange: v => setEf({ ...ef, balance: v }) }),
           d.type === 'tarjeta' && e(Field, { label: 'Límite de crédito', value: ef.creditLimit, onChange: v => setEf({ ...ef, creditLimit: v }) }),
-          d.type === 'tarjeta' && e(Field, { label: 'Día de corte', value: ef.cutDay, help: 'Cuando el banco cierra tu estado de cuenta.', onChange: v => setEf({ ...ef, cutDay: v.replace(/\D/g, '').slice(0, 2) }) }),
+          d.type === 'tarjeta' && e(Field, { label: 'Día de corte', value: ef.cutDay, help: 'El día que el banco cierra tu mes. Lo que compres después lo pagas hasta el mes siguiente.', onChange: v => setEf({ ...ef, cutDay: v.replace(/\D/g, '').slice(0, 2) }) }),
           e(Field, { label: d.type === 'tarjeta' ? 'Pago mínimo' : 'Pago al mes', value: ef.pay, onChange: v => setEf({ ...ef, pay: v }) }),
           d.type === 'tarjeta' && e(Field, { label: 'Pago para no generar intereses', value: ef.pngi, ph: 'Viene en tu estado de cuenta', help: 'Si lo pones, Budgy aparta ese pago (el sano) en lugar del mínimo.', onChange: v => setEf({ ...ef, pngi: v }) }),
           (d.type === 'tarjeta' || d.type === 'prestamo') && e(Field, { label: 'Interés al año (%)', value: ef.interestRate, onChange: v => setEf({ ...ef, interestRate: v }) })),
-      e(Field, { label: 'Día de pago', value: ef.dueDay, onChange: v => setEf({ ...ef, dueDay: v.replace(/\D/g, '').slice(0, 2) }) }),
+      e(Field, { label: d.type === 'tarjeta' ? 'Fecha límite de pago (día)' : 'Día de pago', value: ef.dueDay, help: d.type === 'tarjeta' ? 'El último día para pagar sin intereses ni recargos.' : null, onChange: v => setEf({ ...ef, dueDay: v.replace(/\D/g, '').slice(0, 2) }) }),
       e('button', { className: 'b-primary', onClick: saveEdit }, 'Guardar cambios')),
     e('div', { className: 'b-sheet-foot' }, e(ConfirmDelete, { label: 'Borrar esta deuda', onYes: () => { a.onDelDebt(d.id); _p.onClose(); } })));
 }
@@ -4949,7 +5064,7 @@ function DebtsSection(_p) {
   const payoffs = data.debts.filter(d => (d.type === 'tarjeta' || d.type === 'prestamo') && +d.interestRate > 0).map(d => getPayoffProjection(d.balance, debtPay(d), d.interestRate)).filter(Boolean);
   const minCost = payoffs.reduce((s, p) => s + (p.neverPaysOff ? 0 : p.totalInterest), 0);
   const never = payoffs.some(p => p.neverPaysOff);
-  const first = list[0];
+  const first = list[0] && !isSettled(list[0]) ? list[0] : null;
   const firstWhy = first ? first.urg && (first.urg.key === 'critical' || first.urg.key === 'danger') ? 'Vence pronto: atrasarte te cuesta recargos.' : first.interestCost > 0 ? `Es la que más te cobra: unos ${fmt(first.interestCost)} al mes de intereses.` : 'Es la más próxima a vencer.' : '';
   const openDebt = open && list.find(d => d.id === open);
   return e(React.Fragment, null,
@@ -4960,18 +5075,20 @@ function DebtsSection(_p) {
       return e('button', { key: d.id, onClick: () => setOpen(d.id) },
         e(CatIcon, { c: debtKind(d.type) }),
         e('div', { className: 'b-m' },
-          i === 0 && list.length > 1 && e('div', { className: 'b-first' }, 'Paga esta primero'),
+          first && i === 0 && list.length > 1 && e('div', { className: 'b-first' }, 'Paga esta primero'),
           e('div', { className: 'b-n' }, d.name),
-          e('div', { className: 'b-d' }, paid ? e('span', { className: 'b-ok' }, '✓ Pagada este mes') : dueLabel(d.urg ? d.urg.daysLeft : null), pay > 0 && !paid ? ` · ${fmt(pay)}` : ''),
-          i === 0 && list.length > 1 && e('div', { className: 'b-d' }, firstWhy)),
+          e('div', { className: 'b-d' }, isSettled(d) ? e('span', { className: 'b-ok' }, '✓ Liquidada: ya no debes nada. Puedes borrarla.') :
+            isCardMsi(d) ? `A meses con ${((data.debts || []).find(c => c.id === d.cardId) || { name: 'tu tarjeta' }).name} · ${getPlanInfo(d).paid} de ${getPlanInfo(d).total} · ${fmt(+d.paymentAmount || 0)} al mes` :
+            paid ? e('span', { className: 'b-ok' }, '✓ Pagada este mes') : dueLabel(d.urg ? d.urg.daysLeft : null), pay > 0 && !paid && !isCardMsi(d) && !isSettled(d) ? ` · ${fmt(pay)}` : ''),
+          first && i === 0 && list.length > 1 && e('div', { className: 'b-d' }, firstWhy)),
         e('span', { className: 'b-n b-num' }, fmt(debtBalance(d, cardTxAfter(data)))));
     })),
     (minCost > 0 || never) && e('div', { className: 'b-insight-box', style: { marginTop: 14 } },
       e('b', null, 'Lo que cuesta pagar solo el mínimo'),
       e('p', null, never ? 'Al menos una de tus deudas nunca se termina pagando solo el mínimo. Ábrela para ver cuánto más necesitas.' : `Si solo pagas mínimos, vas a pagar ${fmt(minCost)} de intereses que no bajan tu deuda.`)),
     e('button', { className: 'b-primary ghost', onClick: () => setAdding(true) }, e(Icon, { d: IC.plus, w: 2.4 }), 'Agregar una deuda'),
-    adding && e(AddDebtSheet, { onAddDebt: a.onAddDebt, onClose: () => setAdding(false), onDone: n => { setAdding(false); setAdded(n); } }),
-    openDebt && e(DebtSheet, { d: openDebt, actions: a, cardTx: cardTxAfter(data), onClose: () => setOpen(null) }));
+    adding && e(AddDebtSheet, { cards: (data.debts || []).filter(c => c.type === 'tarjeta'), onAddDebt: a.onAddDebt, onClose: () => setAdding(false), onDone: n => { setAdding(false); setAdded(n); } }),
+    openDebt && e(DebtSheet, { d: openDebt, actions: a, data, cardTx: cardTxAfter(data), onClose: () => setOpen(null) }));
 }
 function LoansSection(_p) {
   const loans = _p.data.loans || [];
@@ -5091,10 +5208,11 @@ function MyInfo(_p) {
   const lastBackup = loadLS('budgy-last-backup');
   return e(React.Fragment, null,
     e('section', null, e('div', { className: 'b-sh' }, e('h2', null, 'Lo que ganas')),
-      e('div', { className: 'b-grid2' },
-        e(Field, { label: 'Quincena del 1 al 15', value: data.q1, ph: '$0', onChange: v => set({ q1: v }) }),
-        e(Field, { label: 'Quincena del 16 al 31', value: data.q2, ph: '$0', onChange: v => set({ q2: v }) })),
-      e('div', { className: 'b-field', style: { marginTop: 12 } }, '¿Qué días te depositan?', e('div', { className: 'b-chips' }, PAY_SCHEDULES.map(o => e('button', { key: o[0], className: 'b-chip' + ((data.paySchedule || '15-ultimo') === o[0] ? ' on' : ''), onClick: () => set({ paySchedule: o[0] }) }, o[1])))),
+      e('div', { className: 'b-field', style: { marginTop: 0 } }, '¿Qué días te depositan tu sueldo?', e('div', { className: 'b-chips' }, PAY_SCHEDULES.map(o => e('button', { key: o[0], className: 'b-chip' + ((data.paySchedule || '15-ultimo') === o[0] ? ' on' : ''), onClick: () => set({ paySchedule: o[0] }) }, o[1])))),
+      e('div', { className: 'b-grid2', style: { marginTop: 12 } },
+        e(Field, { label: payLabels(data.paySchedule)[0], value: data.q1, ph: '$0', onChange: v => set({ q1: v }) }),
+        e(Field, { label: payLabels(data.paySchedule)[1], value: data.q2, ph: '$0', onChange: v => set({ q2: v }) })),
+      e('p', { className: 'b-note', style: { marginTop: 6 } }, 'Lo que de verdad llega a tu cuenta, ya con descuentos (impuestos, IMSS).'),
       income > 0 && e('p', { className: 'b-note' }, 'Al mes: ', e('b', null, fmt(income)), '. Tu quincena se suma sola el día que te pagan.'),
       (() => {
         // La quincena de este periodo ya se sumó: si cambiaste el monto, ¿corregimos lo que ya entró?
@@ -5514,7 +5632,7 @@ async function pushServerKey() {
 // Lo mínimo que el servidor necesita para avisarte de pagos: nombre, día, monto y si ya pagaste
 function pushPayments(data) {
   const month = new Date().toLocalISO().slice(0, 7);
-  const debts = (data.debts || []).filter(d => d.dueDay).map(d => ({ name: d.name, day: +d.dueDay, amount: debtPay(d), paid: paidFor(d, dueMonthOf(d)) }));
+  const debts = (data.debts || []).filter(d => d.dueDay && !isSettled(d) && !isCardMsi(d)).map(d => ({ name: d.name, day: +d.dueDay, amount: debtPay(d), paid: paidFor(d, dueMonthOf(d)) }));
   const fixed = (data.exps || []).filter(x => x.day).map(x => ({ name: x.name, day: +x.day, amount: +x.amount || 0, paid: !!(data.paidExps || {})[`${x.id}_${month}`] }));
   const today = new Date().toLocalISO().slice(0, 10);
   const inv = (data.investments || []).filter(i => i.kind === 'plazo' && i.status !== 'cobrada' && i.maturity > today && daysBetween(today, i.maturity) <= 2)
@@ -5617,6 +5735,8 @@ function NotificationsSection(_p) {
 
 /* ════ FASE 8: quincena automática y "Poner Budgy al día" ════ */
 const PAY_SCHEDULES = [['15-ultimo', 'El 15 y el último día'], ['1-16', 'El 1 y el 16']];
+// Cómo se llama cada quincena según el día que te depositan
+const payLabels = sch => (sch || '15-ultimo') === '1-16' ? ['Lo que te depositan el día 1', 'Lo que te depositan el día 16'] : ['Lo que te depositan el día 15', 'Lo que te depositan el último día del mes'];
 const pad2 = n => String(n).padStart(2, '0');
 // Fechas de pago de un mes según cómo te pagan
 function payDatesOf(data, y, m) {
@@ -5772,8 +5892,8 @@ function FreshStartSheet(_p) {
       e('div', { className: 'b-cardedit-row' }, e('span', null, 'Debes hoy en total', e('small', null, 'Saldo actual en la app de tu banco, con compras recientes')), inline(x.balance, v => up({ balance: v }), `Lo que debes en ${name}`)),
       e('div', { className: 'b-cardedit-row' }, e('span', null, 'Pago mínimo del mes'), inline(x.minPayment, v => up({ minPayment: v }), `Pago mínimo de ${name}`)),
       e('div', { className: 'b-cardedit-row' }, e('span', null, 'Pago para no generar intereses', e('small', null, 'Opcional. Si lo pones, Budgy aparta este en vez del mínimo')), inline(x.pngi || '', v => up({ pngi: v }), `Pago para no generar intereses de ${name}`)),
-      e('div', { className: 'b-cardedit-row' }, e('span', null, 'Día de corte', e('small', null, 'Cuando el banco cierra tu mes')), dayIn(x.cutDay, v => up({ cutDay: v }), `Día de corte de ${name}`)),
-      e('div', { className: 'b-cardedit-row' }, e('span', null, 'Fecha límite de pago'), dayIn(x.dueDay, v => up({ dueDay: v }), `Día límite de pago de ${name}`)),
+      e('div', { className: 'b-cardedit-row' }, e('span', null, 'Día de corte', e('small', null, 'El banco cierra tu mes; lo que compres después lo pagas el siguiente')), dayIn(x.cutDay, v => up({ cutDay: v }), `Día de corte de ${name}`)),
+      e('div', { className: 'b-cardedit-row' }, e('span', null, 'Fecha límite de pago', e('small', null, 'El último día para pagar sin intereses')), dayIn(x.dueDay, v => up({ dueDay: v }), `Día límite de pago de ${name}`)),
       e('div', { className: 'b-cardedit-row' }, e('span', null, 'Límite de crédito'), inline(x.creditLimit, v => up({ creditLimit: v }), `Límite de ${name}`)),
       payRow(x.dueDay, !!x.paid, v => up({ paid: v }), name || 'la tarjeta', 'Pago de tu corte anterior')));
   const STEPS = [
@@ -5791,8 +5911,9 @@ function FreshStartSheet(_p) {
     // 2 · Quincena
     () => e(React.Fragment, null,
       e('div', { className: 'b-wiz-q' }, 'Tu quincena'),
-      e('div', { className: 'b-grid2' }, e(Field, { label: 'Del 1 al 15', value: f.q1, ph: '$0', onChange: v => set({ q1: v }) }), e(Field, { label: 'Del 16 al fin de mes', value: f.q2, ph: '$0', onChange: v => set({ q2: v }) })),
-      e('div', { className: 'b-field' }, '¿Qué días te depositan?', e('div', { className: 'b-chips' }, PAY_SCHEDULES.map(o => e('button', { key: o[0], className: 'b-chip' + (f.schedule === o[0] ? ' on' : ''), onClick: () => set({ schedule: o[0] }) }, o[1])))),
+      e('div', { className: 'b-field' }, '¿Qué días te depositan tu sueldo?', e('div', { className: 'b-chips' }, PAY_SCHEDULES.map(o => e('button', { key: o[0], className: 'b-chip' + (f.schedule === o[0] ? ' on' : ''), onClick: () => set({ schedule: o[0] }) }, o[1])))),
+      e('div', { className: 'b-grid2' }, e(Field, { label: payLabels(f.schedule)[0], value: f.q1, ph: '$0', onChange: v => set({ q1: v }) }), e(Field, { label: payLabels(f.schedule)[1], value: f.q2, ph: '$0', onChange: v => set({ q2: v }) })),
+      e('p', { className: 'b-note', style: { marginTop: 6 } }, 'Lo que de verdad llega a tu cuenta, ya con descuentos.'),
       payNow && e('div', { className: 'b-set' }, e('div', null, e('div', { className: 't' }, `¿Ya te depositaron la del ${+payNow.date.slice(8)}?`), e('div', { className: 's' }, f.gotPaid ? 'Sí: ya está incluida en lo que tienes hoy.' : 'Todavía no: Budgy la suma cuando llegue.')), toggle(f.gotPaid, () => set({ gotPaid: !f.gotPaid }), 'Ya me depositaron')),
       e('p', { className: 'b-note' }, 'De ahora en adelante tu quincena se suma sola el día que te pagan.')),
     // 3 · Tarjetas
@@ -6484,6 +6605,7 @@ function monthlyModel(data) {
   const fixed = (data.exps || []).filter(x => !x.saving).reduce((s, x) => s + (+x.amount || 0), 0);
   const savings = (data.exps || []).filter(x => x.saving).reduce((s, x) => s + (+x.amount || 0), 0);
   const debts = (data.debts || []).reduce((s, d) => {
+    if (isCardMsi(d)) return s;
     if (d.type === 'plan') return getPlanInfo(d).remaining > 0 ? s + (+d.paymentAmount || 0) : s;
     if (d.type === 'deadline' || d.type === 'informal' && d.informalMode !== 'fixed') return s;
     return s + debtMonthPay(d);
@@ -6534,7 +6656,7 @@ function simulateQuincenas(data, count) {
         return dl && dl >= qStart && dl <= qEnd ? s + (+d.balance || 0) : s;
       }
       if (!(inHalf(d.dueDay) || !d.dueDay && half === 2)) return s;
-      if (d.type === 'plan') { if (planLeft[d.id] > 0) { planLeft[d.id]--; return s + (+d.paymentAmount || 0); } return s; }
+      if (d.type === 'plan') { if (!isCardMsi(d) && planLeft[d.id] > 0) { planLeft[d.id]--; return s + (+d.paymentAmount || 0); } return s; }
       return s + debtMonthPay(d);
     }, 0);
     const variable = varDaily * len;
