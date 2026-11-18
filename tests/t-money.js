@@ -30,7 +30,7 @@ run(async ({ p, ok, load, keypad }) => {
   ok('ingreso en efectivo con Enter', await DP(), '21500,500');
   await p.click('.b-avatar'); await p.waitForTimeout(400);
   ok('quincena: aviso de la siguiente', /tu siguiente quincena \(\$15,000\) se suma sola el 31 mar/.test(await p.textContent('main')), true);
-  await p.fill('.b-field:has-text("Quincena del 1 al 15") input', '16000'); await p.waitForTimeout(400);
+  await p.fill('.b-field:has-text("Lo que te depositan el día 15") input', '16000'); await p.waitForTimeout(400);
   ok('quincena: pregunta si corrige', /ya se sumó como \$15,000\. ¿Te depositaron \$16,000\?/.test(await p.textContent('main')), true);
   await p.click('button:has-text("Sí, corregir a $16,000")'); await p.waitForTimeout(1300); ok('quincena: corrige lo que entró', await DP(), '22500,500');
   // Ahorro programado con rendimientos (cálculo independiente)
